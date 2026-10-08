@@ -210,6 +210,27 @@ O relay também serve o player web (build de `apps/discord-activity`), para quem
 
 O workflow `.github/workflows/windows-mvp.yml` gera o artefato `Vellcast-MVP-windows-x64` (desktop, relay, player, `iniciar-relay.bat`, `LEIA-ME.txt` e avisos de licença) a cada push na `main`. O `iniciar-relay.bat` gera um segredo aleatório em `relay.env` na primeira execução, escuta em `0.0.0.0:8788` e serve o player da pasta `player`. Passo a passo em `docs/TESTING_WINDOWS.md`.
 
+### 6.10 Região do servidor (medido em 2026-10-08)
+
+A transmissão faz o caminho **PC do transmissor → relay → espectadores**. O relay precisa ficar perto dos dois lados e sustentar o bitrate escolhido **por conexão**.
+
+Deploy de referência: `https://vellcast.nextestudios.com` (Dokploy, VPS na Europa). Medições a partir do Brasil:
+
+| Medida | Resultado |
+|---|---|
+| RTT até o VPS | ~290 ms (variação de ±66 ms) |
+| Vazão de uma conexão HTTPS comum do VPS para o Brasil | 1,2–2,2 Mbps |
+| Transmissão 720p30 (4 Mbps) com 1 espectador | 15 fps, 2 Mbps, latência p50 1,3 s |
+| Transmissão 720p30 (4 Mbps) com 5 espectadores | 2–8 fps, latência de vários segundos |
+
+A rota Europa → Brasil não sustenta 4–8 Mbps por conexão; o relay em si não é o gargalo (no mesmo teste, local, ele entrega 1080p60 a 20 espectadores com 4,8% de CPU). Para usuários no Brasil:
+
+- Hospede o relay **no Brasil** (ex.: São Paulo) ou na mesma região dos jogadores.
+- Para testes rápidos, rode o relay no próprio PC e exponha com um túnel HTTPS com presença local (ex.: `cloudflared`), ou teste no mesmo PC.
+- Antes de escolher um VPS, meça a vazão de uma conexão até ele: `curl -o /dev/null -w "%{speed_download}\n" https://<host>/<arquivo-grande>` deve passar com folga do bitrate pretendido (8 Mbps = 1 MB/s).
+
+O ajuste automático de bitrate (S-001, Etapa 6) reduzirá o impacto de rotas ruins, mas não substitui um servidor próximo.
+
 ## 7. Futuro: QUIC (Etapa 6)
 
 - **QUIC (Quinn)**, se adotado entre desktop e relay, usa **UDP** (ex.: 443/udp ou porta dedicada):

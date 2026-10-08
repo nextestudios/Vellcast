@@ -97,6 +97,8 @@ Metodologia (macOS): Apple M1 8 GB, macOS 27.0.1, build Release, 20–30 s ocios
 | 20 (loopback, `tests/benchmarks/stage0-viewers.mjs`, 20 s) | 7,9 Mbps por espectador | média 4,4% de 1 núcleo | RSS máx. 9,6 MB | ~158 Mbps | Medido (local, servidor da ETAPA 0) |
 | 20 autenticados por convite (loopback, `tests/benchmarks/relay-viewers.mjs`, 30 s, transmissor `publish_fixture` 1080p60) | 8,21 Mbps por espectador | 4,8% de 1 núcleo | RSS máx. 9,7 MB | ~164 Mbps | Medido (local, `vellcast-relay`) |
 
+Produção (`https://vellcast.nextestudios.com`, VPS na Europa, cliente no Brasil, 2026-10-08): a rota limita uma conexão a 1,2–2,2 Mbps (RTT ~290 ms), então 720p30 a 4 Mbps chegou a 15 fps com 1 espectador e a 2–8 fps com 5. Gargalo de rede, não do relay; ver `DEPLOYMENT.md` §6.10.
+
 Detalhes do teste do `vellcast-relay`: 60,3 fps por espectador, maior intervalo entre quadros 113,5 ms, latência transmissor → espectador p50 0,85 ms / p95 2,23 ms / p99 9,10 ms; nenhum erro, mensagem atrasada (`lagged`), quadro velho descartado ou desconexão. Loopback sem TLS: não mede rede real nem a CPU do transmissor.
 
 Detalhes do teste de 20 espectadores: 58,0 fps por espectador (os primeiros ~0,7 s aguardam o primeiro keyframe), maior intervalo entre quadros 71 ms, latência servidor → recebimento p50 1,2 ms / p95 3,9 ms / p99 17,8 ms, nenhum fechamento anormal, `laggedMessages = 0`, `staleFramesDropped = 0`. É um teste de loopback: não mede rede real, perda de pacotes nem proxy do Discord.

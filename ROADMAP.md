@@ -104,10 +104,10 @@ Servidor `vellcast-relay` que recebe uma transmissão e distribui para vários e
 - [x] ✅ E3-T04 — Filas limitadas por espectador, cache de GOP e pedidos de keyframe
 - [x] ✅ E3-T05 — Reconexão com janela de graça
 - [x] ✅ E3-T06 — Proteção contra abuso (rate limiting, limites de espectadores e banda)
-- [ ] 🧪 E3-T07 — Docker, docker-compose e guia Dokploy — build Docker não executado
+- [x] ✅ E3-T07 — Docker, docker-compose e guia Dokploy (imagem rodando no Dokploy)
 - [x] ✅ E3-T08 — Métricas e health check
 - [x] ✅ E3-T09 — Benchmark com 20 espectadores (local: 60 fps, p95 2,2 ms, 4,8% CPU, 9,7 MB)
-- [ ] ⬜ E3-T10 — Deploy em VPS com TLS via Dokploy
+- [x] ✅ E3-T10 — Deploy em VPS com TLS via Dokploy: `https://vellcast.nextestudios.com` (servidor na Europa limita a vazão para o Brasil)
 - [ ] ⬜ E3-T11 — Salas persistentes em SQLite (S)
 - [ ] ⬜ E3-T12 — Revogação e rotação de tokens
 - [ ] ⬜ E3-T13 — Sessão de 60 min e teste com 50 espectadores

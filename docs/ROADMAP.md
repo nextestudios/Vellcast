@@ -111,10 +111,10 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 | E3-T04 | Filas por espectador e keyframes | M-011, M-018 | E3-T01 | Espectador lento não afeta os demais; solicitação de keyframe ao transmissor | Done — fan-out sem recodificação (bytes idênticos), cache de GOP, filas limitadas |
 | E3-T05 | Reconexão | M-019 | E3-T02 | Janela de graça e retomada no keyframe | Done (local) — janela de graça com retomada por DISCONTINUITY |
 | E3-T06 | Proteção contra abuso | M-020 | E3-T03 | Rate limiting; limites de espectadores e banda | Done — rate limit por IP, limites de sala/espectadores/mensagem, teto de bitrate |
-| E3-T07 | Docker, docker-compose e guia Dokploy | M-021 | E3-T01 | Instalação limpa em VPS seguindo só a documentação | Testing — Dockerfile e compose escritos; build Docker não executado |
+| E3-T07 | Docker, docker-compose e guia Dokploy | M-021 | E3-T01 | Instalação limpa em VPS seguindo só a documentação | Done — imagem construída e rodando no Dokploy (VPS real) |
 | E3-T08 | Métricas e health check | S-014 | E3-T01 | Endpoint de métricas; logs estruturados | Done — `/metrics`, `/healthz`, logs JSON, SIGTERM |
 | E3-T09 | Benchmark com 20 espectadores autenticados | M-011, M-023 | E3-T04 | CPU/RAM/latência registrados | Done (local) — ver PERFORMANCE §3.4 |
-| E3-T10 | Deploy em VPS com TLS via Dokploy | M-021 | E3-T07 | Instalação seguindo só a documentação; medição com rede real | Backlog |
+| E3-T10 | Deploy em VPS com TLS via Dokploy | M-021 | E3-T07 | Instalação seguindo só a documentação; medição com rede real | Done — `https://vellcast.nextestudios.com` (Dokploy + Let's Encrypt); servidor na Europa limita a vazão para o Brasil (DEPLOYMENT §6.10) |
 | E3-T11 | `RoomStore` persistente em SQLite | S-015 | E3-T03 | Salas sobrevivem a reinício do relay | Backlog |
 | E3-T12 | Revogação e rotação de tokens | M-020 | E3-T03 | Revogar um token sem encerrar a sala; troca de segredo sem queda | Backlog |
 | E3-T13 | Sessão de 60 min e teste com 50 espectadores | M-025 | E3-T09 | Sem crescimento de memória; sem desconexões | Backlog |
