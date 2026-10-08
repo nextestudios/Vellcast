@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/protocol", "services/stage0-server"]
+members = ["crates/media-fixtures", "crates/transport", "services/relay", "crates/protocol", "services/stage0-server", "crates/controller", "apps/desktop"]
 
 [workspace.package]
 version = "0.0.1"
@@ -11,6 +11,15 @@ repository = "https://github.com/nextestudios/Vellcast"
 
 [workspace.dependencies]
 vellcast-protocol = { path = "crates/protocol" }
+vellcast-media-fixtures = { path = "crates/media-fixtures" }
+vellcast-transport = { path = "crates/transport" }
+vellcast-relay = { path = "services/relay" }
+base64 = "0.23"
+getrandom = "0.4"
+hmac = "0.13"
+sha2 = "0.11"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+tokio-tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }
 anyhow = "1.0"
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "ws", "query", "json"] }
 bytes = "1.10"

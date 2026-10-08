@@ -13,7 +13,7 @@ use tokio::sync::broadcast;
 use tokio::time::{Instant, sleep_until};
 use vellcast_protocol::{Header, MessageType, encode, flags};
 
-use crate::media::{parse_h264, parse_ogg_opus};
+use vellcast_media_fixtures::{parse_h264, parse_ogg_opus};
 
 /// Capacidade da fila por espectador, em mensagens (~1 s de vídeo + áudio a 60 fps).
 /// Um espectador que fica mais atrasado que isso perde as mensagens mais antigas

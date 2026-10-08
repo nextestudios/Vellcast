@@ -1,0 +1,21 @@
+# Exemplo de self-hosting do relay.
+#   cp infrastructure/docker/relay.env.example infrastructure/docker/relay.env   # e preencha
+#   docker compose -f infrastructure/docker/docker-compose.relay.yml up -d --build
+# Coloque um proxy reverso com TLS (Traefik/Caddy/Nginx) na frente da porta 8788.
+services:
+  relay:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/relay.Dockerfile
+    env_file: relay.env
+    ports:
+      - "127.0.0.1:8788:8788"
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8788 && printf 'GET /healthz HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q ok <&3"]
+      interval: 15s
+      timeout: 3s
+      retries: 3

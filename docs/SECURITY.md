@@ -20,11 +20,32 @@
 | Máquina do usuário | Captura indevida | Indicador visível de transmissão ativa, parar com um clique ou botão, fonte exibida na UI |
 | Áudio | Captura da voz do Discord por engano | Loopback por processo como padrão; loopback do sistema só com aviso claro |
 
-## 3. Autenticação e autorização (alvo: ETAPA 5)
+## 3. Autenticação e autorização
 - **Activity:** `discordSdk.authorize()` → `code` → o backend troca pelo token → o backend obtém a identidade e emite um **token de sessão Vellcast** curto.
 - **Desktop:** login no serviço (oficial ou self-hosted) e pareamento com a Activity por **código temporário** (TTL de minutos, uso único, tentativas limitadas).
 - **Relay:** cada conexão WS apresenta um token. O relay valida assinatura, expiração, sala e papel (publisher/viewer) antes de aceitar qualquer mídia.
 - **Replay:** tokens de pareamento são de uso único e tokens de sessão expiram. O nonce/sequence detecta duplicação quando aplicável.
+
+### 3.1 Relay — implementado na ETAPA 3
+
+| Ameaça | Mitigação implementada | Onde |
+|---|---|---|
+| Espectador sem convite assiste | Salas privadas por padrão; acesso só com token de espectador obtido por convite | `api.rs` (`join_room`), `ws.rs` (`authenticate`) |
+| Token forjado ou adulterado | HMAC-SHA256 com segredo ≥ 32 bytes; assinatura verificada em tempo constante antes de interpretar o payload | `token.rs` |
+| Token em logs ou histórico | Token só em `Authorization: Bearer` ou na mensagem `Auth`; nunca na URL; nunca registrado em log; publicador de exemplo lê o token de variável de ambiente | `api.rs`, `ws.rs`, `examples/publish_fixture.rs` |
+| Token de uma sala usado em outra / papel errado | Sala e papel conferidos em toda chamada da API e no `Auth` | `api.rs` (`authorize`), `ws.rs` |
+| Convite vazado ou reutilizado | Código aleatório de 128 bits, guardado só como SHA-256, com limite de usos e expiração consumidos de forma atômica; até 100 convites ativos por sala | `store.rs` |
+| Segundo transmissor sequestra a sala | Um transmissor por sala; só o **mesmo** token (mesmo `nonce`) assume a vaga (reconexão); outro token recebe `publisher_exists` | `room.rs` (`attach_publisher`) |
+| Criação de salas em massa | `VELLCAST_CREATE_ROOM_KEY` opcional (comparação em tempo constante), limite de salas, rate limit por IP | `api.rs`, `config.rs` |
+| Força bruta / flood | Token bucket por IP na API e nas conexões WebSocket, em memória e com número de IPs rastreados limitado | `ratelimit.rs` |
+| Conexão que nunca autentica | `Auth` obrigatório como primeira mensagem em 5 s, máximo de 2 KiB | `ws.rs` |
+| Exaustão de memória | Filas limitadas por espectador, cache de GOP limitado em bytes, mensagens limitadas (4 MiB transmissor, 1 KiB espectador), espectador travado desconectado após 10 s | `room.rs`, `ws.rs`, `config.rs` |
+| Transmissor abusando de banda | Token bucket de bytes de entrada (40 Mbps padrão) → `bitrate_exceeded` | `ws.rs` |
+| Payload malicioso para espectadores | `VideoInit`/`AudioInit` validados como JSON com limites antes de repassar; tipos desconhecidos rejeitados | `ws.rs` |
+| Retenção de dados | Nada é gravado em disco; estado (salas, convites com hash) só em memória e removido por TTL | `store.rs` |
+| Relay sem segredo configurado | Recusa iniciar sem `VELLCAST_RELAY_SECRET`, exceto com flag explícita de desenvolvimento | `config.rs` |
+
+**Replay:** tokens são credenciais *bearer* com expiração. Reutilizar o mesmo token de espectador ou transmissor é intencional (é o que permite a reconexão). Os itens de uso único (convites) são consumidos no servidor. **Limitações conhecidas:** ainda não há revogação individual de token (encerrar a sala revoga todos os tokens dela; trocar o segredo revoga todos os tokens do servidor); não há contas de usuário (o "dono" é quem tem o token de dono). Contas, identidade Discord e pareamento entram na ETAPA 5.
 
 > **ETAPA 0:** o servidor de validação (`stage0-server`) **não tem autenticação**. Ele serve apenas mídia sintética e não deve ficar exposto além do tempo de teste. Isso é uma limitação aceita e documentada.
 

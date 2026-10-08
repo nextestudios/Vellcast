@@ -1,0 +1,390 @@
+// Janela principal: barra lateral, lista de salas, área central e barra de status.
+
+import { Theme, InputState, NavAction, TextOps } from "theme.slint";
+import { FocusRing, VButton } from "widgets.slint";
+import { VirtualKeyboard } from "keyboard.slint";
+import { HomePage, StreamPage, RoomsPage, LivePage, SettingsPage, AccountPage, PlansPage, AboutPage } from "pages.slint";
+
+export { InputState, NavAction, TextOps }
+
+component NavItem inherits Rectangle {
+    in property <image> icon;
+    in property <string> label;
+    in property <bool> selected;
+    in property <int> focus-token;
+    callback activated;
+
+    height: 56px;
+    border-radius: Theme.radius;
+    background: root.selected ? Theme.bg-3 : (ta.has-hover ? Theme.bg-2 : transparent);
+    accessible-role: tab;
+    accessible-label: root.label;
+    accessible-item-selected: root.selected;
+    accessible-action-default => { root.activated(); }
+
+    // A janela incrementa o token ao trocar de seção pelo controle;
+    // o item selecionado assume o foco.
+    changed focus-token => {
+        if (root.selected) { fs.focus(); }
+    }
+
+    fs := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " ") {
+                root.activated();
+                return accept;
+            }
+            reject
+        }
+    }
+    ta := TouchArea {
+        clicked => {
+            fs.focus();
+            root.activated();
+        }
+    }
+    Rectangle {
+        x: 0;
+        width: 3px;
+        height: root.selected ? 24px : 0;
+        y: (parent.height - self.height) / 2;
+        background: Theme.accent;
+        border-radius: 2px;
+    }
+    VerticalLayout {
+        alignment: center;
+        spacing: 2px;
+        Image {
+            source: root.icon;
+            height: 22px;
+            colorize: root.selected ? Theme.accent : Theme.text-secondary;
+            image-fit: contain;
+        }
+        Text {
+            text: root.label;
+            color: root.selected ? Theme.text-primary : Theme.text-secondary;
+            font-size: 11px;
+            horizontal-alignment: center;
+            overflow: elide;
+        }
+    }
+    FocusRing { visible-ring: fs.has-focus; }
+}
+
+component MenuEntry inherits Rectangle {
+    in property <string> label;
+    in property <bool> selected;
+    callback activated;
+    height: 44px;
+    border-radius: Theme.radius-sm;
+    background: root.selected ? Theme.accent : (ta.has-hover ? Theme.bg-hover : transparent);
+    ta := TouchArea { clicked => { root.activated(); } }
+    Text {
+        x: Theme.sp-4;
+        text: root.label;
+        color: root.selected ? Theme.on-accent : Theme.text-primary;
+        font-size: Theme.fs-body-strong;
+        vertical-alignment: center;
+    }
+    FocusRing { visible-ring: root.selected; radius: Theme.radius-sm; }
+}
+
+export component AppWindow inherits Window {
+    title: "Vellcast";
+    icon: @image-url("icons/cast.svg");
+    min-width: 960px;
+    min-height: 600px;
+    preferred-width: 1180px;
+    preferred-height: 720px;
+    background: Theme.bg-0;
+    default-font-size: Theme.fs-body;
+
+    in-out property <int> current-page: 0;
+    in property <int> nav-focus-token;
+    in property <[string]> gamepads;
+    in property <string> version;
+    in property <[string]> licenses;
+    in property <bool> tray-available;
+    in property <bool> rooms-collapsed: false;
+
+    // Configurações (espelho do arquivo; o Rust persiste a cada mudança).
+    in-out property <int> language-index;
+    in-out property <string> display-name;
+    in-out property <float> deadzone;
+    in-out property <float> repeat-delay;
+    in-out property <float> repeat-interval;
+    in-out property <bool> start-minimized;
+    in-out property <bool> close-to-tray;
+    in property <bool> background-shortcuts;
+
+    // 0 = nenhum, 1 = teclado virtual, 2 = menu rápido.
+    out property <int> modal: 0;
+    property <int> menu-index: 0;
+    property <int> refocus-token: 0;
+    property <int> plan-tab: 0;
+    property <length> scroll-y: 0;
+
+    callback navigate(int);
+    callback settings-changed;
+    callback language-selected(int);
+    callback minimize-to-tray;
+    callback quit-app;
+
+    property <[{icon: image, label: string}]> nav-items: [
+        { icon: @image-url("icons/house.svg"), label: @tr("Home") },
+        { icon: @image-url("icons/cast.svg"), label: @tr("Stream") },
+        { icon: @image-url("icons/users.svg"), label: @tr("Rooms") },
+        { icon: @image-url("icons/radio.svg"), label: @tr("Live") },
+        { icon: @image-url("icons/settings.svg"), label: @tr("Settings") },
+        { icon: @image-url("icons/circle-user.svg"), label: @tr("Account") },
+        { icon: @image-url("icons/gem.svg"), label: @tr("Plans") },
+        { icon: @image-url("icons/info.svg"), label: @tr("About") },
+    ];
+    out property <int> page-count: self.nav-items.length;
+
+    property <[string]> menu-items: [@tr("Home"), @tr("Settings"), @tr("Minimize to tray"), @tr("Quit Vellcast")];
+
+    changed current-page => { root.scroll-y = 0; }
+
+    public function open-menu() {
+        root.menu-index = 0;
+        root.modal = 2;
+        menu-fs.focus();
+    }
+
+    // Abre o teclado virtual para o nome de exibição.
+    public function open-keyboard() {
+        vk.value = root.display-name;
+        root.modal = 1;
+        vk.open();
+    }
+
+    function close-modal() {
+        root.modal = 0;
+        root.refocus-token += 1;
+    }
+
+    function run-menu(i: int) {
+        root.close-modal();
+        if (i == 0) {
+            root.navigate(0);
+        } else if (i == 1) {
+            root.navigate(4);
+        } else if (i == 2) {
+            root.minimize-to-tray();
+        } else {
+            root.quit-app();
+        }
+    }
+
+    // Ações do controle enquanto um modal está aberto.
+    public function modal-action(a: NavAction) {
+        if (root.modal == 1) {
+            vk.action(a);
+        } else if (root.modal == 2) {
+            if (a == NavAction.up) {
+                root.menu-index = max(0, root.menu-index - 1);
+            } else if (a == NavAction.down) {
+                root.menu-index = min(root.menu-items.length - 1, root.menu-index + 1);
+            } else if (a == NavAction.confirm) {
+                root.run-menu(root.menu-index);
+            } else if (a == NavAction.back || a == NavAction.menu) {
+                root.close-modal();
+            }
+        }
+    }
+
+    // LT/RT: abas da tela atual (hoje, só Planos tem abas).
+    public function tab-step(direction: int) {
+        if (root.current-page == 6) {
+            root.plan-tab = Math.mod(root.plan-tab + direction + 3, 3);
+        }
+    }
+
+    // Analógico direito: rolagem da área central.
+    public function scroll-step(direction: int) {
+        root.scroll-y = clamp(root.scroll-y - direction * 80px, min(0px, flick.height - flick.content-height), 0px);
+    }
+
+    HorizontalLayout {
+        width: root.width;
+        height: root.height;
+        // Barra lateral
+        Rectangle {
+            width: 96px;
+            horizontal-stretch: 0;
+            background: Theme.bg-0;
+            VerticalLayout {
+                padding: Theme.sp-2;
+                spacing: Theme.sp-1;
+                Rectangle {
+                    height: 48px;
+                    Rectangle {
+                        width: 28px;
+                        height: 28px;
+                        border-radius: 8px;
+                        background: Theme.accent;
+                        Text { text: "V"; color: Theme.on-accent; font-size: 18px; font-weight: 800; }
+                    }
+                }
+                for item[i] in root.nav-items: NavItem {
+                    icon: item.icon;
+                    label: item.label;
+                    selected: root.current-page == i;
+                    focus-token: root.nav-focus-token;
+                    activated => { root.navigate(i); }
+                }
+                Rectangle { }
+            }
+        }
+
+        // Lista de salas (recolhe abaixo de 1200 px, UX_GUIDELINES §6).
+        // `rooms-collapsed` vem do Rust no redimensionamento, para não criar
+        // laço entre a largura da janela e o layout.
+        if !root.rooms-collapsed: Rectangle {
+            width: 240px;
+            background: Theme.bg-1;
+            VerticalLayout {
+                padding: Theme.sp-4;
+                spacing: Theme.sp-2;
+                Text { text: @tr("ROOMS"); color: Theme.text-secondary; font-size: Theme.fs-caption; font-weight: 600; }
+                Text {
+                    text: @tr("No rooms yet. Private rooms arrive with the relay in Stage 3.");
+                    color: Theme.text-secondary;
+                    font-size: Theme.fs-caption;
+                    wrap: word-wrap;
+                }
+                Rectangle { }
+            }
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            Rectangle {
+                background: Theme.bg-2;
+                flick := Flickable {
+                    content-y <=> root.scroll-y;
+                    content-width: self.width;
+                    content-height: max(self.height, content.preferred-height);
+                    content := VerticalLayout {
+                        width: flick.width;
+                        padding: Theme.sp-8;
+                        alignment: start;
+                        if root.current-page == 0: HomePage {
+                            display-name: root.display-name;
+                            gamepads: root.gamepads;
+                            navigate(i) => { root.navigate(i); }
+                        }
+                        if root.current-page == 1: StreamPage { }
+                        if root.current-page == 2: RoomsPage { }
+                        if root.current-page == 3: LivePage { }
+                        if root.current-page == 4: SettingsPage {
+                            tray-available: root.tray-available;
+                            refocus-token: root.refocus-token;
+                            language-index <=> root.language-index;
+                            display-name <=> root.display-name;
+                            deadzone <=> root.deadzone;
+                            repeat-delay <=> root.repeat-delay;
+                            repeat-interval <=> root.repeat-interval;
+                            start-minimized <=> root.start-minimized;
+                            close-to-tray <=> root.close-to-tray;
+                            background-shortcuts: root.background-shortcuts;
+                            changed-setting => { root.settings-changed(); }
+                            language-selected(i) => { root.language-selected(i); }
+                            request-virtual-keyboard(t) => { root.open-keyboard(); }
+                        }
+                        if root.current-page == 5: AccountPage { }
+                        if root.current-page == 6: PlansPage { tab <=> root.plan-tab; }
+                        if root.current-page == 7: AboutPage {
+                            version: root.version;
+                            licenses: root.licenses;
+                        }
+                    }
+                }
+            }
+
+            // Barra de status
+            Rectangle {
+                height: 32px;
+                background: Theme.bg-0;
+                border-width: 0;
+                HorizontalLayout {
+                    padding-left: Theme.sp-4;
+                    padding-right: Theme.sp-4;
+                    spacing: Theme.sp-2;
+                    Rectangle {
+                        width: 8px;
+                        height: 8px;
+                        y: (parent.height - self.height) / 2;
+                        border-radius: 4px;
+                        background: root.gamepads.length > 0 ? Theme.success : Theme.text-muted;
+                    }
+                    Text {
+                        text: root.gamepads.length > 0 ? @tr("{n} controller connected" | "{n} controllers connected" % root.gamepads.length) : @tr("No controller");
+                        color: Theme.text-secondary;
+                        font-size: Theme.fs-caption;
+                        vertical-alignment: center;
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    Text {
+                        text: @tr("A Confirm · B Back · LB/RB Section · LT/RT Tab · Start Menu");
+                        color: Theme.text-secondary;
+                        font-size: Theme.fs-caption;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+        }
+    }
+
+    vk := VirtualKeyboard {
+        visible: root.modal == 1;
+        width: root.width;
+        height: root.height;
+        title: @tr("Display name");
+        max-length: 32;
+        confirmed(text) => {
+            root.display-name = text;
+            root.settings-changed();
+            root.close-modal();
+        }
+        cancelled => { root.close-modal(); }
+    }
+
+    Rectangle {
+        visible: root.modal == 2;
+        background: #000000b3;
+        // Teclado físico também navega o menu.
+        menu-fs := FocusScope {
+            key-pressed(event) => {
+                if (event.text == Key.UpArrow) { root.modal-action(NavAction.up); return accept; }
+                if (event.text == Key.DownArrow) { root.modal-action(NavAction.down); return accept; }
+                if (event.text == Key.Return || event.text == " ") { root.modal-action(NavAction.confirm); return accept; }
+                if (event.text == Key.Escape) { root.modal-action(NavAction.back); return accept; }
+                accept
+            }
+        }
+        TouchArea { clicked => { root.close-modal(); } }
+        Rectangle {
+            width: 320px;
+            height: menu.preferred-height;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            background: Theme.bg-1;
+            border-radius: Theme.radius-lg;
+            border-width: 1px;
+            border-color: Theme.border;
+            TouchArea { }
+            menu := VerticalLayout {
+                padding: Theme.sp-4;
+                spacing: Theme.sp-1;
+                Text { text: @tr("Menu"); color: Theme.text-secondary; font-size: Theme.fs-caption; font-weight: 600; }
+                for label[i] in root.menu-items: MenuEntry {
+                    label: label;
+                    selected: root.menu-index == i;
+                    activated => { root.run-menu(i); }
+                }
+            }
+        }
+    }
+}

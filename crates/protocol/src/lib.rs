@@ -6,6 +6,8 @@
 
 use bytes::{BufMut, Bytes, BytesMut};
 
+pub mod messages;
+
 /// Versão atual do protocolo.
 pub const VERSION: u8 = 1;
 /// Tamanho do cabeçalho fixo em bytes.
@@ -14,6 +16,8 @@ pub const HEADER_LEN: usize = 28;
 pub const MAX_MESSAGE_LEN: usize = 4 * 1024 * 1024;
 /// Tamanho máximo de mensagens enviadas pelo cliente espectador.
 pub const MAX_CLIENT_MESSAGE_LEN: usize = 1024;
+/// Tamanho máximo de uma mensagem `Auth` (o token cabe com folga).
+pub const MAX_AUTH_MESSAGE_LEN: usize = 2048;
 
 /// Tipos de mensagem.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,12 +39,20 @@ pub enum MessageType {
     KeyframeRequest = 0x12,
     /// Transmissão encerrada.
     StreamEnd = 0x20,
+    /// Servidor → espectador: o transmissor caiu; a sala aguarda a reconexão.
+    StreamPaused = 0x21,
+    /// Cliente → servidor: primeira mensagem da conexão (payload JSON [`messages::AuthRequest`]).
+    Auth = 0x30,
+    /// Servidor → cliente: autenticação aceita (payload JSON [`messages::AuthOk`]).
+    AuthOk = 0x31,
+    /// Servidor → cliente: erro (payload JSON [`messages::ErrorBody`]).
+    Error = 0x32,
 }
 
 impl TryFrom<u8> for MessageType {
     type Error = DecodeError;
 
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+    fn try_from(value: u8) -> Result<Self, DecodeError> {
         Ok(match value {
             0x01 => Self::VideoInit,
             0x02 => Self::VideoFrame,
@@ -50,6 +62,10 @@ impl TryFrom<u8> for MessageType {
             0x11 => Self::Pong,
             0x12 => Self::KeyframeRequest,
             0x20 => Self::StreamEnd,
+            0x21 => Self::StreamPaused,
+            0x30 => Self::Auth,
+            0x31 => Self::AuthOk,
+            0x32 => Self::Error,
             other => return Err(DecodeError::UnknownType(other)),
         })
     }
@@ -246,6 +262,16 @@ mod tests {
         ));
         let msg = encode(&Header::new(MessageType::Ping, 0), &[0; 64]).expect("encode");
         assert!(matches!(decode(&msg, 32), Err(DecodeError::TooLarge(92))));
+    }
+
+    #[test]
+    fn all_types_roundtrip() {
+        for code in [
+            0x01u8, 0x02, 0x03, 0x04, 0x10, 0x11, 0x12, 0x20, 0x21, 0x30, 0x31, 0x32,
+        ] {
+            let kind = MessageType::try_from(code).expect("tipo conhecido");
+            assert_eq!(kind as u8, code);
+        }
     }
 
     #[test]

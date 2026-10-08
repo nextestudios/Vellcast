@@ -1,0 +1,55 @@
+// Tokens de docs/UX_GUIDELINES.md. Sem animações contínuas (spec §12).
+
+export global Theme {
+    out property <color> bg-0: #0E1014;
+    out property <color> bg-1: #15181E;
+    out property <color> bg-2: #1C2028;
+    out property <color> bg-3: #252A34;
+    out property <color> bg-hover: #2F3542;
+    out property <color> border: #252A34;
+    out property <color> text-primary: #ECEEF2;
+    out property <color> text-secondary: #A9B0BD;
+    out property <color> text-muted: #7C8494;
+    out property <color> accent: #2EC4B6;
+    out property <color> accent-strong: #5EE0D3;
+    out property <color> on-accent: #0E1014;
+    out property <color> danger: #F0625D;
+    out property <color> warning: #F2B544;
+    out property <color> success: #4CC77F;
+    out property <color> focus: #FFD166;
+
+    out property <length> radius-sm: 4px;
+    out property <length> radius: 8px;
+    out property <length> radius-lg: 12px;
+    out property <length> sp-1: 4px;
+    out property <length> sp-2: 8px;
+    out property <length> sp-3: 12px;
+    out property <length> sp-4: 16px;
+    out property <length> sp-6: 24px;
+    out property <length> sp-8: 32px;
+
+    out property <length> fs-caption: 12px;
+    out property <length> fs-body: 14px;
+    out property <length> fs-body-strong: 16px;
+    out property <length> fs-section: 20px;
+    out property <length> fs-title: 24px;
+
+    out property <length> control-height: 44px;
+    out property <length> focus-width: 2px;
+    out property <length> focus-offset: 2px;
+}
+
+// Estado de entrada atual. `gamepad` fica verdadeiro apenas durante o
+// processamento de um evento vindo do controle (definido pelo Rust).
+export global InputState {
+    in-out property <bool> gamepad: false;
+}
+
+// Ações enviadas pelo Rust a modais (teclado virtual, menu rápido).
+export enum NavAction { up, down, left, right, confirm, back, secondary, options, menu }
+
+// Funções de texto implementadas em Rust (Slint não tem manipulação de string).
+export global TextOps {
+    pure callback pop-char(string) -> string;
+    pure callback to-upper(string) -> string;
+}

@@ -1,4 +1,4 @@
-//! Leitura da mídia de teste pré-codificada (H.264 Annex B e Ogg Opus).
+//! Parsers de H.264 Annex B e Ogg Opus.
 
 use anyhow::{Context, Result, bail};
 use bytes::Bytes;

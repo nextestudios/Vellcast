@@ -1,0 +1,38 @@
+[package]
+name = "vellcast-desktop"
+description = "Aplicativo desktop do Vellcast (Rust + Slint)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+vellcast-controller = { path = "../../crates/controller" }
+anyhow.workspace = true
+directories = "=6.0.0"
+serde.workspace = true
+serde_json.workspace = true
+slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-software", "accessibility", "unstable-winit-030"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tray-icon = { version = "=0.24.0", default-features = false }
+
+[build-dependencies]
+slint-build = "=1.18.1"
+
+# O código gerado pelo Slint usa `#[allow(unsafe_code)]`, incompatível com o
+# `forbid` do workspace; aqui o código próprio continua sem unsafe via `deny`.
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+unwrap_used = "warn"
+
+[features]
+# Captura a janela em BMP para revisão visual (desenvolvimento apenas).
+dev-snapshot = []
+# Renderer OpenGL (femtovg), para comparação em benchmarks (ADR-014).
+# Selecione em tempo de execução com SLINT_BACKEND=winit-femtovg.
+gpu-renderer = ["slint/renderer-femtovg"]

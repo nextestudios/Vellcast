@@ -96,12 +96,102 @@ Imagens publicadas devem fixar versões das imagens base (tag + digest) e ser re
 - Ajustar timeouts de inatividade do proxy acima do intervalo de heartbeat do protocolo.
 - Desativar buffering/compressão de resposta para o caminho de mídia (dados já comprimidos; buffering aumenta latência).
 
-## 6. Futuro: relay de produção e QUIC (Etapas 3 e 6)
+## 6. Relay de mídia (`vellcast-relay`, ETAPA 3)
 
-- `services/relay` terá Dockerfile e `docker-compose.yml` de exemplo próprios para self-hosting, sem dependência do Vellcast Cloud.
+O relay é o servidor de produção e de self-hosting: salas privadas, convites, tokens e distribuição sem recodificação. Não precisa de GPU, não grava mídia em disco e não depende do Vellcast Cloud.
+
+### 6.1 Execução local
+
+```bash
+export VELLCAST_RELAY_SECRET=$(openssl rand -hex 32)
+VELLCAST_BIND=127.0.0.1:8788 cargo run --release -p vellcast-relay
+```
+
+Para desenvolvimento rápido, `VELLCAST_RELAY_INSECURE_DEV=1` gera um segredo aleatório a cada início (os tokens deixam de valer ao reiniciar). Sem segredo e sem essa flag, o relay **se recusa a iniciar**.
+
+Publicar a mídia sintética numa sala:
+
+```bash
+curl -s -X POST localhost:8788/api/rooms -H 'content-type: application/json' -d '{"name":"teste"}'
+# guarde ownerToken e publisherToken da resposta
+VELLCAST_PUBLISHER_TOKEN=<publisherToken> cargo run --release -p vellcast-transport \
+  --example publish_fixture -- ws://127.0.0.1:8788/ws 1080p60
+```
+
+Teste de carga: `node tests/benchmarks/relay-viewers.mjs http://127.0.0.1:8788 1080p60 20 30` (cria sala e convites, inicia o publicador e conecta N espectadores autenticados).
+
+### 6.2 Variáveis de ambiente
+
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `VELLCAST_RELAY_SECRET` | — (obrigatória) | Segredo HMAC dos tokens, ≥ 32 bytes. Trocar o segredo invalida todos os tokens. |
+| `VELLCAST_RELAY_INSECURE_DEV` | desligado | `1` gera segredo aleatório (apenas desenvolvimento). |
+| `VELLCAST_BIND` | `127.0.0.1:8788` (`0.0.0.0:8788` na imagem) | Endereço HTTP/WebSocket. |
+| `VELLCAST_CREATE_ROOM_KEY` | vazio | Se definida, `POST /api/rooms` exige `Authorization: Bearer <chave>`. Recomendado em servidores expostos. |
+| `VELLCAST_TRUST_PROXY` | `false` | Usa o último endereço de `X-Forwarded-For` como IP do cliente (rate limit). Ative só atrás de proxy que sobrescreve esse cabeçalho. |
+| `VELLCAST_MAX_ROOMS` | `1000` | Salas simultâneas. |
+| `VELLCAST_MAX_VIEWERS_PER_ROOM` | `50` | Teto de espectadores por sala. |
+| `VELLCAST_MAX_PUBLISHER_KBPS` | `40000` | Banda de entrada por transmissor. |
+| `VELLCAST_PUBLISHER_GRACE_SECS` | `30` | Tolerância a queda do transmissor. |
+| `VELLCAST_ROOM_TTL_SECS` | `86400` | Vida máxima de uma sala. |
+| `VELLCAST_ROOM_IDLE_TTL_SECS` | `3600` | Sala sem transmissor e sem espectadores é removida após esse tempo. |
+| `VELLCAST_VIEWER_TOKEN_TTL_SECS` | `43200` | Validade do token de espectador. |
+| `VELLCAST_LOG_FORMAT` | texto (`json` na imagem) | `json` para logs estruturados. |
+| `RUST_LOG` | `info` | Nível de log. |
+
+Os logs nunca incluem tokens, convites, IPs de espectadores nem conteúdo de mídia.
+
+### 6.3 API HTTP
+
+| Método e caminho | Autorização | Resultado |
+|---|---|---|
+| `POST /api/rooms` `{name, maxViewers?}` | `VELLCAST_CREATE_ROOM_KEY`, se definida | `201 {room, ownerToken, publisherToken}` |
+| `GET /api/rooms/{id}` | token da sala (qualquer papel) | estado, espectadores, limites |
+| `POST /api/rooms/{id}/invites` `{maxUses?, ttlSecs?}` | dono | `201 {code, maxUses, expiresAt}` (o código aparece uma vez; o relay guarda só o hash) |
+| `POST /api/rooms/{id}/join` `{invite}` | convite válido | `{viewerToken, room}` |
+| `POST /api/rooms/{id}/publisher-token` | dono | novo token de transmissor |
+| `DELETE /api/rooms/{id}` | dono | `204`; desconecta transmissor e espectadores |
+| `GET /ws` | mensagem `Auth` | mídia (ver `STREAMING_PROTOCOL.md`) |
+| `GET /healthz` | — | `ok` |
+| `GET /metrics` | — | JSON agregado (salas, espectadores, bytes, descartes, falhas de autenticação). Sem conteúdo nem tokens. Restrinja no proxy se não quiser expor. |
+
+Tokens vão sempre em `Authorization: Bearer`, nunca na URL.
+
+### 6.4 Docker
+
+```bash
+docker build -f infrastructure/docker/relay.Dockerfile -t vellcast-relay .
+docker run --rm -p 127.0.0.1:8788:8788 -e VELLCAST_RELAY_SECRET=$(openssl rand -hex 32) vellcast-relay
+```
+
+Self-hosting com Compose: copie `infrastructure/docker/relay.env.example` para `relay.env` (ignorado pelo git), preencha o segredo e rode `docker compose -f infrastructure/docker/docker-compose.relay.yml up -d --build`. O exemplo roda como usuário sem privilégios, com sistema de arquivos somente leitura, sem capabilities, e publica a porta só em `127.0.0.1` para ficar atrás do proxy com TLS. O relay encerra de forma limpa com `SIGTERM`.
+
+### 6.5 Dokploy
+
+1. **Create Service → Application**, fonte GitHub (`nextestudios/Vellcast`, branch `main`).
+2. Build type **Dockerfile**: `infrastructure/docker/relay.Dockerfile`, contexto `.`.
+3. **Environment**: `VELLCAST_RELAY_SECRET` (gerado com `openssl rand -hex 32`, guardado só no Dokploy), `VELLCAST_CREATE_ROOM_KEY`, `VELLCAST_TRUST_PROXY=true`.
+4. **Domains**: domínio do relay, container port `8788`, HTTPS com Let's Encrypt. O Traefik do Dokploy termina o TLS e encaminha o upgrade de WebSocket.
+5. Health check em `/healthz`.
+6. Uma réplica só: o estado das salas fica em memória (ver `ARCHITECTURE.md` §5). Escalar horizontalmente exige roteamento por sala, que ainda não existe.
+
+### 6.6 Proxy reverso
+
+Mesmas regras da seção 5, apontando para a porta `8788`. Pontos específicos:
+
+- `proxy_read_timeout` acima de 30 s (timeout de inatividade do relay).
+- Sem buffering e sem compressão no caminho `/ws`.
+- `client_max_body_size` pequeno para `/api` (os corpos têm poucos bytes); o WebSocket aceita mensagens de até 4 MiB.
+- Com `VELLCAST_TRUST_PROXY=true`, o proxy precisa **sobrescrever** `X-Forwarded-For` (Nginx: `proxy_set_header X-Forwarded-For $remote_addr;`), senão o cliente pode forjar o IP usado no rate limit.
+
+### 6.7 Capacidade
+
+Medição local (Apple M1, loopback, build Release): 1 transmissor 1080p60 a ~8 Mbps para 20 espectadores usou ~5% de um núcleo e < 10 MB de RAM no relay. O limite prático é a **banda de saída** (bitrate × espectadores: 20 × 8 Mbps = 160 Mbps), não a CPU. Dimensionamento e custo em `MONETIZATION.md`.
+
+## 7. Futuro: QUIC (Etapa 6)
+
 - **QUIC (Quinn)**, se adotado entre desktop e relay, usa **UDP** (ex.: 443/udp ou porta dedicada):
   - Liberar a porta UDP no firewall da VPS e no provedor.
   - **Não presumir que o proxy reverso encaminha QUIC.** O Traefik/Nginx do Dokploy normalmente termina HTTP(S)/TCP; o QUIC do relay provavelmente precisará de porta UDP publicada diretamente no container (`ports: "4433:4433/udp"`) com certificado TLS próprio montado no container.
   - A Activity continua usando WebSocket via proxy do Discord.
-- Capacidade: dimensionar pela banda de saída (ver `MONETIZATION.md` §4); o relay não precisa de GPU.
 - Monitoramento: logs estruturados (JSON), `/healthz`, métricas agregadas (S-014).

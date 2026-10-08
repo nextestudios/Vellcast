@@ -1,0 +1,33 @@
+[package]
+name = "vellcast-relay"
+description = "Servidor de mídia do Vellcast: salas privadas, autorização e distribuição sem recodificação"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+vellcast-protocol.workspace = true
+anyhow.workspace = true
+axum.workspace = true
+base64.workspace = true
+bytes.workspace = true
+futures-util.workspace = true
+getrandom.workspace = true
+hmac.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["json"] }
+
+[dev-dependencies]
+vellcast-transport.workspace = true
+tokio-tungstenite.workspace = true
+
+[lints]
+workspace = true

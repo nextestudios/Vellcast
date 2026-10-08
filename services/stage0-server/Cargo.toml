@@ -10,6 +10,7 @@ publish = false
 
 [dependencies]
 vellcast-protocol.workspace = true
+vellcast-media-fixtures.workspace = true
 anyhow.workspace = true
 axum.workspace = true
 bytes.workspace = true

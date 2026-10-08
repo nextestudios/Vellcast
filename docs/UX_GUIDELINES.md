@@ -1,7 +1,6 @@
 # Diretrizes de UX e Design System — Vellcast
 
-> Status: **Proposta inicial (Etapa 0)**. A implementação em Slint começa na Etapa 1.
-> Nada aqui é uma interface concluída; são regras e tokens que a implementação deverá seguir.
+> Status: **Tokens e componentes implementados no desktop (Etapa 1)**: `apps/desktop/ui/theme.slint` (tokens) e `apps/desktop/ui/widgets.slint` (componentes). Validado no macOS; revisão visual no Windows pendente.
 
 ## 1. Princípios
 
@@ -56,7 +55,7 @@ Estados nunca dependem apenas de cor: "ao vivo" tem ícone + rótulo; erro tem �
 
 ## 3. Tipografia
 
-- Família: uma fonte sans-serif com licença OFL (candidatas: **Inter** ou **Noto Sans** para cobertura de pt-BR/en). Embutir apenas os pesos usados (400, 600) para manter o binário pequeno. Licença a registrar em `LICENSING.md`.
+- Família: **fonte do sistema** (Segoe UI no Windows 11), sem custo no binário e com boa cobertura de pt-BR/en. Se a revisão no Windows mostrar problemas, a alternativa é embutir Inter ou Noto Sans (OFL), só nos pesos 400 e 600, com a licença em `LICENSING.md`.
 - Escala (px): `12` legenda · `14` corpo · `16` corpo destacado · `20` título de seção · `24` título de tela.
 - Altura de linha: 1.4 para corpo, 1.2 para títulos.
 - Números de métricas usam dígitos tabulares quando a fonte suportar (evita "tremor" em valores que mudam).
@@ -75,7 +74,22 @@ Estados nunca dependem apenas de cor: "ao vivo" tem ícone + rótulo; erro tem �
 - Exatamente **um** elemento focado por vez em toda a janela, incluindo modais.
 - Ao abrir um modal, o foco vai para a ação principal; ao fechar, volta ao elemento que o abriu.
 - Estados por componente: `default`, `hover`, `focused`, `pressed`, `disabled`, `selected`. `disabled` usa 40% de opacidade e não recebe foco.
-- Transições: no máximo 120 ms, apenas opacidade/cor. Respeitar a preferência do sistema por movimento reduzido (sem transições).
+- Transições: no máximo 120 ms, apenas opacidade/cor. Respeitar a preferência do sistema por movimento reduzido (sem transições). **Implementação atual: nenhuma animação.**
+
+### Componentes implementados (Etapa 1)
+
+| Componente | Uso | Teclas/controle |
+|---|---|---|
+| `VButton` | Ações; variante `primary` em `accent` | A/Enter/Espaço |
+| `VToggle` | Liga/desliga com descrição | A/Enter/Espaço alterna |
+| `VStepper` | Valor numérico com − e + | Esquerda/Direita ajustam no passo |
+| `VSelect` | Escolha entre opções | Esquerda/Direita; A avança |
+| `VTextField` | Texto; com controle abre o teclado virtual | A abre o teclado virtual; mouse/teclado editam direto |
+| `Card`, `Notice`, `BulletList` | Agrupamento e avisos honestos de etapas futuras (chip `warning` "Etapa N") | — |
+| `VirtualKeyboard` | Modal de texto (M-004) | Ver `CONTROLLER_SUPPORT.md` §5 |
+| Menu rápido | Modal aberto por Start | Cima/Baixo, A, B |
+
+Todos desenham o anel de foco de 2 px `focus` com 2 px de afastamento.
 
 ## 6. Layout principal
 
@@ -91,12 +105,12 @@ Estados nunca dependem apenas de cor: "ao vivo" tem ícone + rótulo; erro tem �
 └──────────────────────────────────────────────────────────────┘
 ```
 
-- **Barra lateral (64–72 px):** ícones de navegação com rótulo em tooltip/foco: Home, Transmitir, Salas, Configurações, Conta. "Planos" e "Sobre" ficam no fim da barra.
+- **Barra lateral (96 px):** ícone (Lucide, ISC) com rótulo curto de 11 px sempre visível, porque quem navega pelo controle não tem tooltip. Ordem: Início, Transmitir, Salas, Ao vivo, Configurações, Conta, Planos, Sobre (a mesma ordem de LB/RB). Item selecionado: fundo `bg-3`, barra de 3 px `accent` e ícone `accent`.
 - **Lista de salas (240 px, recolhível):** salas privadas do usuário, transmissão ativa marcada com ícone + rótulo "Ao vivo".
 - **Área central:** conteúdo da tela atual. A prévia da transmissão só é renderizada quando visível (ver §8).
 - **Barra inferior (32 px):** estado da conexão, sala atual, resolução/FPS ativos e **dicas do controle contextuais** (glifos Xbox ou PlayStation conforme o controle detectado; teclas quando o último input foi teclado).
 - **Modo compacto (S-009):** esconde a lista de salas e mostra apenas iniciar/parar, fonte e status.
-- Largura mínima de janela: 960×600. Abaixo de 1200 px a lista de salas recolhe.
+- Largura mínima de janela: 960×600; tamanho inicial 1180×720. Abaixo de 1200 px a lista de salas recolhe. O recolhimento vem do evento de redimensionamento, não de um binding no layout, para evitar laço de layout.
 
 ## 7. Telas iniciais
 

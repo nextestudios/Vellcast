@@ -1,0 +1,28 @@
+[package]
+name = "vellcast-transport"
+description = "Cliente de transporte do transmissor Vellcast (WebSocket + TLS)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+vellcast-protocol.workspace = true
+bytes.workspace = true
+futures-util.workspace = true
+getrandom.workspace = true
+rustls.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+vellcast-media-fixtures.workspace = true
+anyhow.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

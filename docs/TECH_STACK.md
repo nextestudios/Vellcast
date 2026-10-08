@@ -7,8 +7,8 @@ Cada dependência é avaliada por manutenção, licença, segurança, tamanho, i
 | Camada | Tecnologia | Justificativa | Status |
 |---|---|---|---|
 | Linguagem | Rust estável (edition 2024) | Desempenho previsível, sem GC, segurança de memória | Aceita |
-| UI desktop | Slint | Nativo, leve, renderização sob demanda, sem navegador | Aceita (licença pendente, ADR-006) |
-| Controles | GilRs + XInput/Windows.Gaming.Input quando necessário | GilRs cobre a maioria; APIs nativas para casos específicos | A validar na ETAPA 1 |
+| UI desktop | Slint 1.18 (backend winit, renderer de software) | Nativo, leve, renderização sob demanda, sem navegador | Aceita (Royalty-free 2.0, ADR-006; renderer ADR-014) |
+| Controles | GilRs 0.11 (Windows.Gaming.Input/XInput por baixo) | Uma API para Xbox, DualShock/DualSense e genéricos; XInput direto só se testes em hardware mostrarem lacunas (ADR-016) | Implementado; validação em hardware pendente |
 | Captura | Windows Graphics Capture; DXGI Desktop Duplication como alternativa | API oficial, captura por janela, frames em textura D3D11 | Aceita |
 | GPU | Direct3D 11 | Interoperável com WGC e Media Foundation | Aceita |
 | Encoder | Media Foundation (MFT de hardware); NVENC/AMF/QSV direto se benchmarks justificarem | Uma API cobre os três fabricantes | Candidata |
@@ -27,6 +27,16 @@ Cada dependência é avaliada por manutenção, licença, segurança, tamanho, i
 | Observabilidade | `tracing` (logs estruturados), endpoint de métricas, `/health` | Sem serviços externos obrigatórios | Aceita |
 
 ## 2. Dependências atuais (ETAPA 0)
+
+### Rust (desktop, Etapa 1)
+| Crate | Uso | Licença | Observação |
+|---|---|---|---|
+| `slint` 1.18.1 | Interface | Royalty-free 2.0 (escolhida) | Features: `backend-winit`, `renderer-software`, `accessibility`, `unstable-winit-030` (foco/tamanho da janela). `renderer-femtovg` só com a feature `gpu-renderer` |
+| `slint-build` 1.18.1 | Compila `ui/*.slint` e embute as traduções | Idem | Build-time |
+| `gilrs` 0.11.2 | Gamepad | Apache-2.0/MIT | Thread própria, bloqueante, sem polling ocioso |
+| `tray-icon` 0.24.0 | Bandeja | MIT/Apache-2.0 | 0.24 (e não 0.25) para usar o mesmo `muda` 0.19 do Slint: duas versões duplicam classes Objective-C no macOS e quebram o link |
+| `directories` 6.0.0 | Pasta de configuração | MIT/Apache-2.0 | |
+| `serde_json` | `settings.json` | MIT/Apache-2.0 | Já usado no workspace; evita adicionar TOML |
 
 ### Rust (workspace)
 | Crate | Uso | Licença | Observação |

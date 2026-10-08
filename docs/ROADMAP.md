@@ -10,11 +10,12 @@
 | Etapa | Nome | Prioridade | Depende de | Status |
 |---|---|---|---|---|
 | 0 | Validação Discord | Must | — | Testing — validação local concluída; E0-T10 adiada ([ADR-013](DECISIONS.md)) |
-| 1 | Desktop e controles | Must | 0 (local) | Ready |
+| 1 | Desktop e controles | Must | 0 (local) | Testing — falta Windows real e controle físico |
 | 2 | Captura e encoder | Must | 0 (local) | Backlog |
-| 3 | Media relay | Must | 0 (local) | Ready |
+| 3 | Media relay | Must | 0 (local) | Testing — falta Docker e VPS com TLS |
 | 4 | Áudio | Must | 2, 3 | Backlog |
 | 5 | Integração completa | Must | 1, 2, 3, 4, E0-T10 | Backlog |
+| OC | Marco: abertura do código (Open Core) | Should | 5 | Backlog |
 | 6 | Otimização extrema | Must | 5 | Backlog |
 | 7 | Comercialização | Should (MVP) / Must (Premium) | 5 | Backlog |
 | 8 | Lançamento | Must (lançamento) | 6, 7 | Backlog |
@@ -59,15 +60,15 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 | ID | Tarefa | MoSCoW | Depende de | Critérios de aceite | Status |
 |---|---|---|---|---|---|
 | E1-T01 | Decisão de licença do Slint | M-001 | — | Opção registrada em [LICENSING](LICENSING.md) e [DECISIONS](DECISIONS.md) | Done — Royalty-free 2.0 (ADR-006) |
-| E1-T02 | Esqueleto `apps/desktop` (Rust + Slint) | M-001 | E1-T01 | Build Release na CI Windows | Backlog |
-| E1-T03 | Design system em Slint | M-002 | E1-T02 | Tokens de cor, tipografia, espaçamento e foco conforme [UX_GUIDELINES](UX_GUIDELINES.md) | Backlog |
-| E1-T04 | Navegação lateral e telas (Home, Transmitir, Salas, Configurações) | M-002 | E1-T03 | Telas navegáveis; nenhuma tela simulada apresentada como funcional | Backlog |
-| E1-T05 | Crate `controller` (GilRs + XInput quando necessário) | M-003, S-010 | E1-T02 | Mapeamento da seção 13; deadzone; repetição controlada; conexão/desconexão | Backlog |
-| E1-T06 | Sistema de foco e modais | M-003 | E1-T04, E1-T05 | Foco sempre visível; modais navegáveis | Backlog |
-| E1-T07 | Teclado virtual | M-004 | E1-T06 | Requisitos da seção 14 | Backlog |
-| E1-T08 | Modo bandeja | M-017 | E1-T02 | Sem renderização quando minimizado | Backlog |
-| E1-T09 | Preparação de i18n | S-013 | E1-T04 | Strings externalizadas | Backlog |
-| E1-T10 | Medição de CPU/RAM em Release | M-023 | E1-T08 | Ocioso e minimizado medidos em Windows real | Backlog |
+| E1-T02 | Esqueleto `apps/desktop` (Rust + Slint) | M-001 | E1-T01 | Build Release na CI Windows | Testing — compila para Windows; falta build Release na CI Windows e execução real |
+| E1-T03 | Design system em Slint | M-002 | E1-T02 | Tokens de cor, tipografia, espaçamento e foco conforme [UX_GUIDELINES](UX_GUIDELINES.md) | Testing — revisão visual no Windows pendente |
+| E1-T04 | Navegação lateral e telas (Home, Transmitir, Salas, Configurações) | M-002 | E1-T03 | Telas navegáveis; nenhuma tela simulada apresentada como funcional | Testing — 8 telas; etapas futuras com estado honesto ("disponível na Etapa N") |
+| E1-T05 | Crate `controller` (GilRs + XInput quando necessário) | M-003, S-010 | E1-T02 | Mapeamento da seção 13; deadzone; repetição controlada; conexão/desconexão | Testing — 16 testes de lógica; controle físico não testado |
+| E1-T06 | Sistema de foco e modais | M-003 | E1-T04, E1-T05 | Foco sempre visível; modais navegáveis | Testing — fluxo completo validado com ações simuladas (ADR-015) |
+| E1-T07 | Teclado virtual | M-004 | E1-T06 | Requisitos da seção 14 | Testing — validado com ações simuladas; controle físico pendente |
+| E1-T08 | Modo bandeja | M-017 | E1-T02 | Sem renderização quando minimizado | Testing — sem redesenho oculto (20 MB, ~0,1% CPU no macOS); clique/menu e Windows pendentes |
+| E1-T09 | Preparação de i18n | S-013 | E1-T04 | Strings externalizadas | Done — pt-BR/en com troca em tempo real; teste falha se faltar tradução (ADR-017) |
+| E1-T10 | Medição de CPU/RAM em Release | M-023 | E1-T08 | Ocioso e minimizado medidos em Windows real | Blocked — requer máquina Windows; números do macOS em PERFORMANCE |
 
 **Entregável:** aplicativo navegável por controle.
 **Critério de aceite:** todas as operações implementadas nesta etapa acessíveis por controle; CPU e RAM medidos em Release.
@@ -102,14 +103,20 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 
 | ID | Tarefa | MoSCoW | Depende de | Critérios de aceite | Status |
 |---|---|---|---|---|---|
-| E3-T01 | `services/relay` (Tokio + Axum) a partir das lições do `stage0-server` | M-010 | Etapa 0 | Ingestão de transmissor e distribuição a espectadores | Backlog |
-| E3-T02 | Crate `transport` (WebSocket TLS) | M-010, M-020 | E3-T01 | Heartbeats, limites, backpressure | Backlog |
-| E3-T03 | Salas e autorização | M-013, M-020 | E3-T01 | Privadas por padrão; tokens temporários | Backlog |
-| E3-T04 | Filas por espectador e keyframes | M-011, M-018 | E3-T01 | Espectador lento não afeta os demais; solicitação de keyframe ao transmissor | Backlog |
-| E3-T05 | Reconexão | M-019 | E3-T02 | Janela de graça e retomada no keyframe | Backlog |
-| E3-T06 | Proteção contra abuso | M-020 | E3-T03 | Rate limiting; limites de espectadores e banda | Backlog |
-| E3-T07 | Docker, docker-compose e guia Dokploy | M-021 | E3-T01 | Instalação limpa em VPS seguindo só a documentação | Backlog |
-| E3-T08 | Métricas e health check | S-014 | E3-T01 | Endpoint de métricas; logs estruturados | Backlog |
+| E3-T01 | `services/relay` (Tokio + Axum) a partir das lições do `stage0-server` | M-010 | Etapa 0 | Ingestão de transmissor e distribuição a espectadores | Done (local) — 18 testes unitários + 10 de integração |
+| E3-T02 | Crate `transport` (WebSocket TLS) | M-010, M-020 | E3-T01 | Heartbeats, limites, backpressure | Done (local) — fila com descarte, TLS, backoff com jitter; integração ao desktop nas Etapas 2/5 |
+| E3-T03 | Salas e autorização | M-013, M-020 | E3-T01 | Privadas por padrão; tokens temporários | Done — tokens HMAC-SHA256, convites com usos e expiração, API HTTP |
+| E3-T04 | Filas por espectador e keyframes | M-011, M-018 | E3-T01 | Espectador lento não afeta os demais; solicitação de keyframe ao transmissor | Done — fan-out sem recodificação (bytes idênticos), cache de GOP, filas limitadas |
+| E3-T05 | Reconexão | M-019 | E3-T02 | Janela de graça e retomada no keyframe | Done (local) — janela de graça com retomada por DISCONTINUITY |
+| E3-T06 | Proteção contra abuso | M-020 | E3-T03 | Rate limiting; limites de espectadores e banda | Done — rate limit por IP, limites de sala/espectadores/mensagem, teto de bitrate |
+| E3-T07 | Docker, docker-compose e guia Dokploy | M-021 | E3-T01 | Instalação limpa em VPS seguindo só a documentação | Testing — Dockerfile e compose escritos; build Docker não executado |
+| E3-T08 | Métricas e health check | S-014 | E3-T01 | Endpoint de métricas; logs estruturados | Done — `/metrics`, `/healthz`, logs JSON, SIGTERM |
+| E3-T09 | Benchmark com 20 espectadores autenticados | M-011, M-023 | E3-T04 | CPU/RAM/latência registrados | Done (local) — ver PERFORMANCE §3.4 |
+| E3-T10 | Deploy em VPS com TLS via Dokploy | M-021 | E3-T07 | Instalação seguindo só a documentação; medição com rede real | Backlog |
+| E3-T11 | `RoomStore` persistente em SQLite | S-015 | E3-T03 | Salas sobrevivem a reinício do relay | Backlog |
+| E3-T12 | Revogação e rotação de tokens | M-020 | E3-T03 | Revogar um token sem encerrar a sala; troca de segredo sem queda | Backlog |
+| E3-T13 | Sessão de 60 min e teste com 50 espectadores | M-025 | E3-T09 | Sem crescimento de memória; sem desconexões | Backlog |
+| E3-T14 | Inventário de licenças e unificação de dependências duplicadas | M-022 | — | `cargo deny` na CI; uma versão de tungstenite/base64 | Backlog |
 
 **Entregável:** servidor funcional em Docker.
 **Critério de aceite:** transmitir vídeo codificado para múltiplos espectadores sem recodificação no servidor.
@@ -151,6 +158,30 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 
 **Entregável:** MVP de ponta a ponta.
 **Critério de aceite:** um usuário inicia a transmissão no Windows e outro assiste dentro do Discord; o fluxo funciona com controles no desktop.
+**Status:** Backlog.
+
+---
+
+## Marco OC — Abertura do código (Open Core)
+
+**Objetivo:** tornar público o repositório do núcleo aberto sem expor a parte comercial, segredos ou obrigações de licença pendentes. Decisão de 2026-10-08: o repositório `nextestudios/Vellcast` continua **privado** até este marco ser concluído (ver [OPEN_SOURCE_STRATEGY](OPEN_SOURCE_STRATEGY.md) §5).
+
+**Momento-alvo:** ao fim da Etapa 5 (MVP de ponta a ponta), ou antes, se a cota de GitHub Actions do repositório privado virar gargalo.
+
+| ID | Tarefa | MoSCoW | Depende de | Critérios de aceite | Status |
+|---|---|---|---|---|---|
+| OC-T01 | Confirmar a licença do código próprio | M-022 | — | Apache-2.0 confirmada (ou substituída) pelo responsável; ADR-007 passa a Aceita; arquivo `NOTICE` criado | Backlog |
+| OC-T02 | Inventário de licenças de terceiros | M-022 | OC-T01 | `cargo deny check licenses` e verificação das dependências npm na CI; tabela de [LICENSING](LICENSING.md) completa, sem pendências; obrigações do Slint (ADR-006) cumpridas | Backlog |
+| OC-T03 | Separar o núcleo aberto da parte comercial | S-015 | — | `services/cloud-api`, planos, billing e documentos comerciais sensíveis movidos para um repositório privado; o núcleo compila e funciona sem eles (W-013) | Backlog |
+| OC-T04 | Verificação da marca "Vellcast" | — | — | Busca no INPI e em domínios registrada; política de uso da marca publicada (Apache-2.0 não licencia a marca, cláusula 6) | Backlog |
+| OC-T05 | Revisão de segurança do relay e do protocolo | M-020 | Etapa 3 | Auditoria (`/cso`) sem achados críticos ou altos abertos; resultados em [SECURITY](SECURITY.md) | Backlog |
+| OC-T06 | Política de reporte de vulnerabilidades | M-020 | — | `SECURITY.md` na raiz com contato privado e prazos de resposta; GitHub Private Vulnerability Reporting habilitado | Backlog |
+| OC-T07 | Varredura de segredos no histórico | M-024 | — | `gitleaks` (ou equivalente) em todo o histórico sem achados; verificação adicionada à CI | Backlog |
+| OC-T08 | Preparação para contribuidores externos | M-022 | OC-T01 | `CONTRIBUTING.md` revisado, código de conduta, templates de issue e PR, proteção da branch `main` | Backlog |
+| OC-T09 | Tornar o repositório público | — | OC-T01..OC-T08 | Visibilidade alterada pelo responsável; README público revisado; anúncio planejado | Backlog |
+
+**Entregável:** repositório público do Vellcast Core.
+**Critério de aceite:** todas as tarefas OC-T01 a OC-T08 concluídas e a abertura (OC-T09) aprovada explicitamente pelo responsável.
 **Status:** Backlog.
 
 ---

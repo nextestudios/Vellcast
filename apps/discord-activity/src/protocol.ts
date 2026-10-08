@@ -12,7 +12,27 @@ export const MessageType = {
   Pong: 0x11,
   KeyframeRequest: 0x12,
   StreamEnd: 0x20,
+  StreamPaused: 0x21,
+  Auth: 0x30,
+  AuthOk: 0x31,
+  Error: 0x32,
 } as const;
+
+/** Códigos de erro do payload JSON de `Error` (crates/protocol/src/messages.rs). */
+export type ErrorCode =
+  | 'unauthorized'
+  | 'forbidden'
+  | 'room_not_found'
+  | 'room_full'
+  | 'room_closed'
+  | 'publisher_exists'
+  | 'auth_timeout'
+  | 'idle_timeout'
+  | 'message_too_large'
+  | 'rate_limited'
+  | 'bitrate_exceeded'
+  | 'protocol_error'
+  | 'internal';
 export type MessageType = (typeof MessageType)[keyof typeof MessageType];
 
 export const Flags = { Keyframe: 1 << 0, Discontinuity: 1 << 1 } as const;

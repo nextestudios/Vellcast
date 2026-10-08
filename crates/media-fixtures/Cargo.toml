@@ -1,0 +1,19 @@
+[package]
+name = "vellcast-media-fixtures"
+description = "Leitura da mídia sintética de teste (H.264 Annex B e Ogg Opus) — apenas para testes e ferramentas"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+vellcast-protocol.workspace = true
+anyhow.workspace = true
+bytes.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

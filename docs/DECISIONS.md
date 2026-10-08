@@ -81,3 +81,27 @@ Formato: contexto → decisão → consequências. Status possíveis: **Proposta
 **Contexto:** A ETAPA 0 foi validada fora do Discord (Chromium local: 1080p60 e 720p30 decodificados, áudio Opus, reconexão, 20 espectadores). O teste em uma Activity real (E0-T10) depende de aplicação no Developer Portal e URL HTTPS pública.
 **Decisão:** A integração com o Discord fica para depois. E0-T10 volta ao Backlog e as próximas etapas Must Have avançam pela ordem MoSCoW, sem esperar essa validação.
 **Consequências:** Assume-se o risco de o Discord não suportar `VideoDecoder`/`AudioDecoder` ou o throughput necessário (R-01, R-03 em `RISKS.md`). O impacto fica limitado ao player da Activity: desktop, captura, encoder e relay continuam válidos, e o player web externo (S-011) usa o mesmo protocolo. E0-T10 passa a ser pré-requisito da ETAPA 5 (integração completa).
+
+## ADR-014 — Desktop: Slint com backend winit e renderer de software
+**Status:** Aceita (2026-10-08), a revalidar no Windows
+**Contexto:** A meta é UI ociosa abaixo de 1% de CPU e 80 MB de RAM, sem competir com o jogo pela GPU. Opções do Slint: femtovg (OpenGL), Skia (C++, binário maior) e renderer de software com atualização parcial de regiões.
+**Medição (macOS, Apple M1, build Release, 20–30 s ocioso, `phys_footprint`):** software 32 MB com janela visível e 20 MB oculto na bandeja; femtovg 41 MB visível. CPU média de 0,03% a 0,27% de um núcleo em todos os casos. Metodologia em `apps/desktop/README.md`.
+**Decisão:** Renderer de software como padrão (feature `renderer-software`). O femtovg fica atrás da feature `gpu-renderer` (`SLINT_BACKEND=winit-femtovg`) para benchmarks. Skia descartado por tamanho e toolchain C++.
+**Consequências:** Sem contexto de GPU no app e menos memória. A UI é estática e só redesenha regiões alteradas, mas o custo de redesenho em janelas 4K/HiDPI ainda precisa ser medido no Windows; se ficar caro, a decisão volta para femtovg.
+
+## ADR-015 — Navegação por controle sobre a cadeia de foco do Slint
+**Status:** Aceita (2026-10-08)
+**Contexto:** Todas as funções precisam funcionar só com gamepad (M-003), sem quebrar mouse e teclado.
+**Decisão:** O controle gera teclas sintéticas na janela: Baixo/Cima viram Tab/Shift+Tab (foco em ordem), Esquerda/Direita viram setas (ajustam valores em seletores e controles numéricos), A vira Enter. LB/RB trocam de seção, LT/RT trocam de aba, B volta pelo histórico de telas e Start abre o menu rápido. Com um modal aberto (teclado virtual, menu), as ações vão direto ao modal, que mantém o foco preso. Os componentes são próprios (`ui/widgets.slint`) e todos desenham anel de foco.
+**Consequências:** Teclado físico e controle percorrem exatamente o mesmo caminho, sem um segundo modelo de foco. A navegação é em ordem, não espacial; navegação espacial fica para avaliar se testes com usuários pedirem.
+
+## ADR-016 — Entrada de gamepad: GilRs, só com a janela em foco
+**Status:** Aceita (2026-10-08); validação em hardware pendente
+**Decisão:** O GilRs roda numa thread própria, bloqueado em `next_event_blocking` (acorda só por entrada ou prazo de repetição). A thread só emite ações quando a janela do Vellcast está em foco e visível, a partir do evento `Focused` do winit. Em segundo plano, nenhuma ação é gerada e o estado pressionado é descartado. Atalhos globais existem só como configuração, desligada e bloqueada na UI até haver implementação. XInput direto será avaliado apenas se os testes em hardware mostrarem lacunas no GilRs (ex.: gatilhos analógicos ou controles de portáteis).
+**Consequências:** O controle nunca interfere no jogo. O evento de foco depende da API `unstable-winit-030` do Slint, por isso a versão do Slint fica fixada com `=`.
+
+## ADR-017 — Internacionalização com traduções embutidas no binário
+**Status:** Aceita (2026-10-08)
+**Decisão:** Strings da UI com `@tr()`, idioma-fonte inglês e catálogo `pt-BR` em `apps/desktop/translations/pt-BR/LC_MESSAGES/vellcast-desktop.po`, embutido no build (`with_bundled_translations`). O padrão é pt-BR e a troca acontece ao vivo pelo `select_bundled_translation`. Um teste falha se alguma string `@tr` não tiver tradução pt-BR.
+**Consequências:** Sem gettext nem arquivos `.mo` em tempo de execução. O inglês é a fonte porque o Slint trata o idioma-fonte como `en`.
+

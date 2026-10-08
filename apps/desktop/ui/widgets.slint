@@ -1,0 +1,450 @@
+// Componentes próprios do Vellcast, todos navegáveis por foco (Tab/Shift+Tab,
+// que o controle envia como Baixo/Cima) e com anel de foco visível.
+
+import { Theme, InputState } from "theme.slint";
+
+export component FocusRing inherits Rectangle {
+    in property <bool> visible-ring;
+    in property <length> radius: Theme.radius;
+    // Ocupa o pai inteiro; o anel é desenhado 2 px para fora (UX_GUIDELINES §5).
+    Rectangle {
+        x: -(Theme.focus-width + Theme.focus-offset);
+        y: -(Theme.focus-width + Theme.focus-offset);
+        width: root.width + 2 * (Theme.focus-width + Theme.focus-offset);
+        height: root.height + 2 * (Theme.focus-width + Theme.focus-offset);
+        border-width: root.visible-ring ? Theme.focus-width : 0;
+        border-color: Theme.focus;
+        border-radius: root.radius + Theme.focus-width + Theme.focus-offset;
+    }
+}
+
+export component VButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary: false;
+    in property <bool> enabled: true;
+    out property <bool> has-focus: fs.has-focus;
+    callback clicked;
+
+    min-height: 36px;
+    min-width: label.preferred-width + 2 * Theme.sp-4;
+    border-radius: Theme.radius;
+    opacity: root.enabled ? 1.0 : 0.4;
+    background: root.primary
+        ? (ta.pressed ? Theme.accent-strong : Theme.accent)
+        : (ta.has-hover && root.enabled ? Theme.bg-hover : Theme.bg-3);
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-action-default => { root.clicked(); }
+
+    fs := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " ") {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+    }
+
+    ta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => {
+            fs.focus();
+            root.clicked();
+        }
+    }
+
+    label := Text {
+        text: root.text;
+        color: root.primary ? Theme.on-accent : Theme.text-primary;
+        font-size: Theme.fs-body;
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    FocusRing { visible-ring: fs.has-focus; }
+}
+
+// Interruptor com rótulo. Confirmar (A / Enter / Espaço) alterna.
+export component VToggle inherits Rectangle {
+    in property <string> label;
+    in property <string> description;
+    in property <bool> enabled: true;
+    in-out property <bool> checked;
+    callback toggled(bool);
+
+    min-height: Theme.control-height;
+    border-radius: Theme.radius;
+    background: ta.has-hover && root.enabled ? Theme.bg-3 : transparent;
+    opacity: root.enabled ? 1.0 : 0.4;
+    accessible-role: checkbox;
+    accessible-label: root.label;
+    accessible-checked: root.checked;
+    accessible-action-default => { root.flip(); }
+
+    function flip() {
+        if (!root.enabled) { return; }
+        root.checked = !root.checked;
+        root.toggled(root.checked);
+    }
+
+    fs := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " ") {
+                root.flip();
+                return accept;
+            }
+            reject
+        }
+    }
+
+    ta := TouchArea {
+        enabled: root.enabled;
+        clicked => {
+            fs.focus();
+            root.flip();
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: Theme.sp-3;
+        padding-right: Theme.sp-3;
+        spacing: Theme.sp-4;
+        VerticalLayout {
+            alignment: center;
+            Text { text: root.label; color: Theme.text-primary; font-size: Theme.fs-body; }
+            if root.description != "": Text {
+                text: root.description;
+                color: Theme.text-secondary;
+                font-size: Theme.fs-caption;
+                wrap: word-wrap;
+            }
+        }
+        Rectangle {
+            width: 40px;
+            height: 22px;
+            y: (parent.height - self.height) / 2;
+            border-radius: 11px;
+            background: root.checked ? Theme.accent : Theme.bg-hover;
+            Rectangle {
+                width: 16px;
+                height: 16px;
+                border-radius: 8px;
+                y: 3px;
+                x: root.checked ? parent.width - self.width - 3px : 3px;
+                background: root.checked ? Theme.on-accent : Theme.text-secondary;
+            }
+        }
+    }
+
+    FocusRing { visible-ring: fs.has-focus; }
+}
+
+// Botão pequeno só para mouse (o foco fica no componente pai).
+component VButtonMini inherits VerticalLayout {
+    in property <string> text;
+    callback clicked;
+    alignment: center;
+    Rectangle {
+        width: 32px;
+        height: 32px;
+        border-radius: Theme.radius-sm;
+        background: ta.has-hover ? Theme.bg-hover : Theme.bg-3;
+        ta := TouchArea { clicked => { root.clicked(); } }
+        Text {
+            text: root.text;
+            color: Theme.text-primary;
+            font-size: Theme.fs-body-strong;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// Valor numérico ajustável com Esquerda/Direita (D-pad, analógico ou setas).
+export component VStepper inherits Rectangle {
+    in property <string> label;
+    in property <string> description;
+    in property <float> minimum: 0;
+    in property <float> maximum: 1;
+    in property <float> step: 0.05;
+    in property <string> unit;
+    in property <int> decimals: 2;
+    in-out property <float> value;
+    callback changed(float);
+
+    min-height: Theme.control-height;
+    border-radius: Theme.radius;
+    accessible-role: slider;
+    accessible-label: root.label;
+    accessible-value: root.value;
+    accessible-value-minimum: root.minimum;
+    accessible-value-maximum: root.maximum;
+    accessible-value-step: root.step;
+    accessible-action-increment => { root.nudge(1); }
+    accessible-action-decrement => { root.nudge(-1); }
+
+    function nudge(direction: int) {
+        // Arredonda para o passo para evitar acúmulo de erro de ponto flutuante.
+        root.value = clamp(round((root.value + direction * root.step) / root.step) * root.step, root.minimum, root.maximum);
+        root.changed(root.value);
+    }
+
+    fs := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.RightArrow) { root.nudge(1); return accept; }
+            if (event.text == Key.LeftArrow) { root.nudge(-1); return accept; }
+            reject
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: Theme.sp-3;
+        padding-right: Theme.sp-3;
+        spacing: Theme.sp-3;
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            Text { text: root.label; color: Theme.text-primary; font-size: Theme.fs-body; }
+            if root.description != "": Text {
+                text: root.description;
+                color: Theme.text-secondary;
+                font-size: Theme.fs-caption;
+                wrap: word-wrap;
+            }
+        }
+        VButtonMini { text: "−"; clicked => { fs.focus(); root.nudge(-1); } }
+        Text {
+            width: 88px;
+            text: (root.decimals == 0 ? round(root.value) : round(root.value * 100) / 100) + root.unit;
+            color: Theme.text-primary;
+            font-size: Theme.fs-body-strong;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        VButtonMini { text: "+"; clicked => { fs.focus(); root.nudge(1); } }
+    }
+
+    FocusRing { visible-ring: fs.has-focus; }
+}
+
+// Seleção entre opções com Esquerda/Direita; Confirmar avança.
+export component VSelect inherits Rectangle {
+    in property <string> label;
+    in property <[string]> options;
+    in-out property <int> current-index;
+    callback selected(int);
+
+    min-height: Theme.control-height;
+    border-radius: Theme.radius;
+    accessible-role: combobox;
+    accessible-label: root.label;
+    accessible-value: root.options[root.current-index];
+
+    function move(direction: int) {
+        if (root.options.length == 0) { return; }
+        root.current-index = Math.mod(root.current-index + direction + root.options.length, root.options.length);
+        root.selected(root.current-index);
+    }
+
+    fs := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.RightArrow || event.text == Key.Return || event.text == " ") { root.move(1); return accept; }
+            if (event.text == Key.LeftArrow) { root.move(-1); return accept; }
+            reject
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: Theme.sp-3;
+        padding-right: Theme.sp-3;
+        spacing: Theme.sp-3;
+        Text {
+            text: root.label;
+            color: Theme.text-primary;
+            font-size: Theme.fs-body;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+        VButtonMini { text: "‹"; clicked => { fs.focus(); root.move(-1); } }
+        Text {
+            width: 180px;
+            text: root.options[root.current-index];
+            color: Theme.text-primary;
+            font-size: Theme.fs-body-strong;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        VButtonMini { text: "›"; clicked => { fs.focus(); root.move(1); } }
+    }
+
+    FocusRing { visible-ring: fs.has-focus; }
+}
+
+// Campo de texto. Com o controle, Confirmar abre o teclado virtual;
+// com mouse ou teclado físico, edita diretamente.
+export component VTextField inherits Rectangle {
+    in property <string> label;
+    in property <string> placeholder;
+    in property <string> text;
+    // Incrementado pela janela quando o teclado virtual fecha; o campo que o
+    // abriu recupera o foco (UX_GUIDELINES §5).
+    in property <int> refocus-token;
+    callback request-virtual-keyboard(string);
+    callback edited(string);
+
+    property <bool> awaiting-keyboard: false;
+    changed refocus-token => {
+        if (root.awaiting-keyboard) {
+            root.awaiting-keyboard = false;
+            scope.focus();
+        }
+    }
+
+    min-height: Theme.control-height + 20px;
+    accessible-role: text-input;
+    accessible-label: root.label;
+    accessible-value: root.text;
+
+    // O TextInput só fica habilitado durante a edição; assim a navegação por
+    // Tab/controle para uma única vez no campo (no FocusScope).
+    property <bool> editing: false;
+    property <bool> input-focused: input.has-focus;
+    changed input-focused => {
+        if (!self.input-focused) { root.editing = false; }
+    }
+    // Sincroniza quando o valor externo muda (ex.: confirmado no teclado virtual).
+    changed text => { input.text = root.text; }
+
+    function start-editing() {
+        root.editing = true;
+        input.focus();
+    }
+
+    VerticalLayout {
+        spacing: Theme.sp-1;
+        Text { text: root.label; color: Theme.text-secondary; font-size: Theme.fs-caption; }
+        field := Rectangle {
+            height: 36px;
+            border-radius: Theme.radius-sm;
+            background: Theme.bg-0;
+            border-width: 1px;
+            border-color: input.has-focus ? Theme.accent : Theme.border;
+
+            scope := FocusScope {
+                key-pressed(event) => {
+                    if (event.text == Key.Return || event.text == " ") {
+                        if (InputState.gamepad) {
+                            root.awaiting-keyboard = true;
+                            root.request-virtual-keyboard(input.text);
+                        } else {
+                            root.start-editing();
+                        }
+                        return accept;
+                    }
+                    reject
+                }
+            }
+            TouchArea {
+                mouse-cursor: MouseCursor.text;
+                clicked => { root.start-editing(); }
+            }
+            input := TextInput {
+                x: Theme.sp-2;
+                width: parent.width - 2 * Theme.sp-2;
+                vertical-alignment: center;
+                text: root.text;
+                color: Theme.text-primary;
+                font-size: Theme.fs-body;
+                single-line: true;
+                enabled: root.editing;
+                edited => { root.edited(self.text); }
+                accepted => { scope.focus(); }
+                key-pressed(event) => {
+                    if (event.text == Key.Escape) {
+                        scope.focus();
+                        return accept;
+                    }
+                    reject
+                }
+            }
+            if input.text == "" && !input.has-focus: Text {
+                x: Theme.sp-2;
+                text: root.placeholder;
+                color: Theme.text-secondary;
+                font-size: Theme.fs-body;
+                vertical-alignment: center;
+            }
+            FocusRing { visible-ring: scope.has-focus; radius: Theme.radius-sm; }
+        }
+    }
+}
+
+export component Card inherits Rectangle {
+    in property <string> title;
+    background: Theme.bg-2;
+    border-radius: Theme.radius;
+    border-width: 1px;
+    border-color: Theme.border;
+    VerticalLayout {
+        padding: Theme.sp-4;
+        spacing: Theme.sp-3;
+        if root.title != "": Text {
+            text: root.title;
+            color: Theme.text-primary;
+            font-size: Theme.fs-body-strong;
+            font-weight: 600;
+        }
+        @children
+    }
+}
+
+// Estado honesto para funções que ainda não existem.
+export component Notice inherits Rectangle {
+    in property <string> title;
+    in property <string> body;
+    in property <string> stage;
+    background: Theme.bg-2;
+    border-radius: Theme.radius;
+    border-width: 1px;
+    border-color: Theme.border;
+    VerticalLayout {
+        padding: Theme.sp-6;
+        spacing: Theme.sp-2;
+        // O chip fica num HorizontalLayout para que a largura fixa dele não
+        // limite a largura máxima do aviso inteiro.
+        if root.stage != "": HorizontalLayout {
+            alignment: start;
+            Rectangle {
+                height: 22px;
+                width: chip.preferred-width + 2 * Theme.sp-2;
+                border-radius: 11px;
+                background: Theme.bg-3;
+                chip := Text {
+                    text: root.stage;
+                    color: Theme.warning;
+                    font-size: Theme.fs-caption;
+                    font-weight: 600;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+        Text { text: root.title; color: Theme.text-primary; font-size: Theme.fs-section; font-weight: 600; wrap: word-wrap; }
+        Text { text: root.body; color: Theme.text-secondary; font-size: Theme.fs-body; wrap: word-wrap; }
+    }
+}
+
+export component BulletList inherits VerticalLayout {
+    in property <[string]> items;
+    spacing: Theme.sp-1;
+    for item in root.items: HorizontalLayout {
+        spacing: Theme.sp-2;
+        Text { text: "•"; color: Theme.accent; font-size: Theme.fs-body; }
+        Text { text: item; color: Theme.text-secondary; font-size: Theme.fs-body; wrap: word-wrap; horizontal-stretch: 1; }
+    }
+}

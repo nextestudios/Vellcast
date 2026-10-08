@@ -8,3 +8,5 @@ tests/fixtures/media/
 .gstack/
 .DS_Store
 *.log
+*.env
+!*.env.example

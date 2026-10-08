@@ -35,8 +35,9 @@ Regra de fronteira: o Core deve funcionar de ponta a ponta sozinho (desktop → 
 
 | Momento | Ação |
 |---|---|
-| Agora (Etapa 0) | Repositório pode ser público com docs, protocolo, servidor de validação e Activity de teste — **após** confirmar a licença Apache-2.0 |
-| Antes da Etapa 1 | Decidir a licença do Slint (bloqueia a distribuição do desktop) |
+| Agora | Repositório **privado** (decisão de 2026-10-08) |
+| Antes da Etapa 1 | Licença do Slint decidida: Royalty-free 2.0 (ADR-006) |
+| Fim da Etapa 5 | Abertura do núcleo conforme o **Marco OC** do [ROADMAP](ROADMAP.md) (OC-T01 a OC-T09) |
 | Antes da Etapa 8 | Inventário de licenças completo, NOTICE, política de marca, termos e privacidade |
 
 ## 6. Riscos

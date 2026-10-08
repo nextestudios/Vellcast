@@ -82,6 +82,42 @@ Estado na Etapa 0. A coluna "Verificado" indica conferência no registro do paco
 | typescript | Apache-2.0 | Build (dev) | Pendente |
 | @vitejs/plugin-react | MIT | Build (dev) | Pendente |
 
+### Rust (app desktop e `crates/controller`, Etapa 1)
+
+Versões fixadas com `=` no `Cargo.toml`. Licenças conferidas no crates.io em 2026-10-08.
+
+| Crate | Versão | Licença | Uso | Verificado |
+|---|---|---|---|---|
+| slint / slint-build | 1.18.1 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 (usamos Royalty-free 2.0, ver §2) | UI desktop | Sim (crates.io) |
+| gilrs | 0.11.2 | Apache-2.0 / MIT | Entrada de gamepad | Sim (crates.io) |
+| tray-icon | 0.24.0 | MIT OR Apache-2.0 | Ícone na bandeja | Sim (crates.io) |
+| muda (via tray-icon e Slint) | 0.19.3 | MIT OR Apache-2.0 | Menu da bandeja | Pendente (cargo deny) |
+| directories | 6.0.0 | MIT OR Apache-2.0 | Pasta de configuração do sistema | Sim (crates.io) |
+| serde / serde_json | — | MIT OR Apache-2.0 | Arquivo de configurações | Pendente (cargo deny) |
+
+Dependências transitivas do Slint (winit, softbuffer, accesskit, fontique/skrifa etc.) entram no inventário automático (`cargo about`), ainda **pendente**.
+
+### Rust (relay e `crates/transport`, Etapa 3)
+
+Licenças lidas do `cargo metadata` em 2026-10-08.
+
+| Crate | Versão | Licença | Uso | Observação |
+|---|---|---|---|---|
+| hmac / sha2 | 0.13.0 / 0.11.0 | MIT OR Apache-2.0 | Assinatura dos tokens | — |
+| base64 | 0.22.1 | MIT OR Apache-2.0 | Codificação dos tokens | Há também 0.23.1 na árvore (transitiva) |
+| getrandom | 0.3.4 | MIT OR Apache-2.0 | IDs e nonces aleatórios | Outras versões transitivas na árvore |
+| rustls / tokio-rustls | 0.23.45 / 0.26.6 | Apache-2.0 OR ISC OR MIT / MIT OR Apache-2.0 | TLS do transmissor | — |
+| ring | 0.17.14 | Apache-2.0 AND ISC | Criptografia do rustls | Exige manter os avisos de licença ISC |
+| webpki-roots | 1.0.9 | CDLA-Permissive-2.0 | Certificados raiz para TLS | Licença de dados permissiva; exige incluir o texto da licença ao redistribuir |
+| tokio-tungstenite / tungstenite | 0.29.0 / 0.29.0 | MIT / MIT OR Apache-2.0 | WebSocket do transmissor | Há também 0.30.0 na árvore: unificar versões é tarefa de limpeza |
+
+### Ativos embutidos (Etapa 1)
+
+| Ativo | Licença | Uso | Observação |
+|---|---|---|---|
+| Lucide icons 1.47.0 (9 SVGs em `apps/desktop/ui/icons/`) | ISC | Ícones da barra lateral | Texto da licença em `apps/desktop/ui/icons/LICENSE-lucide.txt` |
+| Fonte | — | — | Nenhuma fonte embutida: usa a fonte do sistema (Segoe UI no Windows), custo zero no binário |
+
 ### Ferramentas de desenvolvimento (não distribuídas)
 
 | Ferramenta | Licença | Uso |
@@ -92,13 +128,10 @@ Estado na Etapa 0. A coluna "Verificado" indica conferência no registro do paco
 
 | Componente | Etapa | Observação |
 |---|---|---|
-| Slint | 1 | Ver §2 |
-| GilRs | 1 | MIT/Apache-2.0 (verificar) |
 | windows / windows-rs | 2 | MIT/Apache-2.0 (verificar) |
 | Binding Opus (ex.: `opus`, `audiopus`) | 4 | Verificar licença do binding e da libopus vinculada |
 | Quinn | 6 | MIT/Apache-2.0 (verificar) |
-| Fonte (Inter / Noto Sans) | 1 | OFL-1.1 — incluir texto da licença |
-| Ícones (ex.: Lucide) | 1 | ISC (verificar) |
+| Fonte (Inter / Noto Sans), se a fonte do sistema for insuficiente | — | OFL-1.1 — incluir texto da licença |
 
 ## 5. Obrigações a cumprir na distribuição
 

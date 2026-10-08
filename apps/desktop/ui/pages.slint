@@ -1,0 +1,310 @@
+// Telas 01–08. Funções de etapas futuras aparecem como avisos honestos,
+// nunca como dados simulados.
+
+import { AboutSlint } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { VButton, VToggle, VStepper, VSelect, VTextField, Card, Notice, BulletList } from "widgets.slint";
+
+component PageTitle inherits VerticalLayout {
+    in property <string> title;
+    in property <string> subtitle;
+    spacing: Theme.sp-1;
+    Text { text: root.title; color: Theme.text-primary; font-size: Theme.fs-title; font-weight: 600; }
+    if root.subtitle != "": Text { text: root.subtitle; color: Theme.text-secondary; font-size: Theme.fs-body; wrap: word-wrap; }
+}
+
+export component HomePage inherits VerticalLayout {
+    in property <string> display-name;
+    in property <[string]> gamepads;
+    callback navigate(int);
+    spacing: Theme.sp-4;
+
+    PageTitle {
+        title: root.display-name == "" ? @tr("Welcome to Vellcast") : @tr("Welcome, {}", root.display-name);
+        subtitle: @tr("Lightweight screen sharing for games, made to be used with a controller.");
+    }
+
+    Card {
+        title: @tr("Controller");
+        if root.gamepads.length == 0: Text {
+            text: @tr("No controller connected. Mouse and keyboard keep working normally.");
+            color: Theme.text-secondary;
+            font-size: Theme.fs-body;
+            wrap: word-wrap;
+        }
+        BulletList { items: root.gamepads; }
+    }
+
+    Card {
+        title: @tr("Get started");
+        Text {
+            text: @tr("Choose what to share and adjust quality in the Stream screen. Your preferences are in Settings.");
+            color: Theme.text-secondary;
+            font-size: Theme.fs-body;
+            wrap: word-wrap;
+        }
+        HorizontalLayout {
+            alignment: start;
+            spacing: Theme.sp-2;
+            VButton { text: @tr("Go to Stream"); primary: true; clicked => { root.navigate(1); } }
+            VButton { text: @tr("Settings"); clicked => { root.navigate(4); } }
+        }
+    }
+
+    Notice {
+        stage: @tr("Stage 2");
+        title: @tr("Capture is not available yet");
+        body: @tr("This build validates the interface, controller navigation and tray mode. Window and monitor capture with hardware encoding arrive in Stage 2.");
+    }
+}
+
+export component StreamPage inherits VerticalLayout {
+    spacing: Theme.sp-4;
+    PageTitle {
+        title: @tr("Stream");
+        subtitle: @tr("Capture always requires your explicit action. Nothing is shared automatically.");
+    }
+    Notice {
+        stage: @tr("Stage 2");
+        title: @tr("Source selection is under development");
+        body: @tr("This screen will list games, windows and monitors detected by Windows Graphics Capture.");
+    }
+    Card {
+        title: @tr("Planned for this screen");
+        BulletList {
+            items: [
+                @tr("Choose a game, window or monitor"),
+                @tr("Game audio on or off, with volume"),
+                @tr("Quality profile: up to 1080p60 on the Free plan"),
+                @tr("Destination room"),
+            ];
+        }
+        HorizontalLayout {
+            alignment: start;
+            VButton { text: @tr("Start streaming"); primary: true; enabled: false; }
+        }
+    }
+}
+
+export component RoomsPage inherits VerticalLayout {
+    spacing: Theme.sp-4;
+    PageTitle { title: @tr("Rooms"); subtitle: @tr("Private rooms with invitations, on the official server or your own."); }
+    Notice {
+        stage: @tr("Stage 3");
+        title: @tr("Rooms arrive with the media relay");
+        body: @tr("Creating, joining and inviting to private rooms depends on the Vellcast relay, which can also be self-hosted without a subscription.");
+    }
+}
+
+export component LivePage inherits VerticalLayout {
+    spacing: Theme.sp-4;
+    PageTitle { title: @tr("Live"); }
+    Notice {
+        title: @tr("No active stream");
+        body: @tr("When you are streaming, status, duration, viewers and the stop button appear here.");
+    }
+}
+
+export component SettingsPage inherits VerticalLayout {
+    in property <bool> tray-available;
+    in property <int> refocus-token;
+    in-out property <int> language-index;
+    in-out property <string> display-name;
+    in-out property <float> deadzone;
+    in-out property <float> repeat-delay;
+    in-out property <float> repeat-interval;
+    in-out property <bool> start-minimized;
+    in-out property <bool> close-to-tray;
+    in property <bool> background-shortcuts;
+    callback changed-setting;
+    callback language-selected(int);
+    callback request-virtual-keyboard(string);
+    spacing: Theme.sp-4;
+
+    PageTitle { title: @tr("Settings"); subtitle: @tr("Changes are saved automatically."); }
+
+    Card {
+        title: @tr("General");
+        VSelect {
+            label: @tr("Language");
+            options: ["Português (Brasil)", "English"];
+            current-index <=> root.language-index;
+            selected(i) => { root.language-selected(i); }
+        }
+        VTextField {
+            label: @tr("Display name (shown to viewers from Stage 5)");
+            placeholder: @tr("Your name");
+            text: root.display-name;
+            refocus-token: root.refocus-token;
+            request-virtual-keyboard(t) => { root.request-virtual-keyboard(t); }
+            edited(t) => {
+                root.display-name = t;
+                root.changed-setting();
+            }
+        }
+    }
+
+    Card {
+        title: @tr("Controller");
+        VStepper {
+            label: @tr("Analog stick deadzone");
+            description: @tr("Increase if the selection moves on its own.");
+            minimum: 0.05;
+            maximum: 0.5;
+            step: 0.05;
+            value <=> root.deadzone;
+            changed => { root.changed-setting(); }
+        }
+        VStepper {
+            label: @tr("Delay before repeating");
+            minimum: 150;
+            maximum: 1000;
+            step: 50;
+            decimals: 0;
+            unit: " ms";
+            value <=> root.repeat-delay;
+            changed => { root.changed-setting(); }
+        }
+        VStepper {
+            label: @tr("Repeat interval");
+            minimum: 40;
+            maximum: 500;
+            step: 10;
+            decimals: 0;
+            unit: " ms";
+            value <=> root.repeat-interval;
+            changed => { root.changed-setting(); }
+        }
+    }
+
+    Card {
+        title: @tr("Window");
+        VToggle {
+            label: @tr("Close to tray");
+            description: root.tray-available ? @tr("Closing the window keeps Vellcast running in the notification area.") : @tr("Tray icon unavailable on this system.");
+            enabled: root.tray-available;
+            checked <=> root.close-to-tray;
+            toggled => { root.changed-setting(); }
+        }
+        VToggle {
+            label: @tr("Start minimized to tray");
+            enabled: root.tray-available;
+            checked <=> root.start-minimized;
+            toggled => { root.changed-setting(); }
+        }
+    }
+
+    Card {
+        title: @tr("Global shortcuts");
+        VToggle {
+            label: @tr("Background shortcuts");
+            description: @tr("Not available yet and off by default. While a game has focus, Vellcast never reads your controller.");
+            enabled: false;
+            checked: root.background-shortcuts;
+        }
+    }
+}
+
+export component AccountPage inherits VerticalLayout {
+    spacing: Theme.sp-4;
+    PageTitle { title: @tr("Account"); }
+    Notice {
+        stage: @tr("Stage 5");
+        title: @tr("Sign-in is not available yet");
+        body: @tr("Linking with Discord and pairing with the Activity arrive in Stage 5. No account data is collected by this build.");
+    }
+}
+
+export component PlansPage inherits VerticalLayout {
+    in-out property <int> tab;
+    spacing: Theme.sp-4;
+
+    PageTitle {
+        title: @tr("Plans");
+        subtitle: @tr("Prices are not defined and no billing is active. Self-hosted servers never require a plan.");
+    }
+
+    VSelect {
+        label: @tr("Plan (LT/RT)");
+        options: ["Free", "Pro", "Community"];
+        current-index <=> root.tab;
+    }
+
+    if root.tab == 0: Card {
+        title: "Free";
+        BulletList {
+            items: [
+                @tr("Streaming up to 1920×1080 at 60 FPS, no watermark"),
+                @tr("Game audio and hardware encoding"),
+                @tr("Discord integration and controller support"),
+                @tr("Private rooms and quality settings"),
+                @tr("Official servers within the free quota"),
+            ];
+        }
+    }
+    if root.tab == 1: Card {
+        title: "Pro";
+        BulletList {
+            items: [
+                @tr("Everything in Free"),
+                @tr("1440p60 and 4K60 when supported (planned)"),
+                @tr("More viewers and larger quotas on the official service"),
+                @tr("Priority support"),
+            ];
+        }
+    }
+    if root.tab == 2: Card {
+        title: "Community";
+        BulletList {
+            items: [
+                @tr("Everything in Pro"),
+                @tr("Room management and permanent rooms for communities"),
+                @tr("Larger viewer capacity and community quotas"),
+                @tr("Managed hosting"),
+            ];
+        }
+    }
+    Text {
+        text: @tr("Actual quality depends on your hardware, connection and the viewer's device.");
+        color: Theme.text-secondary;
+        font-size: Theme.fs-caption;
+        wrap: word-wrap;
+    }
+}
+
+export component AboutPage inherits VerticalLayout {
+    in property <string> version;
+    in property <[string]> licenses;
+    spacing: Theme.sp-4;
+
+    PageTitle { title: @tr("About"); subtitle: @tr("Vellcast {} · Next Estúdios · nextestudios.com", root.version); }
+
+    Card {
+        title: @tr("Privacy");
+        Text {
+            text: @tr("Vellcast only captures what you explicitly choose, never records by default and does not analyze what you stream.");
+            color: Theme.text-secondary;
+            font-size: Theme.fs-body;
+            wrap: word-wrap;
+        }
+    }
+
+    Card {
+        title: @tr("Made with Slint");
+        Rectangle {
+            height: 120px;
+            AboutSlint { }
+        }
+    }
+
+    Card {
+        title: @tr("Open source and third-party licenses");
+        Text {
+            text: @tr("Vellcast's own code is licensed under Apache-2.0. Source: github.com/nextestudios/Vellcast");
+            color: Theme.text-secondary;
+            font-size: Theme.fs-body;
+            wrap: word-wrap;
+        }
+        BulletList { items: root.licenses; }
+    }
+}

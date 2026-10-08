@@ -2,7 +2,7 @@
 
 Compartilhamento de tela otimizado para jogos: um aplicativo Windows leve, em Rust, que captura e codifica por hardware, e uma Discord Activity para assistir sem instalar nada. Desenvolvido pela [Next Estúdios](https://nextestudios.com).
 
-> **Status: ETAPA 0 — validação da Discord Activity.** O aplicativo Windows ainda não existe. Esta etapa comprova, com mídia sintética, que H.264 + Opus via WebSocket e WebCodecs funciona dentro de uma Activity antes de investir no motor de captura. Ver [`docs/ROADMAP.md`](docs/ROADMAP.md).
+> **Status: ETAPA 0 — validação da Discord Activity.** O aplicativo Windows ainda não existe. Esta etapa comprova, com mídia sintética, que H.264 + Opus via WebSocket e WebCodecs funciona dentro de uma Activity antes de investir no motor de captura. Ver o [roadmap completo](ROADMAP.md).
 
 ## O que existe hoje
 

@@ -4,7 +4,6 @@
 //! por WebSocket binário para a Discord Activity, sem recodificação.
 //! Não é o relay de produção (ver `services/relay`).
 
-mod media;
 mod stream;
 
 use std::collections::HashMap;

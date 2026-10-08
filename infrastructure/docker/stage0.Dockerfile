@@ -13,9 +13,9 @@ RUN npm run build
 
 FROM rust:1-bookworm AS server
 WORKDIR /src
-COPY Cargo.toml Cargo.lock ./
-COPY crates/protocol crates/protocol
-COPY services/stage0-server services/stage0-server
+# O workspace inteiro é copiado (os manifests de todos os membros são necessários);
+# só o pacote pedido e suas dependências são compilados.
+COPY . .
 RUN cargo build --release --locked -p vellcast-stage0-server
 
 # ffmpeg só existe neste estágio; não é distribuído na imagem final.

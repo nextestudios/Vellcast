@@ -98,18 +98,30 @@ Regras:
 
 ## 5. Internos do relay
 
+Implementado em `services/relay` (ETAPA 3). Módulos: `api` (HTTP), `ws` (sessões), `room` (estado de mídia), `store` (metadados), `token`, `ratelimit`, `metrics`, `config`.
+
 ```
-Room (id, owner, estado, permissões, convites)
- └─ Stream (stream_id, init de vídeo/áudio, último keyframe conhecido)
-     ├─ Publisher: 1 conexão WS → valida cabeçalho/limites → broadcast::Sender<Bytes>
-     └─ Viewers: N × broadcast::Receiver<Bytes> (capacidade limitada)
-           └─ tarefa por espectador: recv → (se Lagged: aguarda próximo keyframe) → WS send
+Relay
+ ├─ RoomStore (trait)  ← metadados: id, nome, dono, TTL, limite de espectadores, convites (hash)
+ │    └─ MemoryStore   (hoje; SQLite/PostgreSQL implementam o mesmo trait no futuro)
+ └─ LiveRoom (sempre em memória, uma por sala)
+      ├─ Mutex<Inner>: estado (idle/live/paused/closed), vaga do transmissor,
+      │                VideoInit, AudioInit, GopCache (≤ 8 MiB)
+      ├─ broadcast::Sender<Relayed>  (capacidade = fila por espectador)
+      ├─ Publisher: 1 tarefa WS → valida cabeçalho, tamanho, banda e JSON de init
+      │             → publish() (atualiza cache + broadcast sob o mesmo lock)
+      └─ Viewers: N tarefas WS → snapshot (init + GOP) → broadcast::Receiver
+                  → descarta quadros > 500 ms / Lagged → espera keyframe e pede um ao transmissor
 ```
 
-- **Zero cópia no fan-out.** O payload é um `bytes::Bytes` com contagem de referência, e o mesmo buffer vai para todos os espectadores.
-- **Isolamento.** Cada espectador tem uma tarefa e uma fila próprias. Um espectador lento recebe `Lagged`, perde frames e é ressincronizado no próximo keyframe. **Ele nunca bloqueia o publisher nem os outros espectadores.**
-- **Limites.** Mensagem ≤ 4 MiB, espectadores por sala, salas por usuário, banda por stream e taxa de mensagens de controle.
-- **Heartbeats.** Ping/Pong da aplicação a cada 2 s. Uma conexão sem tráfego por 15 s é encerrada.
+- **Zero cópia e zero recodificação.** Cada mensagem do transmissor vira um `Bytes` com contagem de referência e vai igual para todos os espectadores. O relay não reescreve nem o cabeçalho; os testes de integração comparam os bytes recebidos por cada espectador com os enviados.
+- **Isolamento.** Cada espectador tem tarefa e fila próprias. Um espectador lento perde mensagens antigas (`Lagged`) e volta no próximo keyframe; se o envio ficar travado por 10 s, é desconectado. **Ele nunca bloqueia o transmissor nem os outros espectadores** (há teste de integração para isso).
+- **Entrada imediata.** O GOP atual em cache permite que um espectador novo comece a decodificar na hora, sem esperar o próximo keyframe.
+- **Queda do transmissor.** Sem `StreamEnd`, a sala vai para `paused` e avisa os espectadores (`StreamPaused`). Se o transmissor voltar dentro da tolerância (30 s), a transmissão continua com `VideoInit` + `DISCONTINUITY`; senão, `StreamEnd`.
+- **Limpeza.** Uma tarefa periódica remove salas com TTL vencido, salas ociosas, convites expirados e buckets de rate limit inativos.
+- **Fronteira de persistência.** Só os metadados passam por `RoomStore`. O caminho de mídia nunca toca disco nem banco, o que mantém a latência independente da persistência.
+- **Escala.** Uma instância guarda as salas em memória; várias instâncias exigiriam roteamento por sala (fora do escopo atual). O gargalo esperado é a banda de saída, não a CPU (ver `PERFORMANCE.md`).
+- **Heartbeats.** Clientes enviam `Ping`; 30 s sem mensagens → `idle_timeout`.
 - **Sem estado de mídia persistente.** Nada é gravado em disco (W-008).
 
 ## 6. Discord Activity e rede

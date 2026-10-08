@@ -1,0 +1,274 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: pt_BR\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+msgid "Home"
+msgstr "Início"
+
+msgid "Stream"
+msgstr "Transmitir"
+
+msgid "Rooms"
+msgstr "Salas"
+
+msgid "Live"
+msgstr "Ao vivo"
+
+msgid "Settings"
+msgstr "Configurações"
+
+msgid "Account"
+msgstr "Conta"
+
+msgid "Plans"
+msgstr "Planos"
+
+msgid "About"
+msgstr "Sobre"
+
+msgid "Minimize to tray"
+msgstr "Minimizar para a bandeja"
+
+msgid "Quit Vellcast"
+msgstr "Sair do Vellcast"
+
+msgid "ROOMS"
+msgstr "SALAS"
+
+msgid "No rooms yet. Private rooms arrive with the relay in Stage 3."
+msgstr "Nenhuma sala ainda. As salas privadas chegam com o relay na Etapa 3."
+
+msgid "No controller"
+msgstr "Nenhum controle"
+
+msgid "A Confirm · B Back · LB/RB Section · LT/RT Tab · Start Menu"
+msgstr "A Confirmar · B Voltar · LB/RB Seção · LT/RT Aba · Start Menu"
+
+msgid "Display name"
+msgstr "Nome de exibição"
+
+msgid "Menu"
+msgstr "Menu"
+
+msgid "Space"
+msgstr "Espaço"
+
+msgid "Cancel"
+msgstr "Cancelar"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "A: press key · X: backspace · Y: space · Start: confirm · B: cancel"
+msgstr "A: tecla · X: apagar · Y: espaço · Start: confirmar · B: cancelar"
+
+msgid "Welcome to Vellcast"
+msgstr "Boas-vindas ao Vellcast"
+
+msgid "Welcome, {}"
+msgstr "Olá, {}"
+
+msgid "Lightweight screen sharing for games, made to be used with a controller."
+msgstr "Compartilhamento de tela leve para jogos, feito para usar com controle."
+
+msgid "Controller"
+msgstr "Controle"
+
+msgid "No controller connected. Mouse and keyboard keep working normally."
+msgstr "Nenhum controle conectado. Mouse e teclado continuam funcionando normalmente."
+
+msgid "Get started"
+msgstr "Começar"
+
+msgid "Choose what to share and adjust quality in the Stream screen. Your preferences are in Settings."
+msgstr "Escolha o que compartilhar e ajuste a qualidade na tela Transmitir. Suas preferências ficam em Configurações."
+
+msgid "Go to Stream"
+msgstr "Ir para Transmitir"
+
+msgid "Stage 2"
+msgstr "Etapa 2"
+
+msgid "Capture is not available yet"
+msgstr "A captura ainda não está disponível"
+
+msgid "This build validates the interface, controller navigation and tray mode. Window and monitor capture with hardware encoding arrive in Stage 2."
+msgstr "Esta versão valida a interface, a navegação por controle e o modo bandeja. A captura de janelas e monitores com codificação por hardware chega na Etapa 2."
+
+msgid "Capture always requires your explicit action. Nothing is shared automatically."
+msgstr "A captura sempre exige sua ação explícita. Nada é compartilhado automaticamente."
+
+msgid "Source selection is under development"
+msgstr "A seleção de fonte está em desenvolvimento"
+
+msgid "This screen will list games, windows and monitors detected by Windows Graphics Capture."
+msgstr "Esta tela vai listar jogos, janelas e monitores detectados pelo Windows Graphics Capture."
+
+msgid "Planned for this screen"
+msgstr "Planejado para esta tela"
+
+msgid "Choose a game, window or monitor"
+msgstr "Escolher um jogo, janela ou monitor"
+
+msgid "Game audio on or off, with volume"
+msgstr "Áudio do jogo ligado ou desligado, com volume"
+
+msgid "Quality profile: up to 1080p60 on the Free plan"
+msgstr "Perfil de qualidade: até 1080p60 no plano Free"
+
+msgid "Destination room"
+msgstr "Sala de destino"
+
+msgid "Start streaming"
+msgstr "Iniciar transmissão"
+
+msgid "Private rooms with invitations, on the official server or your own."
+msgstr "Salas privadas com convites, no servidor oficial ou no seu."
+
+msgid "Stage 3"
+msgstr "Etapa 3"
+
+msgid "Rooms arrive with the media relay"
+msgstr "As salas chegam com o relay de mídia"
+
+msgid "Creating, joining and inviting to private rooms depends on the Vellcast relay, which can also be self-hosted without a subscription."
+msgstr "Criar, entrar e convidar para salas privadas depende do relay do Vellcast, que também pode ser hospedado por você, sem assinatura."
+
+msgid "No active stream"
+msgstr "Nenhuma transmissão ativa"
+
+msgid "When you are streaming, status, duration, viewers and the stop button appear here."
+msgstr "Quando você estiver transmitindo, o estado, a duração, os espectadores e o botão de parar aparecem aqui."
+
+msgid "Changes are saved automatically."
+msgstr "As alterações são salvas automaticamente."
+
+msgid "General"
+msgstr "Geral"
+
+msgid "Language"
+msgstr "Idioma"
+
+msgid "Display name (shown to viewers from Stage 5)"
+msgstr "Nome de exibição (mostrado aos espectadores a partir da Etapa 5)"
+
+msgid "Your name"
+msgstr "Seu nome"
+
+msgid "Analog stick deadzone"
+msgstr "Zona morta do analógico"
+
+msgid "Increase if the selection moves on its own."
+msgstr "Aumente se a seleção se mover sozinha."
+
+msgid "Delay before repeating"
+msgstr "Atraso antes de repetir"
+
+msgid "Repeat interval"
+msgstr "Intervalo de repetição"
+
+msgid "Window"
+msgstr "Janela"
+
+msgid "Close to tray"
+msgstr "Fechar para a bandeja"
+
+msgid "Closing the window keeps Vellcast running in the notification area."
+msgstr "Fechar a janela mantém o Vellcast rodando na área de notificação."
+
+msgid "Tray icon unavailable on this system."
+msgstr "Ícone da bandeja indisponível neste sistema."
+
+msgid "Start minimized to tray"
+msgstr "Iniciar minimizado na bandeja"
+
+msgid "Global shortcuts"
+msgstr "Atalhos globais"
+
+msgid "Background shortcuts"
+msgstr "Atalhos em segundo plano"
+
+msgid "Not available yet and off by default. While a game has focus, Vellcast never reads your controller."
+msgstr "Ainda não disponível e desligado por padrão. Enquanto um jogo estiver em foco, o Vellcast nunca lê o seu controle."
+
+msgid "Stage 5"
+msgstr "Etapa 5"
+
+msgid "Sign-in is not available yet"
+msgstr "O login ainda não está disponível"
+
+msgid "Linking with Discord and pairing with the Activity arrive in Stage 5. No account data is collected by this build."
+msgstr "O vínculo com o Discord e o pareamento com a Activity chegam na Etapa 5. Esta versão não coleta dados de conta."
+
+msgid "Prices are not defined and no billing is active. Self-hosted servers never require a plan."
+msgstr "Os preços não estão definidos e nenhuma cobrança está ativa. Servidores próprios nunca exigem plano."
+
+msgid "Plan (LT/RT)"
+msgstr "Plano (LT/RT)"
+
+msgid "Streaming up to 1920×1080 at 60 FPS, no watermark"
+msgstr "Transmissão até 1920×1080 a 60 FPS, sem marca d'água"
+
+msgid "Game audio and hardware encoding"
+msgstr "Áudio do jogo e codificação por hardware"
+
+msgid "Discord integration and controller support"
+msgstr "Integração com o Discord e suporte a controles"
+
+msgid "Private rooms and quality settings"
+msgstr "Salas privadas e ajustes de qualidade"
+
+msgid "Official servers within the free quota"
+msgstr "Servidores oficiais dentro da cota gratuita"
+
+msgid "Everything in Free"
+msgstr "Tudo do Free"
+
+msgid "1440p60 and 4K60 when supported (planned)"
+msgstr "1440p60 e 4K60 quando suportados (planejado)"
+
+msgid "More viewers and larger quotas on the official service"
+msgstr "Mais espectadores e cotas maiores no serviço oficial"
+
+msgid "Priority support"
+msgstr "Suporte prioritário"
+
+msgid "Everything in Pro"
+msgstr "Tudo do Pro"
+
+msgid "Room management and permanent rooms for communities"
+msgstr "Gerenciamento de salas e salas permanentes para comunidades"
+
+msgid "Larger viewer capacity and community quotas"
+msgstr "Mais capacidade de espectadores e cotas comunitárias"
+
+msgid "Managed hosting"
+msgstr "Hospedagem gerenciada"
+
+msgid "Actual quality depends on your hardware, connection and the viewer's device."
+msgstr "A qualidade real depende do seu hardware, da conexão e do dispositivo de quem assiste."
+
+msgid "Vellcast {} · Next Estúdios · nextestudios.com"
+msgstr "Vellcast {} · Next Estúdios · nextestudios.com"
+
+msgid "Privacy"
+msgstr "Privacidade"
+
+msgid "Vellcast only captures what you explicitly choose, never records by default and does not analyze what you stream."
+msgstr "O Vellcast só captura o que você escolhe explicitamente, nunca grava por padrão e não analisa o que você transmite."
+
+msgid "Made with Slint"
+msgstr "Feito com Slint"
+
+msgid "Open source and third-party licenses"
+msgstr "Código aberto e licenças de terceiros"
+
+msgid "Vellcast's own code is licensed under Apache-2.0. Source: github.com/nextestudios/Vellcast"
+msgstr "O código próprio do Vellcast é licenciado sob Apache-2.0. Código-fonte: github.com/nextestudios/Vellcast"
+
+msgid "{n} controller connected"
+msgid_plural "{n} controllers connected"
+msgstr[0] "{n} controle conectado"
+msgstr[1] "{n} controles conectados"

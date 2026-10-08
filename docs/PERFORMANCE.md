@@ -74,8 +74,13 @@ As tabelas são preenchidas somente com dados reais. Resultados de ambiente loca
 
 | Cenário | CPU | RAM | Status |
 |---|---|---|---|
-| Ocioso, janela visível | — | — | Pendente |
-| Ocioso, minimizado/bandeja | — | — | Pendente |
+| Ocioso, janela visível (renderer de software) — macOS | 0,05–0,27% de 1 núcleo | 32–33 MB (`phys_footprint`) | Medido no macOS; Windows pendente |
+| Ocioso, oculto na bandeja — macOS | 0,03–0,10% de 1 núcleo | 20 MB (`phys_footprint`) | Medido no macOS; Windows pendente |
+| Ocioso, janela visível (femtovg/OpenGL) — macOS | 0,05% de 1 núcleo | 41 MB (`phys_footprint`) | Medido no macOS (referência para o ADR-014) |
+| Ocioso, janela visível — Windows 11 | — | — | Pendente (máquina Windows) |
+| Ocioso, minimizado/bandeja — Windows 11 | — | — | Pendente (máquina Windows) |
+
+Metodologia (macOS): Apple M1 8 GB, macOS 27.0.1, build Release, 20–30 s ociosos, amostragem por `ps` (CPU) e `footprint` (memória). O RSS do `ps` (~80–100 MB) inclui páginas compartilhadas de frameworks do macOS e não representa o custo real do app. A máquina estava sob carga (load average entre 8 e 18) durante as medições. Ver `apps/desktop/README.md`.
 
 ### 3.3 ETAPA 2/6 — Captura, encoder e impacto no jogo
 
@@ -88,6 +93,9 @@ As tabelas são preenchidas somente com dados reais. Resultados de ambiente loca
 | Espectadores | Bitrate | CPU | RAM | Banda de saída | Status |
 |---|---|---|---|---|---|
 | 20 (loopback, `tests/benchmarks/stage0-viewers.mjs`, 20 s) | 7,9 Mbps por espectador | média 4,4% de 1 núcleo | RSS máx. 9,6 MB | ~158 Mbps | Medido (local, servidor da ETAPA 0) |
+| 20 autenticados por convite (loopback, `tests/benchmarks/relay-viewers.mjs`, 30 s, transmissor `publish_fixture` 1080p60) | 8,21 Mbps por espectador | 4,8% de 1 núcleo | RSS máx. 9,7 MB | ~164 Mbps | Medido (local, `vellcast-relay`) |
+
+Detalhes do teste do `vellcast-relay`: 60,3 fps por espectador, maior intervalo entre quadros 113,5 ms, latência transmissor → espectador p50 0,85 ms / p95 2,23 ms / p99 9,10 ms; nenhum erro, mensagem atrasada (`lagged`), quadro velho descartado ou desconexão. Loopback sem TLS: não mede rede real nem a CPU do transmissor.
 
 Detalhes do teste de 20 espectadores: 58,0 fps por espectador (os primeiros ~0,7 s aguardam o primeiro keyframe), maior intervalo entre quadros 71 ms, latência servidor → recebimento p50 1,2 ms / p95 3,9 ms / p99 17,8 ms, nenhum fechamento anormal, `laggedMessages = 0`, `staleFramesDropped = 0`. É um teste de loopback: não mede rede real, perda de pacotes nem proxy do Discord.
 

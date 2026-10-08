@@ -4,3 +4,5 @@ target
 tests/fixtures/media
 .git
 .gstack
+.env
+**/*.env
