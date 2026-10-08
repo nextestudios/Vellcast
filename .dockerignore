@@ -1,0 +1,6 @@
+target
+**/node_modules
+**/dist
+tests/fixtures/media
+.git
+.gstack
