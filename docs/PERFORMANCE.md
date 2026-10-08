@@ -84,6 +84,8 @@ Metodologia (macOS): Apple M1 8 GB, macOS 27.0.1, build Release, 20–30 s ocios
 
 ### 3.3 ETAPA 2/6 — Captura, encoder e impacto no jogo
 
+**Execução em Windows (runner do GitHub Actions, sem GPU, 2026-10-08):** a enumeração listou 1 janela e 1 monitor (1024×768) e o encoder `H264 Encoder MFT` (software). O teste `encodes_synthetic_frames_with_sps_idr_and_forced_keyframe` passou com conversão BGRA→NV12 na CPU (ADR-031): saída começa com SPS+IDR e o keyframe sob demanda funciona. Não mede desempenho; números com GPU e jogos continuam pendentes.
+
 | Jogo/benchmark | Hardware | FPS médio sem / com | 1% lows sem / com | Encoder | Status |
 |---|---|---|---|---|---|
 | — | — | — | — | — | Pendente |

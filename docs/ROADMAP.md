@@ -82,11 +82,11 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 
 | ID | Tarefa | MoSCoW | Depende de | Critérios de aceite | Status |
 |---|---|---|---|---|---|
-| E2-T01 | Crate `capture` — WGC de janela | M-005 | Etapa 0 | Seleção explícita; resize; fechamento; perda de dispositivo | Testing — WGC implementado; compila no Windows (MSVC); execução real pendente |
+| E2-T01 | Crate `capture` — WGC de janela | M-005 | Etapa 0 | Seleção explícita; resize; fechamento; perda de dispositivo | Testing — enumeração de janelas e monitores executada no Windows da CI; captura real pendente |
 | E2-T02 | WGC de monitor | M-006 | E2-T01 | Multi-monitor; mudança de resolução | Testing — compila no Windows; execução real pendente |
 | E2-T03 | Fallback DXGI Desktop Duplication (se necessário) | M-006 | E2-T02 | Somente se justificado por teste | Backlog — só se o WGC falhar nos testes reais |
-| E2-T04 | Crate `encoder` — detecção de encoders (MF) | M-007, S-006 | E2-T01 | Lista NVENC/AMF/QSV disponíveis | Testing — MFT de hardware primeiro, software Microsoft como fallback |
-| E2-T05 | Pipeline D3D11 → encoder H.264 sem cópia para CPU | M-007, M-018 | E2-T04 | Baixa latência; sem B-frames; keyframe sob demanda; fila limitada | Testing — BGRA→NV12 e escala na GPU (ID3D11VideoProcessor); execução real pendente |
+| E2-T04 | Crate `encoder` — detecção de encoders (MF) | M-007, S-006 | E2-T01 | Lista NVENC/AMF/QSV disponíveis | Testing — enumeração executada no Windows da CI (H264 Encoder MFT encontrado); GPUs reais pendentes |
+| E2-T05 | Pipeline D3D11 → encoder H.264 sem cópia para CPU | M-007, M-018 | E2-T04 | Baixa latência; sem B-frames; keyframe sob demanda; fila limitada | Testing — encoder executado no Windows da CI (software + conversão na CPU, ADR-031): SPS+IDR e keyframe sob demanda OK; caminho de GPU pendente |
 | E2-T06 | Configuração de resolução/FPS/bitrate | M-016 | E2-T05 | Reconfiguração ou reinício controlado | Testing — definidos ao iniciar; mudar exige reiniciar a transmissão |
 | E2-T07 | Detecção de jogos | S-003 | E2-T01 | Heurística não invasiva | Testing — heurística testada; enumeração real pendente |
 | E2-T08 | Medição 1080p60 | M-008, M-023 | E2-T05 | Consumo e limitações registrados por GPU | Blocked — requer máquina Windows com GPU |
