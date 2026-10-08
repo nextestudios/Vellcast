@@ -45,6 +45,14 @@ jobs:
       - name: Build Release do desktop
         if: runner.os == 'Windows'
         run: cargo build --release --locked -p vellcast-desktop
+      # Informativo: o runner não tem GPU nem sessão interativa garantida.
+      # Registra o que a captura e o encoder encontram em um Windows real.
+      - name: Diagnóstico de captura e encoder (informativo)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        run: |
+          cargo run --locked -p vellcast-core --example capture_to_file -- list
+          cargo test --locked -p vellcast-encoder --test windows_encoder -- --ignored --nocapture
 
   activity:
     name: Discord Activity

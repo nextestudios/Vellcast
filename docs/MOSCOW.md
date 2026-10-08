@@ -15,7 +15,7 @@
 | Could Have | 20 | 20 | 0 | 0 | 0 |
 | Won't Have | 17 | — (fora do escopo) | — | — | — |
 
-Itens `In Progress` na Etapa 0: **M-010**, **M-011**, **M-012** (apenas trabalho de validação/fundação — ver notas) e **M-022** (documentação inicial).
+Atualizado em 2026-10-08: todos os Must do MVP Windows estão implementados e em **Testing** (falta a execução em Windows real); M-012, M-014 e M-015 foram adiados pela ADR-013 e M-025 depende de testes prolongados no Windows.
 
 Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dependem de captura, GPU, áudio WASAPI ou gamepad no Windows só podem ser validados em máquina Windows real; a CI Windows cobre apenas compilação e testes sem hardware.
 
@@ -30,7 +30,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** binário Release único para Windows 11 x64; nenhuma dependência de Electron/WebView; ocioso < 1% CPU e < 80 MB RAM medidos em Release (meta, não garantia).
 - **Testes necessários:** build Release na CI Windows; medição de CPU/RAM ocioso em hardware de referência; inventário de dependências.
 - **Riscos técnicos:** licença do Slint incompatível com o modelo Open Core; consumo de GPU do renderer do Slint.
-- **Status:** Backlog
+- **Status:** Testing — app Rust + Slint compila e roda no macOS; build Release Windows na CI; execução no Windows pendente
 
 ### M-002 — Interface amigável
 - **Descrição:** UI moderna, minimalista, dark mode, organização familiar a usuários do Discord, com identidade visual própria.
@@ -39,7 +39,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** telas Home, Transmitir, Salas, Transmissão ativa, Configurações, Conta, Planos e Sobre implementadas conforme o design system; contraste mínimo WCAG AA; nenhum asset ou layout copiado do Discord.
 - **Testes necessários:** revisão visual contra o design system; verificação de contraste; teste de usabilidade com o fluxo principal.
 - **Riscos técnicos:** limitações de componentes do Slint; esforço de design subestimado.
-- **Status:** Backlog
+- **Status:** Testing — 8 telas com design system próprio; revisão visual no Windows pendente
 
 ### M-003 — Suporte completo a controles
 - **Descrição:** Todas as funções essenciais acessíveis apenas com gamepad, mantendo mouse e teclado funcionais.
@@ -48,7 +48,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** 100% das ações das telas da etapa navegáveis por gamepad; foco sempre visível; modais navegáveis; deadzone configurável; repetição controlada; nenhum input capturado em segundo plano por padrão.
 - **Testes necessários:** testes unitários do mapeamento e da máquina de foco; teste manual com Xbox, DualShock 4, DualSense e controle genérico; teste de conexão/desconexão.
 - **Riscos técnicos:** variação de drivers; conflito de foco com o jogo em primeiro plano.
-- **Status:** Backlog
+- **Status:** Testing — navegação completa por controle validada com ações simuladas; controle físico pendente
 
 ### M-004 — Teclado virtual
 - **Descrição:** Teclado virtual original, navegável por D-pad e analógico.
@@ -57,7 +57,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** letras, números, símbolos, espaço, apagar, maiúsculas/minúsculas, confirmar e cancelar; abre automaticamente ao focar campo de texto via gamepad; teclado físico continua funcionando.
 - **Testes necessários:** testes unitários de navegação de grade; teste manual com gamepad.
 - **Riscos técnicos:** suporte a IME/caracteres acentuados; integração com campos de texto do Slint.
-- **Status:** Backlog
+- **Status:** Testing — teclado virtual validado com ações simuladas; controle físico pendente
 
 ### M-005 — Captura de janelas
 - **Descrição:** Selecionar e capturar uma janela/jogo via Windows Graphics Capture.
@@ -66,7 +66,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** listar janelas capturáveis; capturar com seleção explícita; tratar redimensionamento, fechamento da janela e perda de dispositivo sem crash.
 - **Testes necessários:** testes de integração em Windows real (janela comum e jogo DirectX); teste de fechamento e resize.
 - **Riscos técnicos:** borda amarela do WGC; jogos em fullscreen exclusivo; diferenças entre builds do Windows.
-- **Status:** Backlog
+- **Status:** Testing — WGC de janela implementado e compilado no Windows; execução real pendente
 
 ### M-006 — Captura de monitores
 - **Descrição:** Compartilhar um monitor completo.
@@ -75,7 +75,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** listar monitores; capturar monitor escolhido; tratar mudança de resolução/DPI e desconexão de monitor.
 - **Testes necessários:** teste em setup multi-monitor; troca de resolução durante captura.
 - **Riscos técnicos:** HDR e escalas de DPI mistas; fallback DXGI Desktop Duplication.
-- **Status:** Backlog
+- **Status:** Testing — WGC de monitor implementado e compilado no Windows; execução real pendente
 
 ### M-007 — Encoder por hardware
 - **Descrição:** Codificação H.264 acelerada por GPU com detecção de encoders (NVENC, AMF, Quick Sync).
@@ -84,7 +84,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** detectar encoders disponíveis; codificar texturas D3D11 sem cópia para CPU; modo baixa latência sem B-frames; keyframe sob demanda; recuperação de falhas.
 - **Testes necessários:** testes em pelo menos uma GPU NVIDIA, AMD e Intel; teste de falha/reinicialização do encoder.
 - **Riscos técnicos:** variação de recursos entre MFTs de fabricantes; drivers antigos.
-- **Status:** Backlog
+- **Status:** Testing — Media Foundation, hardware primeiro (software como fallback); execução real pendente
 
 ### M-008 — Transmissão 1080p60 gratuita
 - **Descrição:** Plano Free permite até 1920x1080 a 60 FPS, sem marca d'água.
@@ -93,7 +93,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** nenhuma restrição de resolução no código aberto; 1080p60 alcançado fim a fim em hardware compatível com métricas registradas.
 - **Testes necessários:** teste fim a fim 1080p60 com medição de FPS entregue ao espectador.
 - **Riscos técnicos:** capacidade do proxy do Discord para ~8 Mbps; custo de banda do serviço oficial.
-- **Status:** Backlog (a viabilidade de reprodução 1080p60 na Activity é validada na Etapa 0)
+- **Status:** Testing — perfil padrão 1080p60/8 Mbps sem assinatura; reprodução 1080p60 validada no player web; captura real pendente
 
 ### M-009 — Captura de áudio
 - **Descrição:** Capturar áudio do aplicativo selecionado (WASAPI Application Loopback), com fallback para áudio do sistema.
@@ -102,7 +102,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** captura por processo quando suportada; fallback com aviso claro; Opus 48 kHz; volume ajustável; não capturar voz do Discord indevidamente.
 - **Testes necessários:** teste em Windows 11 (e versões de Windows 10 suportadas); teste de eco com Discord aberto.
 - **Riscos técnicos:** disponibilidade do Application Loopback por build; processos com áudio em processo filho.
-- **Status:** Backlog
+- **Status:** Testing — WASAPI por processo + Opus; execução real pendente
 
 ### M-010 — Servidor de transmissão
 - **Descrição:** Servidor Rust (`vellcast-relay`) que recebe e distribui mídia codificada sem recodificar.
@@ -111,7 +111,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** recebe um stream do transmissor e distribui a N espectadores; sem decodificação/recodificação; filas limitadas; Docker de produção.
 - **Testes necessários:** testes de integração com múltiplos clientes; teste de carga; teste de espectador lento.
 - **Riscos técnicos:** custo de banda; head-of-line blocking no WebSocket.
-- **Status:** In Progress — *fundação apenas*: protocolo v1 (`crates/protocol`) e servidor de teste da Etapa 0 (`services/stage0-server`) com fan-out. O relay real ainda não existe.
+- **Status:** Testing — `vellcast-relay` implementado (49 testes, benchmark local de 20 espectadores)
 
 ### M-011 — Múltiplos espectadores
 - **Descrição:** Vários espectadores assistem ao mesmo stream sem codificação separada por espectador.
@@ -120,7 +120,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** uma codificação, N espectadores; fila independente e limitada por espectador; espectador lento não afeta os demais; novo espectador inicia no próximo keyframe.
 - **Testes necessários:** teste com ≥ 10 espectadores simulados, incluindo um lento; medição de memória.
 - **Riscos técnicos:** tempo até o primeiro frame para novos espectadores; custo de banda.
-- **Status:** In Progress — *validação parcial*: o servidor da Etapa 0 faz fan-out com descarte e ressincronização no keyframe; não há relay de produção.
+- **Status:** Testing — fan-out sem recodificação validado (bytes idênticos); deploy real pendente
 
 ### M-012 — Discord Activity
 - **Descrição:** Activity para assistir às transmissões dentro do Discord, sem instalar o desktop.
@@ -129,7 +129,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** Activity inicia via Embedded App SDK; reproduz H.264 via WebCodecs e Opus via AudioDecoder (ou fallback documentado); métricas registradas no Discord Desktop e Web.
 - **Testes necessários:** teste em Activity real no Discord Desktop, Discord Web e, quando aplicável, mobile.
 - **Riscos técnicos:** suporte a WebCodecs por cliente; throughput do proxy; CSP.
-- **Status:** In Progress — Activity mínima de validação (Etapa 0) em desenvolvimento; teste em Activity real pendente de credenciais e túnel HTTPS.
+- **Status:** Blocked — adiado por decisão (ADR-013); player web substitui no MVP
 
 ### M-013 — Salas privadas
 - **Descrição:** Salas privadas com convites e autorização.
@@ -138,7 +138,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** criar, entrar, sair, encerrar, convidar, validar acesso, expirar sessões; privada por padrão.
 - **Testes necessários:** testes unitários do gerenciador de salas; testes de autorização negativa.
 - **Riscos técnicos:** modelo de identidade entre desktop e Discord.
-- **Status:** Backlog
+- **Status:** Testing — salas privadas e convites temporários no relay e na interface
 
 ### M-014 — Autenticação
 - **Descrição:** Autenticação segura, com identidade Discord (OAuth2 via Embedded App SDK) quando necessário.
@@ -147,7 +147,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** troca de código OAuth2 apenas no backend; client secret em variável de ambiente; tokens de sessão curtos; identidade nunca confiada a partir do frontend.
 - **Testes necessários:** testes de token expirado, adulterado e reutilizado.
 - **Riscos técnicos:** mudanças na API do Discord; vazamento de tokens em logs.
-- **Status:** Backlog
+- **Status:** Backlog — adiado (ADR-013): autenticação por tokens de sala no MVP; OAuth Discord na integração com a Activity
 
 ### M-015 — Pareamento
 - **Descrição:** Vincular app Windows e sessão Discord por código temporário ou fluxo seguro equivalente.
@@ -156,7 +156,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** código de uso único com expiração curta; rate limiting; nenhum compartilhamento de credenciais do Discord.
 - **Testes necessários:** expiração, reuso, força bruta (rate limit).
 - **Riscos técnicos:** UX do pareamento com gamepad.
-- **Status:** Backlog
+- **Status:** Backlog — adiado (ADR-013): link de convite substitui o pareamento no MVP
 
 ### M-016 — Controles de transmissão
 - **Descrição:** Iniciar, parar, selecionar fonte, configurar áudio, resolução, FPS e bitrate.
@@ -165,7 +165,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** todas as ações disponíveis via UI e gamepad; mudanças aplicadas sem reiniciar o app (reconfiguração ou reinício controlado do pipeline).
 - **Testes necessários:** testes de transição de estado; teste manual de cada controle.
 - **Riscos técnicos:** reconfiguração do encoder não suportada por alguns MFTs.
-- **Status:** Backlog
+- **Status:** Testing — iniciar, parar, fonte, áudio, resolução, FPS, bitrate e encoder na interface
 
 ### M-017 — Modo bandeja
 - **Descrição:** Minimizar para a bandeja mantendo a transmissão.
@@ -174,7 +174,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** ícone na bandeja com iniciar/parar/abrir/sair; sem renderização da UI quando minimizado.
 - **Testes necessários:** medição de CPU/GPU minimizado; transmissão contínua por 60 min em bandeja.
 - **Riscos técnicos:** integração de bandeja fora do Slint.
-- **Status:** Backlog
+- **Status:** Testing — transmissão continua na bandeja; menu "Parar transmissão"; Windows pendente
 
 ### M-018 — Gerenciamento de recursos
 - **Descrição:** Filas limitadas, descarte de frames antigos, prevenção de consumo ilimitado de memória.
@@ -183,7 +183,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** toda fila tem limite explícito; descarte documentado; memória estável em sessões de 60 min.
 - **Testes necessários:** testes unitários de filas; teste de sobrecarga; soak test.
 - **Riscos técnicos:** descarte gerando artefatos até o próximo keyframe.
-- **Status:** Backlog
+- **Status:** Testing — filas limitadas em captura, encoder, transporte, relay e player
 
 ### M-019 — Reconexão
 - **Descrição:** Recuperar conexões transmissor↔relay e espectador↔relay quando possível.
@@ -192,7 +192,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** backoff exponencial com jitter; retomada no próximo keyframe; estado da sala preservado durante janela de graça.
 - **Testes necessários:** derrubar conexão/servidor e medir tempo de recuperação.
 - **Riscos técnicos:** tokens expirados durante a reconexão.
-- **Status:** Backlog (reconexão do player é validada na Etapa 0)
+- **Status:** Testing — reconexão do transmissor (janela de graça) e do player validadas localmente
 
 ### M-020 — Segurança do streaming
 - **Descrição:** Autenticação e autorização no relay.
@@ -201,7 +201,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** toda conexão autenticada; autorização por sala; limites de tamanho de mensagem, espectadores e taxa; TLS obrigatório em produção.
 - **Testes necessários:** testes negativos de autorização; fuzzing do parser do protocolo.
 - **Riscos técnicos:** abuso do relay como CDN gratuita.
-- **Status:** Backlog
+- **Status:** Testing — tokens HMAC, autenticação pela primeira mensagem, rate limit e limites de tamanho
 
 ### M-021 — Self-hosting
 - **Descrição:** Servidor básico instalável em infraestrutura própria, sem depender da Vellcast Cloud.
@@ -210,7 +210,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** imagem Docker + docker-compose de exemplo; guia para VPS Linux e Dokploy; funciona sem nenhuma chamada à Cloud.
 - **Testes necessários:** instalação limpa seguindo apenas a documentação.
 - **Riscos técnicos:** configuração de TLS e proxy reverso pelo usuário.
-- **Status:** Backlog
+- **Status:** Testing — Dockerfile, compose, guia Dokploy e pacote Windows com `iniciar-relay.bat`; build Docker pendente
 
 ### M-022 — Documentação
 - **Descrição:** Documentação técnica e de instalação em PT-BR.
@@ -219,7 +219,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** todos os documentos da seção 32 da especificação existem e são atualizados a cada etapa.
 - **Testes necessários:** revisão a cada etapa; links válidos.
 - **Riscos técnicos:** documentação desatualizada em relação ao código.
-- **Status:** In Progress — documentos de planejamento criados na Etapa 0.
+- **Status:** Testing — documentação de arquitetura, protocolo, deploy e guia de testes Windows
 
 ### M-023 — Métricas
 - **Descrição:** Coletar métricas para verificar desempenho, estabilidade e latência.
@@ -228,7 +228,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** métricas de FPS, frames descartados, bitrate, latência e tempo de codificação disponíveis localmente; sem envio de conteúdo transmitido.
 - **Testes necessários:** validação das métricas contra medição externa.
 - **Riscos técnicos:** overhead da própria coleta.
-- **Status:** Backlog (métricas do player são parte da tarefa E0-T06)
+- **Status:** Testing — métricas no app (Ao vivo), no relay (`/metrics`) e no player
 
 ### M-024 — Privacidade
 - **Descrição:** Não capturar, armazenar ou transmitir conteúdo sem ação explícita.
@@ -237,7 +237,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** captura só inicia por ação do usuário; indicador visível de transmissão ativa; nenhuma gravação por padrão; logs sem conteúdo.
 - **Testes necessários:** revisão de código; teste de que nada é capturado antes do clique em "Iniciar".
 - **Riscos técnicos:** —
-- **Status:** Backlog
+- **Status:** Testing — captura só por ação explícita, indicador AO VIVO, nada é gravado
 
 ### M-025 — Testes de estabilidade
 - **Descrição:** Validar sessões prolongadas, desconexões e sobrecarga.
@@ -246,7 +246,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** sessão ≥ 60 min sem crash e com memória estável; recuperação de desconexões; comportamento previsível sob sobrecarga.
 - **Testes necessários:** soak test, chaos de rede (perda/latência), sobrecarga de GPU.
 - **Riscos técnicos:** vazamentos em recursos COM/D3D.
-- **Status:** Backlog
+- **Status:** Backlog — sessões de 60 min e testes de falha exigem Windows real (E3-T13, E6-T08)
 
 ---
 
