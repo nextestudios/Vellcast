@@ -22,7 +22,9 @@ use crate::slot::LatestSlot;
 use crate::{CaptureError, CaptureOptions, CaptureTarget, D3dDevice};
 
 /// Buffers do pool: um em uso pelo encoder e um sendo preenchido.
-const POOL_BUFFERS: i32 = 2;
+/// Três buffers: o pipeline guarda o último quadro para repeti-lo quando a fonte
+/// fica parada, e o WGC ainda tem dois livres para quadros novos.
+const POOL_BUFFERS: i32 = 3;
 const PIXEL_FORMAT: DirectXPixelFormat = DirectXPixelFormat::B8G8R8A8UIntNormalized;
 
 /// Um quadro capturado, ainda na GPU.

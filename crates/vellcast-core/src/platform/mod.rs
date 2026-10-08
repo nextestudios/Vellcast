@@ -267,6 +267,11 @@ struct Pipeline {
     video_codec: Option<String>,
     inflight: VecDeque<(i64, Instant)>,
     device_resets: u32,
+    /// Último quadro capturado, reenviado ao encoder quando a fonte fica parada
+    /// (o WGC só entrega quadros quando o conteúdo muda). Mantém o ritmo de FPS,
+    /// os keyframes periódicos e a imagem para quem entra depois.
+    last_frame: Option<CapturedFrame>,
+    last_submit: Instant,
 }
 
 impl Pipeline {
@@ -347,6 +352,8 @@ impl Pipeline {
             video_codec: None,
             inflight: VecDeque::with_capacity(MAX_INFLIGHT),
             device_resets: 0,
+            last_frame: None,
+            last_submit: Instant::now(),
         })
     }
 
@@ -367,8 +374,15 @@ impl Pipeline {
             }
 
             // Espera curta quando há saída pendente no encoder; senão aguarda o próximo quadro.
-            let timeout = if self.inflight.is_empty() {
+            // Com um quadro guardado, acorda a cada meio intervalo para poder repeti-lo.
+            let idle = if self.last_frame.is_some() {
+                (Duration::from_secs(1) / self.config.quality.fps.max(1) / 2)
+                    .min(Duration::from_millis(50))
+            } else {
                 Duration::from_millis(50)
+            };
+            let timeout = if self.inflight.is_empty() {
+                idle
             } else {
                 Duration::from_millis(2)
             };
@@ -403,13 +417,30 @@ impl Pipeline {
         window: &mut RateWindow,
     ) -> std::result::Result<(), EncoderError> {
         self.gpu.encoder.poll(out)?;
-        let Some(frame) = frame else { return Ok(()) };
-        window.captured += 1;
+        let (frame, pts_hns) = match frame {
+            Some(frame) => {
+                window.captured += 1;
+                let pts = (frame.time_hns - self.origin_hns).max(0);
+                (frame, pts)
+            }
+            None => {
+                // Fonte parada: repete o último quadro no ritmo do FPS-alvo.
+                let interval = Duration::from_secs(1) / self.config.quality.fps.max(1);
+                if self.last_submit.elapsed() < interval + interval / 2 {
+                    return Ok(());
+                }
+                let Some(last) = self.last_frame.take() else {
+                    return Ok(());
+                };
+                let now = ticks_to_hns(qpc_ticks(), qpc_frequency());
+                (last, (now - self.origin_hns).max(0))
+            }
+        };
         if !self.gpu.encoder.ready_for_input() {
             shared.stats.add_dropped(1);
+            self.last_frame = Some(frame);
             return Ok(());
         }
-        let pts_hns = (frame.time_hns - self.origin_hns).max(0);
         let force = shared.keyframe.swap(false, Ordering::Relaxed);
         let outcome = self.gpu.encoder.submit(
             &frame.texture,
@@ -425,6 +456,7 @@ impl Pipeline {
                     self.inflight.pop_front();
                 }
                 self.inflight.push_back((pts_hns, Instant::now()));
+                self.last_submit = Instant::now();
             }
             SubmitOutcome::Busy => {
                 shared.stats.add_dropped(1);
@@ -433,7 +465,8 @@ impl Pipeline {
                 }
             }
         }
-        // `frame` é descartado aqui e o buffer volta ao pool da captura.
+        // O quadro fica guardado para repetição; o anterior volta ao pool da captura.
+        self.last_frame = Some(frame);
         Ok(())
     }
 
@@ -494,6 +527,8 @@ impl Pipeline {
         // Para a captura antiga e descarta quadros pendentes do dispositivo perdido
         // antes de criar os recursos novos.
         self.gpu.capturer.halt();
+        // O quadro guardado pertence ao dispositivo perdido.
+        self.last_frame = None;
         while shared.slot.take(Duration::ZERO).is_some() {}
         let fresh = open_gpu(&self.config, shared, self.out_w, self.out_h)?;
         drop(std::mem::replace(&mut self.gpu, fresh));
