@@ -61,7 +61,15 @@ pub struct Settings {
     pub public_url: String,
     /// Preferências da tela Transmitir.
     pub stream: StreamPrefs,
+    /// Versão do formato, para migrações únicas. Arquivos antigos não têm o
+    /// campo e leem 0 (o padrão do campo, não o de [`Settings::default`]).
+    #[serde(default)]
+    pub config_version: u32,
 }
+
+/// Versão atual de [`Settings::config_version`].
+/// 1 → 2: o servidor padrão passou do relay local para o servidor de testes.
+const CONFIG_VERSION: u32 = 2;
 
 // Debug manual: a chave de criação de salas nunca aparece em logs.
 impl std::fmt::Debug for Settings {
@@ -83,7 +91,11 @@ impl std::fmt::Debug for Settings {
     }
 }
 
-pub const DEFAULT_RELAY_URL: &str = "http://127.0.0.1:8788";
+/// Servidor de teste do MVP (relay hospedado com TLS). Para usar um relay neste
+/// PC, configure `http://127.0.0.1:8788`: o app o inicia sozinho (`local_relay`).
+pub const DEFAULT_RELAY_URL: &str = "https://vellcast.nextestudios.com";
+/// Padrão das versões anteriores; migrado para [`DEFAULT_RELAY_URL`].
+const LEGACY_DEFAULT_RELAY_URL: &str = "http://127.0.0.1:8788";
 
 /// Preferências de qualidade e áudio (índices dos seletores da interface).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -185,6 +197,7 @@ impl Default for Settings {
             room_key: String::new(),
             public_url: String::new(),
             stream: StreamPrefs::default(),
+            config_version: CONFIG_VERSION,
         }
     }
 }
@@ -198,6 +211,12 @@ impl Settings {
         self.gamepad_repeat_interval_ms = input.repeat_interval.as_millis() as u64;
         self.display_name = sanitize_display_name(&self.display_name);
         self.relay_url = self.relay_url.trim().chars().take(256).collect();
+        // Migração única: quem tinha o padrão antigo passa para o servidor de testes;
+        // escolher o relay local depois disso continua valendo.
+        if self.config_version < CONFIG_VERSION && self.relay_url == LEGACY_DEFAULT_RELAY_URL {
+            self.relay_url = DEFAULT_RELAY_URL.into();
+        }
+        self.config_version = CONFIG_VERSION;
         if self.relay_url.is_empty() {
             self.relay_url = DEFAULT_RELAY_URL.into();
         }
@@ -364,6 +383,26 @@ mod tests {
         assert_eq!(s.relay_url, DEFAULT_RELAY_URL);
         assert_eq!(s.room_key, "");
         assert_eq!(s.stream, StreamPrefs::default());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn migrates_old_default_server_only_once() {
+        let dir = std::env::temp_dir().join(format!("vellcast-mig-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let path = dir.join("settings.json");
+        // Arquivo de uma versão anterior: sem config_version e com o padrão antigo.
+        std::fs::write(&path, br#"{ "relay_url": "http://127.0.0.1:8788" }"#).expect("write");
+        let (s, _) = load(&path);
+        assert_eq!(s.relay_url, DEFAULT_RELAY_URL);
+        assert_eq!(s.config_version, CONFIG_VERSION);
+        // Depois da migração, escolher o relay local é respeitado.
+        let chosen = Settings {
+            relay_url: LEGACY_DEFAULT_RELAY_URL.into(),
+            ..s
+        }
+        .sanitized();
+        assert_eq!(chosen.relay_url, LEGACY_DEFAULT_RELAY_URL);
         let _ = std::fs::remove_dir_all(dir);
     }
 

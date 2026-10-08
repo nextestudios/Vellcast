@@ -4,7 +4,8 @@
 //! Opcionais: `VELLCAST_DEV_PAGE=<0-7>`, `VELLCAST_DEV_MODAL=menu|keyboard`,
 //! `VELLCAST_DEV_TABS=<n>` (envia n Tabs para mostrar o anel de foco),
 //! `VELLCAST_DEV_ACTIONS=down,down,confirm,...` (ações de controle simuladas,
-//! processadas pelo mesmo caminho do gamepad real).
+//! processadas pelo mesmo caminho do gamepad real) e `VELLCAST_DEV_WAIT_MS=<ms>`
+//! (espera antes da captura, para resultados assíncronos).
 
 use std::time::Duration;
 
@@ -53,8 +54,14 @@ pub fn schedule(ui: &AppWindow) {
             Ok("keyboard") => ui.invoke_open_keyboard(),
             _ => {}
         }
+        // `VELLCAST_DEV_WAIT_MS`: espera extra antes da captura, para ações assíncronas
+        // (ex.: criar sala, que pode iniciar o servidor local).
+        let wait = std::env::var("VELLCAST_DEV_WAIT_MS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(400);
         let weak = ui.as_weak();
-        Timer::single_shot(Duration::from_millis(400), move || {
+        Timer::single_shot(Duration::from_millis(wait), move || {
             let Some(ui) = weak.upgrade() else { return };
             let size = ui.window().size();
             tracing::info!(

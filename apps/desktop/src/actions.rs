@@ -944,7 +944,10 @@ fn test_relay(ui: &AppWindow) {
     ui.set_relay_message_error(false);
     background(
         ui,
-        move || relay_api::health(&relay),
+        move || {
+            crate::local_relay::ensure(&relay);
+            relay_api::health(&relay)
+        },
         |ui, result| match result {
             Ok(()) => {
                 ui.set_relay_message(t(

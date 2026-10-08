@@ -471,14 +471,14 @@ export component SettingsPage inherits VerticalLayout {
     Card {
         title: @tr("Server");
         Text {
-            text: @tr("Address of the vellcast-relay that receives your stream. Use http://127.0.0.1:8788 when it runs on this PC, or https://… for a server with TLS.");
+            text: @tr("Address of the vellcast-relay that receives your stream. The default is the Vellcast test server. To use a server on this PC, enter http://127.0.0.1:8788 (the app starts it automatically).");
             color: Theme.text-secondary;
             font-size: Theme.fs-caption;
             wrap: word-wrap;
         }
         VTextField {
             label: @tr("Server address");
-            placeholder: "http://127.0.0.1:8788";
+            placeholder: "https://vellcast.nextestudios.com";
             text: root.relay-url;
             refocus-token: root.refocus-token;
             request-virtual-keyboard(t) => { root.request-virtual-keyboard(1, t); }

@@ -15,6 +15,7 @@ anyhow.workspace = true
 # Área de transferência para o link de convite (sem suporte a imagens).
 arboard = { version = "=3.6.1", default-features = false }
 directories = "=6.0.0"
+getrandom.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-software", "accessibility", "unstable-winit-030"] }

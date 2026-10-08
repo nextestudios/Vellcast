@@ -21,20 +21,24 @@ Guia para validar o Vellcast em uma máquina Windows real: captura, encoder por 
 
 Conteúdo: `vellcast-desktop.exe`, `vellcast-relay.exe`, `iniciar-relay.bat`, `player\`, `LEIA-ME.txt`, `LICENSE.txt`, `THIRD-PARTY-NOTICES.txt`, `VERSAO.txt`.
 
-## 3. Primeiro teste (tudo no mesmo PC)
+## 3. Primeiro teste (servidor de testes)
 
-1. Execute `iniciar-relay.bat`. Na primeira vez ele cria `relay.env` com um segredo aleatório. Se o Firewall perguntar, permita em redes privadas.
-2. Abra `vellcast-desktop.exe`.
-3. **Configurações → Servidor**: endereço `http://127.0.0.1:8788` → **Testar conexão** → "Servidor respondeu".
-4. **Salas → Criar sala** → selecione a sala → **Gerar link de convite** → **Copiar link**.
-5. **Transmitir**:
+O app vem configurado com o servidor de testes `https://vellcast.nextestudios.com` (relay no Dokploy com TLS). Não é preciso rodar nada além do app.
+
+1. Abra `vellcast-desktop.exe`.
+2. **Salas → Criar sala** → selecione a sala → **Gerar link de convite** → **Copiar link**.
+3. **Transmitir**:
    - escolha a fonte (jogos prováveis aparecem primeiro, com o selo "Jogo");
-   - perfil **Equilibrado** (1080p60, 8 Mbps) ou outro;
+   - perfil **Econômico** (recomendado com o servidor de testes, que fica na Europa; ver `DEPLOYMENT.md` §6.10) ou outro;
    - áudio **Só o aplicativo escolhido**;
    - sala de destino → **Iniciar transmissão**.
-6. O app vai para **Ao vivo**, com o indicador **AO VIVO** na janela, na barra de status e na dica do ícone da bandeja.
-7. Cole o link no Chrome/Edge do mesmo PC. A imagem deve aparecer em até ~1 s. Clique em **Ativar áudio**.
-8. **Parar transmissão** (na tela Ao vivo ou no menu da bandeja). O player mostra "Aguardando transmissão".
+4. O app vai para **Ao vivo**, com o indicador **AO VIVO** na janela, na barra de status e na dica do ícone da bandeja.
+5. Abra o link no Chrome/Edge (neste PC, no celular ou em outro PC). A imagem deve aparecer em até ~1–2 s. Clique em **Ativar áudio**.
+6. **Parar transmissão** (na tela Ao vivo ou no menu da bandeja). O player mostra "Aguardando transmissão".
+
+### 3.1 Servidor neste PC (melhor qualidade)
+
+Em **Configurações → Servidor**, use `http://127.0.0.1:8788` e **Testar conexão**: o app inicia o `vellcast-relay.exe` do pacote sozinho, sem janela, e o encerra ao sair. Abra o link no navegador do mesmo PC.
 
 ## 4. Assistir em outro aparelho
 
@@ -64,7 +68,7 @@ Registre o resultado de cada linha (OK / Falhou / Não testado) e o hardware usa
 | M-007 | Encoder por hardware | Ao vivo → Vídeo; Gerenciador de Tarefas → GPU → "Video Encode" | Nome do encoder de hardware; uso de "Video Encode" na GPU, CPU baixa |
 | M-008 | 1080p60 grátis | Perfil Equilibrado | Ao vivo mostra 1920×1080 @ 60; o player mostra ~60 FPS |
 | M-009 | Áudio do aplicativo | Áudio "Só o aplicativo escolhido" + vídeo/jogo com som | Som no player após "Ativar áudio"; outros apps (ex.: Discord) não aparecem |
-| M-010 | Servidor de transmissão | `http://127.0.0.1:8788/metrics` durante a transmissão | Contadores de mensagens e bytes crescendo |
+| M-010 | Servidor de transmissão | `https://vellcast.nextestudios.com/metrics` (ou `http://127.0.0.1:8788/metrics`) durante a transmissão | Contadores de mensagens e bytes crescendo |
 | M-011 | Vários espectadores | Abrir o link em 3 abas/aparelhos (o link vale para 10 pessoas) | Todos assistem; a CPU do PC que transmite não aumenta por espectador |
 | M-012 | Discord Activity | — | **Adiado** (ADR-013) |
 | M-013 | Salas privadas | Abrir `/watch` sem convite e com convite já usado | Acesso negado com mensagem clara; só links válidos assistem |

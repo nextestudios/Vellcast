@@ -5764,6 +5764,7 @@ dependencies = [
  "anyhow",
  "arboard",
  "directories",
+ "getrandom 0.4.3",
  "serde",
  "serde_json",
  "slint",

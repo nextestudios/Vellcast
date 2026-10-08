@@ -11,6 +11,7 @@
 mod actions;
 mod engine;
 mod input;
+mod local_relay;
 mod relay_api;
 mod rooms;
 mod settings;
@@ -159,6 +160,8 @@ fn main() -> anyhow::Result<()> {
     slint::run_event_loop_until_quit()?;
     // Encerra a transmissão (se houver) antes de sair: o motor para a sessão no Drop.
     STATE.with(|s| drop(s.borrow_mut().take()));
+    // Desliga o servidor local, se o app o iniciou.
+    local_relay::shutdown();
     Ok(())
 }
 
@@ -200,6 +203,7 @@ fn settings_from_ui(
         room_key: ui.get_room_key().to_string(),
         public_url: ui.get_public_url().to_string(),
         stream: actions::stream_prefs_from_ui(ui, &previous.stream, encoders),
+        config_version: previous.config_version,
     }
     .sanitized()
 }

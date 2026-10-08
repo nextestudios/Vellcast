@@ -477,8 +477,8 @@ msgstr "Para mudar a qualidade, pare e inicie de novo com as novas configuraçõ
 msgid "Server"
 msgstr "Servidor"
 
-msgid "Address of the vellcast-relay that receives your stream. Use http://127.0.0.1:8788 when it runs on this PC, or https://… for a server with TLS."
-msgstr "Endereço do vellcast-relay que recebe sua transmissão. Use http://127.0.0.1:8788 quando ele roda neste PC, ou https://… para um servidor com TLS."
+msgid "Address of the vellcast-relay that receives your stream. The default is the Vellcast test server. To use a server on this PC, enter http://127.0.0.1:8788 (the app starts it automatically)."
+msgstr "Endereço do vellcast-relay que recebe sua transmissão. O padrão é o servidor de testes do Vellcast. Para usar um servidor neste PC, coloque http://127.0.0.1:8788 (o app o inicia sozinho)."
 
 msgid "Room creation key (only if the server requires one)"
 msgstr "Chave de criação de salas (só se o servidor exigir)"

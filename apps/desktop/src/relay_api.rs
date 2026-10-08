@@ -267,6 +267,7 @@ struct CreateRoomBody<'a> {
 }
 
 pub fn create_room(base: &str, create_key: &str, name: &str) -> Result<CreatedRoom, ApiError> {
+    crate::local_relay::ensure(base);
     let base = normalize_base(base)?;
     let mut req = agent().post(format!("{base}/api/rooms"));
     if !create_key.trim().is_empty() {
@@ -287,6 +288,7 @@ pub fn create_invite(
     room_id: &str,
     owner_token: &str,
 ) -> Result<CreatedInvite, ApiError> {
+    crate::local_relay::ensure(base);
     let base = normalize_base(base)?;
     let room = checked_room(room_id)?;
     finish(
@@ -302,6 +304,7 @@ pub fn create_invite(
 
 /// Token de transmissor novo para a sala (emitido a cada início de transmissão).
 pub fn publisher_token(base: &str, room_id: &str, owner_token: &str) -> Result<String, ApiError> {
+    crate::local_relay::ensure(base);
     let base = normalize_base(base)?;
     let room = checked_room(room_id)?;
     finish::<PublisherToken>(
@@ -314,6 +317,7 @@ pub fn publisher_token(base: &str, room_id: &str, owner_token: &str) -> Result<S
 }
 
 pub fn get_room(base: &str, room_id: &str, owner_token: &str) -> Result<RoomView, ApiError> {
+    crate::local_relay::ensure(base);
     let base = normalize_base(base)?;
     let room = checked_room(room_id)?;
     finish(
@@ -343,6 +347,7 @@ pub fn health(base: &str) -> Result<(), ApiError> {
 }
 
 pub fn delete_room(base: &str, room_id: &str, owner_token: &str) -> Result<(), ApiError> {
+    crate::local_relay::ensure(base);
     let base = normalize_base(base)?;
     let room = checked_room(room_id)?;
     let mut resp = agent()

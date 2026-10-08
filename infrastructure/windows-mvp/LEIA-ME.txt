@@ -10,31 +10,33 @@ Conteúdo do pacote
   LICENSE.txt            Licença do código do Vellcast (Apache-2.0, proposta)
   THIRD-PARTY-NOTICES.txt Licenças de terceiros
 
-Teste rápido (tudo neste PC)
-----------------------------
- 1. Dê dois cliques em iniciar-relay.bat e deixe a janela aberta.
- 2. Abra vellcast-desktop.exe.
- 3. Configurações > Servidor: deixe http://127.0.0.1:8788 e use "Testar conexão".
- 4. Salas > Criar sala > Gerar link de convite > Copiar link.
- 5. Transmitir: escolha um jogo, janela ou monitor, a qualidade, o áudio e a sala.
+Teste rápido (servidor de testes, sem instalar nada)
+----------------------------------------------------
+O app já vem configurado com o servidor de testes do Vellcast:
+https://vellcast.nextestudios.com (salas, convites e transmissão).
+
+ 1. Abra vellcast-desktop.exe.
+ 2. Salas > Criar sala > Gerar link de convite > Copiar link.
+ 3. Transmitir: escolha um jogo, janela ou monitor, a qualidade, o áudio e a sala.
     Clique em "Iniciar transmissão". O indicador AO VIVO aparece na janela e
     na bandeja.
- 6. Cole o link no Chrome ou Edge deste PC e clique em "Ativar áudio".
+ 4. Abra o link no Chrome ou Edge (neste PC, no celular ou em outro PC) e
+    clique em "Ativar áudio". O link vale para até 10 pessoas por 24 horas.
 
-Assistir em outros aparelhos
-----------------------------
-O navegador só decodifica o vídeo (WebCodecs) em conexão segura (HTTPS).
-Um link http://192.168.x.x NÃO toca vídeo em outro aparelho. Opções:
+Observação: o servidor de testes fica na Europa. A partir do Brasil, use a
+qualidade "Econômico" para um vídeo mais fluido; 1080p60 vai engasgar.
 
- A) Túnel HTTPS temporário (mais simples para testar):
-      cloudflared tunnel --url http://localhost:8788
-    Copie o endereço https://....trycloudflare.com mostrado e cole em
-    Configurações > Servidor > "Endereço público para os links de convite".
-    Gere um novo link de convite.
+Teste com o servidor neste PC (melhor qualidade, só neste PC)
+-------------------------------------------------------------
+ 1. Configurações > Servidor: coloque http://127.0.0.1:8788 e clique em
+    "Testar conexão". O app inicia o vellcast-relay.exe sozinho, sem janela
+    (o iniciar-relay.bat continua disponível para rodar o servidor à parte).
+ 2. Siga os passos 2 a 4 acima, abrindo o link no navegador deste PC.
 
- B) Servidor em uma VPS com HTTPS (Dokploy + Let's Encrypt): veja
-    docs/DEPLOYMENT.md no repositório. Em Configurações > Servidor use
-    https://seu-dominio (o app transmite por wss:// automaticamente).
+Para assistir em outros aparelhos com o servidor neste PC, o navegador exige
+HTTPS: use um túnel (cloudflared tunnel --url http://localhost:8788) e cole o
+endereço https://....trycloudflare.com em Configurações > Servidor >
+"Endereço público para os links de convite".
 
 Requisitos
 ----------
