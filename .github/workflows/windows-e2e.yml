@@ -1,0 +1,126 @@
+name: Windows E2E
+
+# Validação de ponta a ponta em um Windows real (runner do GitHub, sem GPU):
+# captura WGC → encoder Media Foundation → relay → espectadores autenticados,
+# captura de áudio WASAPI e o app desktop renderizando as 8 telas.
+# Em push roda uma sessão curta; manualmente aceita uma duração longa (M-025).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Duração da transmissão principal em segundos (3600 = teste de estabilidade de 60 min)
+        default: "60"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  e2e:
+    name: E2E Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: e2e
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Build (Release)
+        run: |
+          cargo build --release --locked -p vellcast-relay
+          cargo build --release --locked -p vellcast-core --example stream_to_relay --example capture_to_file
+          cargo build --release --locked -p vellcast-audio --example capture_audio
+          cargo build --release --locked -p vellcast-desktop --features dev-snapshot
+
+      - name: Fontes e encoders
+        run: |
+          Start-Process notepad
+          Start-Sleep -Seconds 3
+          target\release\examples\capture_to_file.exe list | Tee-Object -FilePath sources.txt
+
+      - name: Captura de monitor e de janela → H.264
+        run: |
+          $lines = Get-Content sources.txt
+          $mon = ($lines | Select-String '^\s*\[(\d+)\].*Monitor' | Select-Object -First 1).Matches[0].Groups[1].Value
+          $win = ($lines | Select-String '^\s*\[(\d+)\].*(?i)notepad' | Select-Object -First 1)
+          New-Item -ItemType Directory -Force e2e-out | Out-Null
+          target\release\examples\capture_to_file.exe $mon 8 e2e-out\monitor.h264 30 3000
+          if ($LASTEXITCODE -ne 0) { throw "captura de monitor falhou" }
+          if ($win) {
+            $idx = $win.Matches[0].Groups[1].Value
+            target\release\examples\capture_to_file.exe $idx 8 e2e-out\janela.h264 30 3000
+            if ($LASTEXITCODE -ne 0) { throw "captura de janela falhou" }
+          } else { Write-Output "janela do Bloco de Notas não encontrada na lista" }
+          Get-ChildItem e2e-out | Format-Table Name, Length
+          foreach ($f in Get-ChildItem e2e-out\*.h264) {
+            if ($f.Length -lt 1000) { throw "$($f.Name) vazio" }
+            $head = [System.IO.File]::ReadAllBytes($f.FullName)[0..5]
+            Write-Output "$($f.Name): $($f.Length) bytes, início $([BitConverter]::ToString($head))"
+          }
+
+      - name: Captura de áudio WASAPI (informativo)
+        continue-on-error: true
+        run: |
+          target\release\examples\capture_audio.exe system 5 e2e-out\audio.opus
+          Get-ChildItem e2e-out\audio.opus -ErrorAction SilentlyContinue | Format-Table Name, Length
+
+      - name: Relay
+        run: |
+          $env:VELLCAST_RELAY_SECRET = -join ((1..64) | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) })
+          $env:VELLCAST_BIND = "127.0.0.1:8788"
+          $env:RUST_LOG = "info"
+          $p = Start-Process target\release\vellcast-relay.exe -PassThru -NoNewWindow -RedirectStandardOutput relay.out.log -RedirectStandardError relay.err.log
+          "VELLCAST_E2E_RELAY_PID=$($p.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Start-Sleep -Seconds 2
+          (Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8788/healthz).Content
+
+      - name: Transmissão de ponta a ponta (monitor + áudio do sistema)
+        run: node tests/e2e/windows-e2e.mjs target\release\examples\stream_to_relay.exe ${{ inputs.seconds || '60' }} 3 30 3000 system monitor
+
+      - name: Transmissão de ponta a ponta (janela)
+        run: |
+          $win = (Get-Content sources.txt | Select-String '^\s*\[(\d+)\].*(?i)notepad' | Select-Object -First 1)
+          if (-not $win) { Write-Output "sem janela do Bloco de Notas; etapa pulada"; exit 0 }
+          node tests/e2e/windows-e2e.mjs target\release\examples\stream_to_relay.exe 20 2 30 2000 off $win.Matches[0].Groups[1].Value
+
+      - name: App desktop — telas renderizadas no Windows
+        run: |
+          New-Item -ItemType Directory -Force e2e-out\telas | Out-Null
+          foreach ($page in 0..7) {
+            $env:VELLCAST_DEV_SNAPSHOT = "$PWD\e2e-out\telas\tela-$page.bmp"
+            $env:VELLCAST_DEV_PAGE = "$page"
+            $p = Start-Process target\release\vellcast-desktop.exe -PassThru -Wait
+            Write-Output "tela $page → código $($p.ExitCode)"
+          }
+          $env:VELLCAST_DEV_PAGE = "4"
+          $env:VELLCAST_DEV_MODAL = "keyboard"
+          $env:VELLCAST_DEV_SNAPSHOT = "$PWD\e2e-out\telas\teclado-virtual.bmp"
+          Start-Process target\release\vellcast-desktop.exe -Wait
+          Get-ChildItem e2e-out\telas | Format-Table Name, Length
+          if ((Get-ChildItem e2e-out\telas\*.bmp).Count -lt 9) { throw "nem todas as telas foram capturadas" }
+
+      - name: Logs do relay
+        if: always()
+        run: |
+          Get-Content relay.err.log -Tail 40 -ErrorAction SilentlyContinue
+          Get-Content relay.out.log -Tail 40 -ErrorAction SilentlyContinue
+
+      - uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: e2e-windows
+          path: |
+            e2e-out
+            sources.txt
+            relay.*.log
+          retention-days: 14
