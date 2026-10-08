@@ -43,7 +43,7 @@ use windows::Win32::System::Variant::{VARIANT, VT_BOOL, VT_UI4};
 use windows::core::{GUID, Interface, PWSTR};
 
 use crate::annexb::{self, ParameterSets};
-use crate::convert::VideoConverter;
+use crate::convert::{CpuConverter, VideoConverter};
 use crate::sizing::{bitrate_bps, frame_duration_hns, gop_frames};
 use crate::{EncodedFrame, EncoderConfig, EncoderDescriptor, EncoderError, SubmitOutcome, Vendor};
 
@@ -189,6 +189,21 @@ enum InputPath {
         staging: ID3D11Texture2D,
         context: ID3D11DeviceContext,
     },
+    /// Sem processador de vídeo D3D11: o NV12 já é produzido em memória pela CPU.
+    Memory,
+}
+
+/// Onde a conversão BGRA → NV12 acontece.
+enum Conversion {
+    Gpu(VideoConverter),
+    /// Fallback sem `ID3D11VideoDevice` (VM, Área de Trabalho Remota, driver básico).
+    Cpu(CpuConverter),
+}
+
+/// Quadro NV12 pronto para virar amostra do Media Foundation.
+enum Prepared {
+    Texture(ID3D11Texture2D),
+    Memory(windows::Win32::Media::MediaFoundation::IMFMediaBuffer),
 }
 
 pub struct H264Encoder {
@@ -196,7 +211,7 @@ pub struct H264Encoder {
     transform: IMFTransform,
     events: Option<IMFMediaEventGenerator>,
     codec_api: Option<ICodecAPI>,
-    converter: VideoConverter,
+    conversion: Conversion,
     input: InputPath,
     config: EncoderConfig,
     params: ParameterSets,
@@ -270,38 +285,60 @@ impl H264Encoder {
             }
         }
 
-        // Dispositivo compartilhado com a captura: o encoder lê as texturas NV12 direto.
-        let mut token = 0u32;
-        let mut manager = None;
-        // SAFETY: ponteiros de saída locais.
-        unsafe { MFCreateDXGIDeviceManager(&mut token, &mut manager) }
-            .map_err(win("MFCreateDXGIDeviceManager"))?;
-        let manager = manager.ok_or(EncoderError::Platform {
-            context: "MFCreateDXGIDeviceManager",
-            message: "nulo".into(),
-        })?;
-        // SAFETY: `device` é válido e tem proteção multithread ativada pela captura.
-        unsafe { manager.ResetDevice(device, token) }.map_err(win("ResetDevice"))?;
-        // SAFETY: o parâmetro é um ponteiro de interface válido durante a chamada; o MFT faz AddRef.
-        let d3d_ok = unsafe {
-            transform.ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, manager.as_raw() as usize)
-        }
-        .is_ok();
+        // Conversão BGRA→NV12: na GPU quando há processador de vídeo D3D11; sem ele,
+        // na CPU, e somente com o encoder de software (hardware exige a GPU).
+        let gpu_converter =
+            match VideoConverter::new(device, config.width, config.height, config.fps) {
+                Ok(converter) => Some(converter),
+                Err(err) if !descriptor.hardware => {
+                    tracing::warn!(%err, "sem processador de vídeo D3D11: convertendo na CPU");
+                    None
+                }
+                Err(err) => return Err(err),
+            };
 
-        let input = if d3d_ok {
-            InputPath::Gpu { _manager: manager }
-        } else if descriptor.hardware {
-            // Encoder de hardware que não aceita este dispositivo (ex.: outra GPU).
-            return Err(EncoderError::Platform {
-                context: "MFT_MESSAGE_SET_D3D_MANAGER",
-                message: format!("{} não aceita o dispositivo Direct3D", descriptor.name),
-            });
-        } else {
-            tracing::warn!(encoder = %descriptor.name, "encoder de software sem Direct3D: usando cópia pela CPU");
-            InputPath::Cpu {
-                staging: create_staging(device, config.width, config.height)?,
-                context: immediate_context(device)?,
+        let (input, conversion, d3d_ok) = match gpu_converter {
+            Some(converter) => {
+                // Dispositivo compartilhado com a captura: o encoder lê as texturas NV12 direto.
+                let mut token = 0u32;
+                let mut manager = None;
+                // SAFETY: ponteiros de saída locais.
+                unsafe { MFCreateDXGIDeviceManager(&mut token, &mut manager) }
+                    .map_err(win("MFCreateDXGIDeviceManager"))?;
+                let manager = manager.ok_or(EncoderError::Platform {
+                    context: "MFCreateDXGIDeviceManager",
+                    message: "nulo".into(),
+                })?;
+                // SAFETY: `device` é válido e tem proteção multithread ativada pela captura.
+                unsafe { manager.ResetDevice(device, token) }.map_err(win("ResetDevice"))?;
+                // SAFETY: o parâmetro é um ponteiro de interface válido durante a chamada; o MFT faz AddRef.
+                let d3d_ok = unsafe {
+                    transform.ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, manager.as_raw() as usize)
+                }
+                .is_ok();
+
+                let input = if d3d_ok {
+                    InputPath::Gpu { _manager: manager }
+                } else if descriptor.hardware {
+                    // Encoder de hardware que não aceita este dispositivo (ex.: outra GPU).
+                    return Err(EncoderError::Platform {
+                        context: "MFT_MESSAGE_SET_D3D_MANAGER",
+                        message: format!("{} não aceita o dispositivo Direct3D", descriptor.name),
+                    });
+                } else {
+                    tracing::warn!(encoder = %descriptor.name, "encoder de software sem Direct3D: usando cópia pela CPU");
+                    InputPath::Cpu {
+                        staging: create_staging(device, config.width, config.height)?,
+                        context: immediate_context(device)?,
+                    }
+                };
+                (input, Conversion::Gpu(converter), d3d_ok)
             }
+            None => (
+                InputPath::Memory,
+                Conversion::Cpu(CpuConverter::new(device, config.width, config.height)?),
+                false,
+            ),
         };
 
         let codec_api: Option<ICodecAPI> = transform.cast().ok();
@@ -366,15 +403,13 @@ impl H264Encoder {
         } else {
             None
         };
-        let converter = VideoConverter::new(device, config.width, config.height, config.fps)?;
-
         tracing::info!(encoder = %descriptor.name, hardware = descriptor.hardware, is_async, gpu_input = d3d_ok, "encoder H.264 pronto");
         Ok(Self {
             descriptor,
             transform,
             events,
             codec_api,
-            converter,
+            conversion,
             input,
             config: config.clone(),
             params,
@@ -400,7 +435,9 @@ impl H264Encoder {
 
     /// Esquece views de entrada em cache (o pool da captura foi recriado).
     pub fn reset_inputs(&mut self) {
-        self.converter.reset_inputs();
+        if let Conversion::Gpu(converter) = &mut self.conversion {
+            converter.reset_inputs();
+        }
     }
 
     /// Indica se o encoder aceita um novo quadro agora (sempre verdadeiro no modelo síncrono).
@@ -429,8 +466,15 @@ impl H264Encoder {
                 let _ = unsafe { api.SetValue(&CODECAPI_AVEncVideoForceKeyFrame, &variant_u32(1)) };
             }
         }
-        let nv12 = self.converter.convert(source, width, height)?;
-        let sample = self.make_sample(&nv12, pts_hns)?;
+        let prepared = match &mut self.conversion {
+            Conversion::Gpu(converter) => {
+                Prepared::Texture(converter.convert(source, width, height)?)
+            }
+            Conversion::Cpu(converter) => {
+                Prepared::Memory(converter.convert(source, width, height)?)
+            }
+        };
+        let sample = self.make_sample(prepared, pts_hns)?;
         // SAFETY: amostra válida para o fluxo 0.
         match unsafe { self.transform.ProcessInput(0, &sample, 0) } {
             Ok(()) => {}
@@ -577,13 +621,16 @@ impl H264Encoder {
         }))
     }
 
-    fn make_sample(&self, nv12: &ID3D11Texture2D, pts_hns: i64) -> Result<IMFSample, EncoderError> {
+    fn make_sample(&self, prepared: Prepared, pts_hns: i64) -> Result<IMFSample, EncoderError> {
         // SAFETY: criação de amostra; a textura NV12 permanece viva no rodízio do conversor.
         unsafe {
             let sample = MFCreateSample().map_err(win("MFCreateSample"))?;
-            match &self.input {
-                InputPath::Gpu { .. } => {
-                    let buffer = MFCreateDXGISurfaceBuffer(&ID3D11Texture2D::IID, nv12, 0, false)
+            match (&self.input, prepared) {
+                (_, Prepared::Memory(buffer)) => {
+                    sample.AddBuffer(&buffer).map_err(win("AddBuffer"))?;
+                }
+                (InputPath::Gpu { .. }, Prepared::Texture(nv12)) => {
+                    let buffer = MFCreateDXGISurfaceBuffer(&ID3D11Texture2D::IID, &nv12, 0, false)
                         .map_err(win("MFCreateDXGISurfaceBuffer"))?;
                     if let Ok(two_d) = buffer.cast::<IMF2DBuffer>() {
                         if let Ok(len) = two_d.GetContiguousLength() {
@@ -592,15 +639,21 @@ impl H264Encoder {
                     }
                     sample.AddBuffer(&buffer).map_err(win("AddBuffer"))?;
                 }
-                InputPath::Cpu { staging, context } => {
+                (InputPath::Cpu { staging, context }, Prepared::Texture(nv12)) => {
                     let buffer = copy_nv12_to_memory(
                         context,
                         staging,
-                        nv12,
+                        &nv12,
                         self.config.width,
                         self.config.height,
                     )?;
                     sample.AddBuffer(&buffer).map_err(win("AddBuffer"))?;
+                }
+                (InputPath::Memory, Prepared::Texture(_)) => {
+                    return Err(EncoderError::Platform {
+                        context: "make_sample",
+                        message: "textura NV12 sem caminho de entrada D3D".into(),
+                    });
                 }
             }
             sample

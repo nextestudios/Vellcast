@@ -7,6 +7,7 @@
 //!   de hardware.
 
 pub mod annexb;
+pub mod cpu_convert;
 pub mod sizing;
 
 #[cfg(windows)]

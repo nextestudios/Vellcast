@@ -1,25 +1,32 @@
 //! Conversão BGRA → NV12 com redimensionamento na GPU (`ID3D11VideoProcessor`).
 //!
 //! O quadro capturado nunca passa pela CPU: o processador de vídeo escreve
-//! direto em uma textura NV12 que é entregue ao encoder.
+//! direto em uma textura NV12 que é entregue ao encoder. Sem processador de
+//! vídeo (VM, Área de Trabalho Remota, driver básico), [`CpuConverter`] faz a
+//! conversão na CPU como fallback.
 
 use windows::Win32::Foundation::RECT;
 use windows::Win32::Graphics::Direct3D11::{
-    D3D11_BIND_RENDER_TARGET, D3D11_TEX2D_VPIV, D3D11_TEX2D_VPOV, D3D11_TEXTURE2D_DESC,
-    D3D11_USAGE_DEFAULT, D3D11_VIDEO_COLOR, D3D11_VIDEO_COLOR_0, D3D11_VIDEO_COLOR_YCbCrA,
+    D3D11_BIND_RENDER_TARGET, D3D11_CPU_ACCESS_READ, D3D11_MAP_READ, D3D11_MAPPED_SUBRESOURCE,
+    D3D11_TEX2D_VPIV, D3D11_TEX2D_VPOV, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
+    D3D11_USAGE_STAGING, D3D11_VIDEO_COLOR, D3D11_VIDEO_COLOR_0, D3D11_VIDEO_COLOR_YCbCrA,
     D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE, D3D11_VIDEO_PROCESSOR_COLOR_SPACE,
     D3D11_VIDEO_PROCESSOR_CONTENT_DESC, D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC,
     D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC_0, D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC,
     D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC_0, D3D11_VIDEO_PROCESSOR_STREAM,
     D3D11_VIDEO_USAGE_OPTIMAL_SPEED, D3D11_VPIV_DIMENSION_TEXTURE2D,
-    D3D11_VPOV_DIMENSION_TEXTURE2D, ID3D11Device, ID3D11Texture2D, ID3D11VideoContext,
-    ID3D11VideoDevice, ID3D11VideoProcessor, ID3D11VideoProcessorEnumerator,
+    D3D11_VPOV_DIMENSION_TEXTURE2D, ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D,
+    ID3D11VideoContext, ID3D11VideoDevice, ID3D11VideoProcessor, ID3D11VideoProcessorEnumerator,
     ID3D11VideoProcessorInputView, ID3D11VideoProcessorOutputView,
 };
-use windows::Win32::Graphics::Dxgi::Common::{DXGI_FORMAT_NV12, DXGI_RATIONAL, DXGI_SAMPLE_DESC};
+use windows::Win32::Graphics::Dxgi::Common::{
+    DXGI_FORMAT, DXGI_FORMAT_NV12, DXGI_RATIONAL, DXGI_SAMPLE_DESC,
+};
+use windows::Win32::Media::MediaFoundation::{IMFMediaBuffer, MFCreateMemoryBuffer};
 use windows::core::Interface;
 
 use crate::EncoderError;
+use crate::cpu_convert::{bgra_to_nv12, nv12_len};
 use crate::sizing::letterbox;
 
 /// Texturas NV12 em rodízio. Encoders assíncronos podem segurar a amostra de
@@ -331,5 +338,134 @@ impl VideoConverter {
     pub fn reset_inputs(&mut self) {
         self.input_views.clear();
         self.configured_src = (0, 0);
+    }
+}
+
+/// Fallback sem processador de vídeo D3D11: lê o quadro BGRA por uma textura
+/// staging e converte para NV12 na CPU ([`crate::cpu_convert`]).
+pub(crate) struct CpuConverter {
+    device: ID3D11Device,
+    context: ID3D11DeviceContext,
+    /// Textura staging no tamanho e formato da fonte (recriada se mudarem).
+    staging: Option<(ID3D11Texture2D, u32, u32, DXGI_FORMAT)>,
+    nv12: Vec<u8>,
+    out_w: u32,
+    out_h: u32,
+}
+
+impl CpuConverter {
+    pub fn new(device: &ID3D11Device, out_w: u32, out_h: u32) -> Result<Self, EncoderError> {
+        // SAFETY: `device` é um dispositivo válido.
+        let context = unsafe { device.GetImmediateContext() }
+            .map_err(|e| EncoderError::win("GetImmediateContext", e))?;
+        Ok(Self {
+            device: device.clone(),
+            context,
+            staging: None,
+            nv12: vec![0; nv12_len(out_w, out_h)],
+            out_w,
+            out_h,
+        })
+    }
+
+    fn staging_for(
+        &mut self,
+        desc: &D3D11_TEXTURE2D_DESC,
+    ) -> Result<ID3D11Texture2D, EncoderError> {
+        if let Some((tex, w, h, fmt)) = &self.staging {
+            if (*w, *h, *fmt) == (desc.Width, desc.Height, desc.Format) {
+                return Ok(tex.clone());
+            }
+        }
+        let staging_desc = D3D11_TEXTURE2D_DESC {
+            Width: desc.Width,
+            Height: desc.Height,
+            MipLevels: 1,
+            ArraySize: 1,
+            Format: desc.Format,
+            SampleDesc: DXGI_SAMPLE_DESC {
+                Count: 1,
+                Quality: 0,
+            },
+            Usage: D3D11_USAGE_STAGING,
+            BindFlags: 0,
+            CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
+            MiscFlags: 0,
+        };
+        let mut texture = None;
+        // SAFETY: descritor válido na pilha; saída local.
+        unsafe {
+            self.device
+                .CreateTexture2D(&staging_desc, None, Some(&mut texture))
+        }
+        .map_err(|e| EncoderError::win("CreateTexture2D staging BGRA", e))?;
+        let texture = texture.ok_or_else(|| EncoderError::Platform {
+            context: "CreateTexture2D staging BGRA",
+            message: "textura nula".into(),
+        })?;
+        self.staging = Some((texture.clone(), desc.Width, desc.Height, desc.Format));
+        Ok(texture)
+    }
+
+    /// Converte a região `content_w`×`content_h` de `source` em um buffer NV12 de memória.
+    pub fn convert(
+        &mut self,
+        source: &ID3D11Texture2D,
+        content_w: u32,
+        content_h: u32,
+    ) -> Result<IMFMediaBuffer, EncoderError> {
+        let mut desc = D3D11_TEXTURE2D_DESC::default();
+        // SAFETY: textura válida; descritor de saída na pilha.
+        unsafe { source.GetDesc(&mut desc) };
+        let w = if content_w == 0 {
+            desc.Width
+        } else {
+            content_w.min(desc.Width)
+        };
+        let h = if content_h == 0 {
+            desc.Height
+        } else {
+            content_h.min(desc.Height)
+        };
+        let staging = self.staging_for(&desc)?;
+        let (out_w, out_h) = (self.out_w, self.out_h);
+        let size = nv12_len(out_w, out_h);
+
+        // SAFETY: cópia GPU→staging do mesmo tamanho e formato; o mapeamento é
+        // lido somente dentro deste bloco (pitch × altura bytes) e desfeito antes de sair.
+        unsafe {
+            self.context.CopyResource(&staging, source);
+            let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
+            self.context
+                .Map(&staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped))
+                .map_err(|e| EncoderError::win("Map staging BGRA", e))?;
+            let pitch = mapped.RowPitch as usize;
+            let src =
+                std::slice::from_raw_parts(mapped.pData as *const u8, pitch * desc.Height as usize);
+            let ok = bgra_to_nv12(src, pitch, w, h, &mut self.nv12, out_w, out_h);
+            self.context.Unmap(&staging, 0);
+            if !ok {
+                return Err(EncoderError::Platform {
+                    context: "conversão BGRA→NV12 na CPU",
+                    message: format!("tamanhos inválidos: fonte {w}x{h}, saída {out_w}x{out_h}"),
+                });
+            }
+        }
+
+        // SAFETY: buffer recém-criado com `size` bytes; travado só durante a cópia.
+        unsafe {
+            let buffer = MFCreateMemoryBuffer(size as u32)
+                .map_err(|e| EncoderError::win("MFCreateMemoryBuffer", e))?;
+            let mut dst = std::ptr::null_mut();
+            buffer
+                .Lock(&mut dst, None, None)
+                .map_err(|e| EncoderError::win("Lock", e))?;
+            std::ptr::copy_nonoverlapping(self.nv12.as_ptr(), dst, size);
+            let _ = buffer.Unlock();
+            buffer
+                .SetCurrentLength(size as u32)
+                .map_err(|e| EncoderError::win("SetCurrentLength", e))?;
+            Ok(buffer)
+        }
     }
 }

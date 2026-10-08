@@ -179,3 +179,9 @@ Formato: contexto → decisão → consequências. Status possíveis: **Proposta
 **Status:** Aceita (2026-10-08)
 **Decisão:** As salas criadas ficam em `rooms.json` no diretório de configuração do usuário (até 20, expiradas removidas ao carregar), incluindo o token de dono necessário para convites, tokens de transmissor e encerramento. `Debug` de salas e configurações omite tokens e chaves; nada disso vai para logs. Um token de transmissor novo é pedido ao relay a cada início de transmissão.
 **Consequências:** Reiniciar o relay (estado em memória) invalida as salas salvas; o app detecta `room_not_found`, remove a sala e orienta o usuário. Persistência no relay (E3-T11) elimina esse caso.
+
+## ADR-031 — Conversão BGRA→NV12 na CPU quando não há processador de vídeo D3D11
+**Status:** Aceita (2026-10-08)
+**Contexto:** O diagnóstico na CI Windows (runner sem GPU) mostrou que a enumeração de fontes e do encoder de software funciona, mas o pipeline falhava em `ID3D11VideoDevice indisponível`: adaptadores básicos (VMs, Área de Trabalho Remota, driver genérico) não oferecem `ID3D11VideoProcessor`.
+**Decisão:** Quando o processador de vídeo não existe, o encoder de software recebe NV12 convertido na CPU (`crates/encoder/src/cpu_convert.rs`: BT.709 estúdio, letterbox, vizinho mais próximo). Encoders de hardware continuam exigindo o caminho de GPU, sem nenhuma cópia para a CPU.
+**Consequências:** O MVP funciona em qualquer Windows 10 2004+, inclusive sem GPU, com custo maior de CPU (o app já avisa quando usa codificação por software). A CI passa a exercitar o encoder real do Windows.
