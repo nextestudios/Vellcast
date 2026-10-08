@@ -71,27 +71,35 @@ jobs:
       - name: Captura de áudio WASAPI (informativo)
         continue-on-error: true
         run: |
-          target\release\examples\capture_audio.exe system 5 e2e-out\audio.opus
+          Get-Service Audiosrv -ErrorAction SilentlyContinue | Format-Table Name, Status, StartType
+          $env:RUST_LOG = "debug"
+          & target\release\examples\capture_audio.exe system 5 e2e-out\audio.opus 2>&1 | Out-String | Write-Output
+          Write-Output "código de saída: $LASTEXITCODE"
           Get-ChildItem e2e-out\audio.opus -ErrorAction SilentlyContinue | Format-Table Name, Length
 
-      - name: Relay
+      # Relay e testes no mesmo passo: no Windows, o runner encerra os processos
+      # iniciados por um passo quando ele termina.
+      - name: Transmissão de ponta a ponta (relay + monitor + janela)
         run: |
           $env:VELLCAST_RELAY_SECRET = -join ((1..64) | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) })
           $env:VELLCAST_BIND = "127.0.0.1:8788"
           $env:RUST_LOG = "info"
-          $p = Start-Process target\release\vellcast-relay.exe -PassThru -NoNewWindow -RedirectStandardOutput relay.out.log -RedirectStandardError relay.err.log
-          "VELLCAST_E2E_RELAY_PID=$($p.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          $relay = Start-Process target\release\vellcast-relay.exe -PassThru -NoNewWindow -RedirectStandardOutput relay.out.log -RedirectStandardError relay.err.log
+          $env:VELLCAST_E2E_RELAY_PID = "$($relay.Id)"
           Start-Sleep -Seconds 2
           (Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8788/healthz).Content
 
-      - name: Transmissão de ponta a ponta (monitor + áudio do sistema)
-        run: node tests/e2e/windows-e2e.mjs target\release\examples\stream_to_relay.exe ${{ inputs.seconds || '60' }} 3 30 3000 system monitor
+          node tests/e2e/windows-e2e.mjs target\release\examples\stream_to_relay.exe ${{ inputs.seconds || '60' }} 3 30 3000 system monitor
+          if ($LASTEXITCODE -ne 0) { $failed = $true }
 
-      - name: Transmissão de ponta a ponta (janela)
-        run: |
           $win = (Get-Content sources.txt | Select-String '^\s*\[(\d+)\].*(?i)notepad' | Select-Object -First 1)
-          if (-not $win) { Write-Output "sem janela do Bloco de Notas; etapa pulada"; exit 0 }
-          node tests/e2e/windows-e2e.mjs target\release\examples\stream_to_relay.exe 20 2 30 2000 off $win.Matches[0].Groups[1].Value
+          if ($win) {
+            node tests/e2e/windows-e2e.mjs target\release\examples\stream_to_relay.exe 20 2 30 2000 off $win.Matches[0].Groups[1].Value
+            if ($LASTEXITCODE -ne 0) { $failed = $true }
+          } else { Write-Output "sem janela do Bloco de Notas; transmissão de janela pulada" }
+
+          Stop-Process -Id $relay.Id -ErrorAction SilentlyContinue
+          if ($failed) { exit 1 }
 
       - name: App desktop — telas renderizadas no Windows
         run: |
