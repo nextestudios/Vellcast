@@ -27,8 +27,8 @@ use windows::Win32::Media::KernelStreaming::{KSDATAFORMAT_SUBTYPE_PCM, WAVE_FORM
 use windows::Win32::Media::Multimedia::{KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, WAVE_FORMAT_IEEE_FLOAT};
 use windows::Win32::System::Com::StructuredStorage::PROPVARIANT;
 use windows::Win32::System::Com::{
-    BLOB, CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoTaskMemFree,
-    CoUninitialize,
+    BLOB, CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoTaskMemAlloc,
+    CoTaskMemFree, CoUninitialize,
 };
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS,
@@ -326,9 +326,7 @@ fn activate_process_loopback(
     pid: u32,
     mode: PROCESS_LOOPBACK_MODE,
 ) -> Result<IAudioClient, AudioError> {
-    // Parâmetros e PROPVARIANT ficam no heap: se a ativação passar do prazo, eles
-    // são vazados (o Windows ainda pode lê-los) em vez de apontar para a pilha.
-    let params = Box::new(AUDIOCLIENT_ACTIVATION_PARAMS {
+    let params = AUDIOCLIENT_ACTIVATION_PARAMS {
         ActivationType: AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
         Anonymous: AUDIOCLIENT_ACTIVATION_PARAMS_0 {
             ProcessLoopbackParams: AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS {
@@ -336,19 +334,29 @@ fn activate_process_loopback(
                 ProcessLoopbackMode: mode,
             },
         },
-    });
+    };
+    // O blob dos parâmetros é alocado com `CoTaskMemAlloc` e nunca liberado por
+    // nós: o diagnóstico com page heap (workflow diag-audio) mostrou que a
+    // operação de ativação libera esse bloco ao terminar. Com memória da pilha ou
+    // de `Box`, isso corrompia o heap (0xC0000374) ou causava liberação dupla.
+    let size = std::mem::size_of::<AUDIOCLIENT_ACTIVATION_PARAMS>();
+    // SAFETY: alocação simples; o resultado é verificado antes do uso.
+    let blob = unsafe { CoTaskMemAlloc(size) }.cast::<AUDIOCLIENT_ACTIVATION_PARAMS>();
+    if blob.is_null() {
+        return Err(AudioError::Wasapi("sem memória para a ativação".into()));
+    }
+    // SAFETY: `blob` aponta para `size` bytes recém-alocados, alinhados para a struct.
+    unsafe { blob.write(params) };
+    // O PROPVARIANT fica no heap para continuar válido mesmo se a ativação
+    // passar do prazo (nesse caso ele é vazado).
     let mut prop = Box::new(PROPVARIANT::default());
-    // SAFETY: monta um PROPVARIANT VT_BLOB que aponta para `params`, que vive
-    // até o fim desta função (a ativação é concluída antes do retorno). O
-    // PROPVARIANT não é liberado com `PropVariantClear`, pois não é dono do blob.
+    // SAFETY: monta um PROPVARIANT VT_BLOB que aponta para `blob`.
     unsafe {
         let inner = &mut *prop.Anonymous.Anonymous;
         inner.vt = VT_BLOB;
         inner.Anonymous.blob = BLOB {
-            cbSize: std::mem::size_of::<AUDIOCLIENT_ACTIVATION_PARAMS>() as u32,
-            pBlobData: std::ptr::from_ref::<AUDIOCLIENT_ACTIVATION_PARAMS>(&params)
-                .cast_mut()
-                .cast::<u8>(),
+            cbSize: size as u32,
+            pBlobData: blob.cast::<u8>(),
         };
     }
 
@@ -372,12 +380,11 @@ fn activate_process_loopback(
 
     tracing::debug!("áudio: ativação pedida; aguardando conclusão");
     if !done.wait(START_TIMEOUT.as_millis() as u32) {
-        // A operação pode concluir depois: mantém `params`, o evento e o handler
+        // A operação pode concluir depois: mantém o PROPVARIANT, o evento e o handler
         // vivos para sempre em vez de liberar memória que o Windows ainda vai ler.
         std::mem::forget(done);
         std::mem::forget(handler);
         std::mem::forget(operation);
-        Box::leak(params);
         Box::leak(prop);
         return Err(AudioError::Timeout);
     }
