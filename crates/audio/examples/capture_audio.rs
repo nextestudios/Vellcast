@@ -93,6 +93,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     use std::sync::{Arc, Mutex};
     use vellcast_audio::{AudioCapture, AudioTarget, qpc_now};
 
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
+        )
+        .init();
+
     let args: Vec<String> = std::env::args().skip(1).collect();
     let target = match args.first().map(String::as_str) {
         None | Some("system") => AudioTarget::System,

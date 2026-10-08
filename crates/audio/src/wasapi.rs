@@ -326,7 +326,9 @@ fn activate_process_loopback(
     pid: u32,
     mode: PROCESS_LOOPBACK_MODE,
 ) -> Result<IAudioClient, AudioError> {
-    let params = AUDIOCLIENT_ACTIVATION_PARAMS {
+    // Parâmetros e PROPVARIANT ficam no heap: se a ativação passar do prazo, eles
+    // são vazados (o Windows ainda pode lê-los) em vez de apontar para a pilha.
+    let params = Box::new(AUDIOCLIENT_ACTIVATION_PARAMS {
         ActivationType: AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
         Anonymous: AUDIOCLIENT_ACTIVATION_PARAMS_0 {
             ProcessLoopbackParams: AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS {
@@ -334,8 +336,8 @@ fn activate_process_loopback(
                 ProcessLoopbackMode: mode,
             },
         },
-    };
-    let mut prop = PROPVARIANT::default();
+    });
+    let mut prop = Box::new(PROPVARIANT::default());
     // SAFETY: monta um PROPVARIANT VT_BLOB que aponta para `params`, que vive
     // até o fim desta função (a ativação é concluída antes do retorno). O
     // PROPVARIANT não é liberado com `PropVariantClear`, pois não é dono do blob.
@@ -344,10 +346,13 @@ fn activate_process_loopback(
         inner.vt = VT_BLOB;
         inner.Anonymous.blob = BLOB {
             cbSize: std::mem::size_of::<AUDIOCLIENT_ACTIVATION_PARAMS>() as u32,
-            pBlobData: std::ptr::from_ref(&params).cast_mut().cast::<u8>(),
+            pBlobData: std::ptr::from_ref::<AUDIOCLIENT_ACTIVATION_PARAMS>(&params)
+                .cast_mut()
+                .cast::<u8>(),
         };
     }
 
+    tracing::debug!(pid, mode = mode.0, "áudio: ativando loopback por processo");
     let done = Event::new()?;
     let handler: IActivateAudioInterfaceCompletionHandler = Completion {
         event: done.0.0 as usize,
@@ -359,15 +364,24 @@ fn activate_process_loopback(
         ActivateAudioInterfaceAsync(
             VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK,
             &IAudioClient::IID,
-            Some(&prop),
+            Some(std::ptr::from_ref::<PROPVARIANT>(&prop)),
             &handler,
         )
     }
     .map_err(|e| AudioError::ProcessLoopbackUnavailable(e.message().to_string()))?;
 
+    tracing::debug!("áudio: ativação pedida; aguardando conclusão");
     if !done.wait(START_TIMEOUT.as_millis() as u32) {
+        // A operação pode concluir depois: mantém `params`, o evento e o handler
+        // vivos para sempre em vez de liberar memória que o Windows ainda vai ler.
+        std::mem::forget(done);
+        std::mem::forget(handler);
+        std::mem::forget(operation);
+        Box::leak(params);
+        Box::leak(prop);
         return Err(AudioError::Timeout);
     }
+    tracing::debug!("áudio: ativação concluída");
     let mut result = HRESULT(0);
     let mut unknown: Option<IUnknown> = None;
     // SAFETY: a operação terminou (evento sinalizado); os ponteiros de saída são locais.
@@ -418,6 +432,7 @@ impl Stream {
             }
         };
 
+        tracing::debug!(?source, "áudio: inicializando o cliente");
         // Primeiro tenta deixar o Windows converter para 48 kHz estéreo f32.
         // SAFETY: `desired` vive durante a chamada; cliente ainda não inicializado.
         let auto = unsafe {
@@ -479,6 +494,7 @@ impl Stream {
             }
         };
 
+        tracing::debug!("áudio: cliente inicializado; configurando evento e serviço de captura");
         let event = Event::new()?;
         // SAFETY: cliente inicializado com EVENTCALLBACK; o evento vive tanto quanto o `Stream`
         // (campo declarado depois de `client`, destruído depois do `Stop` em `Drop`).
@@ -556,7 +572,10 @@ impl CaptureThread {
             AudioTarget::System => {
                 // SAFETY: sem pré-condições.
                 let own = unsafe { GetCurrentProcessId() };
-                let exclusion = choose_exclusion(&list_processes(), own);
+                let processes = list_processes();
+                tracing::debug!(count = processes.len(), "áudio: processos listados");
+                let exclusion = choose_exclusion(&processes, own);
+                tracing::debug!(pid = exclusion.pid, "áudio: árvore de processos excluída");
                 if let Some(w) = &exclusion.warning {
                     (self.on_warning)(w.clone());
                 }
@@ -581,6 +600,7 @@ impl CaptureThread {
 
     fn run(&mut self, ready: mpsc::SyncSender<Result<(), AudioError>>) {
         let _com = ComGuard::init();
+        tracing::debug!("áudio: COM iniciado; criando encoder Opus");
         let mut encoder = match OpusEncoder::new() {
             Ok(e) => e,
             Err(e) => {
@@ -588,6 +608,7 @@ impl CaptureThread {
                 return;
             }
         };
+        tracing::debug!("áudio: encoder Opus pronto; abrindo a captura");
         let (source, mut stream) = match self.open_initial() {
             Ok(v) => v,
             Err(e) => {

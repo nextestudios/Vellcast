@@ -1,0 +1,54 @@
+name: Diagnóstico de áudio
+
+# Roda a captura de áudio WASAPI sob o depurador do Windows (cdb) com page heap,
+# para localizar falhas de memória no código nativo. Uso: push em diag/** ou manual.
+
+on:
+  push:
+    branches: ["diag/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  audio:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: diag-audio
+
+      - name: Build (debug, com símbolos)
+        run: cargo build --locked -p vellcast-audio --example capture_audio
+
+      - name: Execução direta
+        continue-on-error: true
+        run: |
+          $env:RUST_LOG = "debug"
+          $env:RUST_BACKTRACE = "1"
+          & target\debug\examples\capture_audio.exe system 4 out-system.opus 2>&1 | Out-String | Write-Output
+          Write-Output "código de saída (system): $LASTEXITCODE"
+          $self = (Start-Process notepad -PassThru).Id
+          & target\debug\examples\capture_audio.exe $self 3 out-pid.opus 2>&1 | Out-String | Write-Output
+          Write-Output "código de saída (pid $self): $LASTEXITCODE"
+
+      - name: Depurador com page heap
+        continue-on-error: true
+        run: |
+          $dbg = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Debuggers\x64" -Filter cdb.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          $gflags = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Debuggers\x64" -Filter gflags.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $dbg) { Write-Output "cdb não encontrado"; exit 0 }
+          Write-Output "cdb: $($dbg.FullName)"
+          if ($gflags) { & $gflags.FullName /p /enable capture_audio.exe /full }
+          $env:RUST_LOG = "debug"
+          $exe = (Resolve-Path target\debug\examples\capture_audio.exe).Path
+          $sym = (Resolve-Path target\debug\examples).Path
+          & $dbg.FullName -g -G -y "$sym;srv*C:\symbols*https://msdl.microsoft.com/download/symbols" -c ".lines -e; .ecxr; kp 40; !heap -p -a @rcx; q" $exe system 4 dbg.opus 2>&1 | Select-Object -Last 120
+          if ($gflags) { & $gflags.FullName /p /disable capture_audio.exe }

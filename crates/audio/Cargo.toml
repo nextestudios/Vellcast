@@ -44,3 +44,6 @@ unsafe_code = "allow"
 [lints.clippy]
 unwrap_used = "warn"
 undocumented_unsafe_blocks = "warn"
+
+[dev-dependencies]
+tracing-subscriber.workspace = true
