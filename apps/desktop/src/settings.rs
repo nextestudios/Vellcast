@@ -38,7 +38,7 @@ impl Language {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
     pub language: Language,
@@ -52,6 +52,121 @@ pub struct Settings {
     /// Atalhos globais em segundo plano. Desativados por padrão (spec §13);
     /// nenhum atalho global existe ainda.
     pub background_shortcuts: bool,
+    /// Endereço base do `vellcast-relay` (http:// ou https://).
+    pub relay_url: String,
+    /// Chave exigida pelo relay para criar salas (`VELLCAST_CREATE_ROOM_KEY`); vazia = sem chave.
+    pub room_key: String,
+    /// Endereço HTTPS usado nos links de convite quando o relay é acessado por
+    /// outro endereço neste PC (ex.: túnel ou proxy). Vazio = mesmo endereço do servidor.
+    pub public_url: String,
+    /// Preferências da tela Transmitir.
+    pub stream: StreamPrefs,
+}
+
+// Debug manual: a chave de criação de salas nunca aparece em logs.
+impl std::fmt::Debug for Settings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Settings")
+            .field("language", &self.language)
+            .field("relay_url", &self.relay_url)
+            .field("public_url", &self.public_url)
+            .field(
+                "room_key",
+                &if self.room_key.is_empty() {
+                    ""
+                } else {
+                    "<oculta>"
+                },
+            )
+            .field("stream", &self.stream)
+            .finish_non_exhaustive()
+    }
+}
+
+pub const DEFAULT_RELAY_URL: &str = "http://127.0.0.1:8788";
+
+/// Preferências de qualidade e áudio (índices dos seletores da interface).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct StreamPrefs {
+    /// 0 Econômico, 1 Equilibrado, 2 Qualidade, 3 Competitivo, 4 Personalizado.
+    pub profile: u8,
+    /// Altura máxima no modo Personalizado: 720, 900 ou 1080.
+    pub custom_height: u32,
+    pub custom_fps: u32,
+    pub custom_bitrate_kbps: u32,
+    /// 0 desligado, 1 aplicativo, 2 sistema inteiro.
+    pub audio: u8,
+    /// Nome do encoder escolhido; vazio = automático.
+    pub encoder: String,
+}
+
+impl Default for StreamPrefs {
+    fn default() -> Self {
+        Self {
+            profile: 1,
+            custom_height: 1080,
+            custom_fps: 60,
+            custom_bitrate_kbps: 8000,
+            audio: 1,
+            encoder: String::new(),
+        }
+    }
+}
+
+pub const CUSTOM_HEIGHTS: [u32; 3] = [720, 900, 1080];
+pub const CUSTOM_FPS: [u32; 2] = [30, 60];
+
+impl StreamPrefs {
+    pub fn sanitized(mut self) -> Self {
+        self.profile = self.profile.min(4);
+        self.audio = self.audio.min(2);
+        if !CUSTOM_HEIGHTS.contains(&self.custom_height) {
+            self.custom_height = 1080;
+        }
+        if !CUSTOM_FPS.contains(&self.custom_fps) {
+            self.custom_fps = 60;
+        }
+        // Passos de 500 kbps entre 1 e 20 Mbps (limites de vellcast_core::Quality).
+        self.custom_bitrate_kbps = (self.custom_bitrate_kbps.clamp(1000, 20000) / 500) * 500;
+        self.encoder = self
+            .encoder
+            .chars()
+            .filter(|c| !c.is_control())
+            .take(128)
+            .collect();
+        self
+    }
+
+    /// Qualidade efetiva (o plano gratuito vai até 1080p60, sem restrição artificial).
+    pub fn quality(&self) -> vellcast_core::Quality {
+        use vellcast_core::{Quality, QualityProfile};
+        let profile = match self.profile {
+            0 => QualityProfile::Economico,
+            2 => QualityProfile::Qualidade,
+            3 => QualityProfile::Competitivo,
+            4 => QualityProfile::Personalizado,
+            _ => QualityProfile::Equilibrado,
+        };
+        if profile != QualityProfile::Personalizado {
+            return profile.quality();
+        }
+        Quality {
+            max_width: self.custom_height * 16 / 9,
+            max_height: self.custom_height,
+            fps: self.custom_fps,
+            bitrate_kbps: self.custom_bitrate_kbps,
+        }
+        .clamped()
+    }
+
+    pub fn audio_mode(&self) -> vellcast_core::AudioMode {
+        match self.audio {
+            0 => vellcast_core::AudioMode::Off,
+            2 => vellcast_core::AudioMode::System,
+            _ => vellcast_core::AudioMode::Application,
+        }
+    }
 }
 
 impl Default for Settings {
@@ -66,6 +181,10 @@ impl Default for Settings {
             start_minimized: false,
             close_to_tray: true,
             background_shortcuts: false,
+            relay_url: DEFAULT_RELAY_URL.into(),
+            room_key: String::new(),
+            public_url: String::new(),
+            stream: StreamPrefs::default(),
         }
     }
 }
@@ -78,6 +197,19 @@ impl Settings {
         self.gamepad_repeat_delay_ms = input.repeat_delay.as_millis() as u64;
         self.gamepad_repeat_interval_ms = input.repeat_interval.as_millis() as u64;
         self.display_name = sanitize_display_name(&self.display_name);
+        self.relay_url = self.relay_url.trim().chars().take(256).collect();
+        if self.relay_url.is_empty() {
+            self.relay_url = DEFAULT_RELAY_URL.into();
+        }
+        self.room_key = self
+            .room_key
+            .trim()
+            .chars()
+            .filter(|c| !c.is_control())
+            .take(256)
+            .collect();
+        self.public_url = self.public_url.trim().chars().take(256).collect();
+        self.stream = self.stream.sanitized();
         self
     }
 
@@ -219,6 +351,58 @@ mod tests {
         assert_eq!(s.gamepad_deadzone, 0.9);
         assert_eq!(s.gamepad_repeat_delay_ms, 400);
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn old_files_get_relay_and_stream_defaults() {
+        let dir = temp_dir("old");
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("settings.json");
+        std::fs::write(&path, br#"{ "language": "pt-BR", "display_name": "Ana" }"#).expect("write");
+        let (s, outcome) = load(&path);
+        assert_eq!(outcome, LoadOutcome::Loaded);
+        assert_eq!(s.relay_url, DEFAULT_RELAY_URL);
+        assert_eq!(s.room_key, "");
+        assert_eq!(s.stream, StreamPrefs::default());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn stream_prefs_are_clamped_and_never_exceed_1080p60() {
+        let p = StreamPrefs {
+            profile: 9,
+            custom_height: 2160,
+            custom_fps: 144,
+            custom_bitrate_kbps: 99_999,
+            audio: 7,
+            encoder: "x".repeat(300),
+        }
+        .sanitized();
+        assert_eq!((p.profile, p.audio), (4, 2));
+        assert_eq!(
+            (p.custom_height, p.custom_fps, p.custom_bitrate_kbps),
+            (1080, 60, 20000)
+        );
+        assert_eq!(p.encoder.chars().count(), 128);
+        let q = p.quality();
+        assert_eq!((q.max_width, q.max_height, q.fps), (1920, 1080, 60));
+        let p720 = StreamPrefs {
+            profile: 4,
+            custom_height: 720,
+            custom_fps: 30,
+            custom_bitrate_kbps: 2500,
+            ..StreamPrefs::default()
+        };
+        let q = p720.quality();
+        assert_eq!(
+            (q.max_width, q.max_height, q.fps, q.bitrate_kbps),
+            (1280, 720, 30, 2500)
+        );
+        // Perfil predefinido ignora os campos personalizados.
+        assert_eq!(
+            StreamPrefs { profile: 1, ..p720 }.quality(),
+            vellcast_core::QualityProfile::Equilibrado.quality()
+        );
     }
 
     #[test]

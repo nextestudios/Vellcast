@@ -1,0 +1,76 @@
+name: Windows MVP
+
+# Gera o pacote de teste para Windows: desktop + relay + player web.
+# Baixe o artefato "Vellcast-MVP-windows-x64" na página da execução.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  package:
+    name: Pacote Windows x64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/discord-activity/package-lock.json
+
+      - name: Build do player web
+        working-directory: apps/discord-activity
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build Release (desktop e relay)
+        run: cargo build --release --locked -p vellcast-desktop -p vellcast-relay
+
+      - name: Montar pacote
+        shell: pwsh
+        run: |
+          $out = "dist/Vellcast-MVP-windows-x64"
+          New-Item -ItemType Directory -Force -Path "$out/player" | Out-Null
+          Copy-Item target/release/vellcast-desktop.exe, target/release/vellcast-relay.exe -Destination $out
+          Copy-Item -Recurse -Path apps/discord-activity/dist/* -Destination "$out/player"
+          Copy-Item -Path infrastructure/windows-mvp/* -Destination $out
+          Copy-Item -Path LICENSE -Destination "$out/LICENSE.txt"
+          "Vellcast MVP`r`ncommit: $env:GITHUB_SHA`r`nbuild: $(Get-Date -Format o)" | Set-Content -Encoding utf8 "$out/VERSAO.txt"
+          Get-ChildItem -Recurse $out | Select-Object FullName, Length | Format-Table -AutoSize
+
+      - name: Verificar binários
+        shell: pwsh
+        run: |
+          # O relay precisa subir e responder /healthz com o player servido.
+          $env:VELLCAST_RELAY_INSECURE_DEV = "1"
+          $env:VELLCAST_BIND = "127.0.0.1:8788"
+          $env:VELLCAST_STATIC_DIR = "dist/Vellcast-MVP-windows-x64/player"
+          $relay = Start-Process -FilePath dist/Vellcast-MVP-windows-x64/vellcast-relay.exe -PassThru -NoNewWindow
+          try {
+            Start-Sleep -Seconds 2
+            $health = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8788/healthz
+            if ($health.Content.Trim() -ne "ok") { throw "healthz inesperado: $($health.Content)" }
+            $watch = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8788/watch
+            if ($watch.StatusCode -ne 200 -or $watch.Content -notmatch "<div id=`"root`">") { throw "player não servido" }
+            Write-Output "relay ok; player ok"
+          } finally {
+            Stop-Process -Id $relay.Id -Force
+          }
+
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: Vellcast-MVP-windows-x64
+          path: dist/Vellcast-MVP-windows-x64
+          retention-days: 30
+          if-no-files-found: error

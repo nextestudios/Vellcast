@@ -1,6 +1,7 @@
 //! Configuração do relay via variáveis de ambiente (ver `docs/DEPLOYMENT.md`).
 
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -45,6 +46,8 @@ pub struct Config {
     /// Conexões WebSocket por IP: rajada e reposição por segundo.
     pub ws_burst: f64,
     pub ws_per_sec: f64,
+    /// Diretório do player web (S-011) servido em `/` e `/watch`. `None` desativa.
+    pub static_dir: Option<PathBuf>,
 }
 
 impl Config {
@@ -75,6 +78,7 @@ impl Config {
             api_per_sec: 2.0,
             ws_burst: 20.0,
             ws_per_sec: 2.0,
+            static_dir: None,
         }
     }
 
@@ -105,7 +109,21 @@ impl Config {
         c.room_ttl = secs("VELLCAST_ROOM_TTL_SECS", c.room_ttl)?;
         c.room_idle_ttl = secs("VELLCAST_ROOM_IDLE_TTL_SECS", c.room_idle_ttl)?;
         c.viewer_token_ttl = secs("VELLCAST_VIEWER_TOKEN_TTL_SECS", c.viewer_token_ttl)?;
+        c.static_dir = static_dir_from_env();
         Ok(c)
+    }
+}
+
+/// `VELLCAST_STATIC_DIR` explícito (vazio desativa) ou a pasta `player`
+/// ao lado do executável, quando existir (pacote Windows do MVP).
+fn static_dir_from_env() -> Option<PathBuf> {
+    match std::env::var("VELLCAST_STATIC_DIR") {
+        Ok(v) if v.is_empty() => None,
+        Ok(v) => Some(PathBuf::from(v)),
+        Err(_) => std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(|d| d.join("player")))
+            .filter(|d| d.join("index.html").is_file()),
     }
 }
 

@@ -3,7 +3,7 @@
 
 import { AboutSlint } from "std-widgets.slint";
 import { Theme } from "theme.slint";
-import { VButton, VToggle, VStepper, VSelect, VTextField, Card, Notice, BulletList } from "widgets.slint";
+import { VButton, VToggle, VStepper, VSelect, VTextField, Card, Notice, BulletList, SelectRow, StatusLine, Stat, LiveBadge } from "widgets.slint";
 
 component PageTitle inherits VerticalLayout {
     in property <string> title;
@@ -13,15 +13,52 @@ component PageTitle inherits VerticalLayout {
     if root.subtitle != "": Text { text: root.subtitle; color: Theme.text-secondary; font-size: Theme.fs-body; wrap: word-wrap; }
 }
 
+export struct SourceItem { title: string, detail: string, game: bool }
+export struct RoomItem { name: string, detail: string, live: bool }
+
 export component HomePage inherits VerticalLayout {
     in property <string> display-name;
     in property <[string]> gamepads;
+    in property <bool> live;
+    in property <int> room-count;
     callback navigate(int);
     spacing: Theme.sp-4;
 
     PageTitle {
         title: root.display-name == "" ? @tr("Welcome to Vellcast") : @tr("Welcome, {}", root.display-name);
         subtitle: @tr("Lightweight screen sharing for games, made to be used with a controller.");
+    }
+
+    if root.live: Card {
+        title: @tr("You are live");
+        HorizontalLayout {
+            alignment: start;
+            spacing: Theme.sp-3;
+            LiveBadge { text: @tr("LIVE"); }
+            VButton { text: @tr("Open Live"); primary: true; clicked => { root.navigate(3); } }
+        }
+    }
+
+    Card {
+        title: @tr("How to stream");
+        BulletList {
+            items: [
+                @tr("1. Start the Vellcast server (vellcast-relay) on this PC, on your network or on a VPS"),
+                @tr("2. Create a private room in Rooms"),
+                @tr("3. Choose a game, window or monitor in Stream and start"),
+                @tr("4. Send the invite link: viewers watch in the browser, no install needed"),
+            ];
+        }
+        HorizontalLayout {
+            alignment: start;
+            spacing: Theme.sp-2;
+            VButton {
+                text: root.room-count == 0 ? @tr("Create a room") : @tr("Go to Stream");
+                primary: true;
+                clicked => { root.navigate(root.room-count == 0 ? 2 : 1); }
+            }
+            VButton { text: @tr("Settings"); clicked => { root.navigate(4); } }
+        }
     }
 
     Card {
@@ -34,74 +71,354 @@ export component HomePage inherits VerticalLayout {
         }
         BulletList { items: root.gamepads; }
     }
-
-    Card {
-        title: @tr("Get started");
-        Text {
-            text: @tr("Choose what to share and adjust quality in the Stream screen. Your preferences are in Settings.");
-            color: Theme.text-secondary;
-            font-size: Theme.fs-body;
-            wrap: word-wrap;
-        }
-        HorizontalLayout {
-            alignment: start;
-            spacing: Theme.sp-2;
-            VButton { text: @tr("Go to Stream"); primary: true; clicked => { root.navigate(1); } }
-            VButton { text: @tr("Settings"); clicked => { root.navigate(4); } }
-        }
-    }
-
-    Notice {
-        stage: @tr("Stage 2");
-        title: @tr("Capture is not available yet");
-        body: @tr("This build validates the interface, controller navigation and tray mode. Window and monitor capture with hardware encoding arrive in Stage 2.");
-    }
 }
 
 export component StreamPage inherits VerticalLayout {
+    in property <[SourceItem]> sources;
+    in-out property <int> selected-source: -1;
+    in property <string> sources-message;
+    in property <bool> sources-loading;
+    in-out property <int> profile;
+    in-out property <int> custom-height-index;
+    in-out property <int> custom-fps-index;
+    in-out property <float> custom-bitrate;
+    in property <string> quality-summary;
+    in-out property <int> audio-index;
+    in property <[string]> encoder-options;
+    in-out property <int> encoder-index;
+    in property <[string]> room-options;
+    in-out property <int> room-index;
+    in property <bool> live;
+    in property <bool> starting;
+    in property <string> message;
+    in property <bool> message-error;
+    callback refresh-sources;
+    callback prefs-changed;
+    callback start-clicked;
+    callback navigate(int);
     spacing: Theme.sp-4;
+
     PageTitle {
         title: @tr("Stream");
         subtitle: @tr("Capture always requires your explicit action. Nothing is shared automatically.");
     }
-    Notice {
-        stage: @tr("Stage 2");
-        title: @tr("Source selection is under development");
-        body: @tr("This screen will list games, windows and monitors detected by Windows Graphics Capture.");
+
+    if root.live: Notice {
+        title: @tr("You are already streaming");
+        body: @tr("Stop the current stream in Live before starting another one.");
     }
+    if root.live: HorizontalLayout {
+        alignment: start;
+        VButton { text: @tr("Open Live"); primary: true; clicked => { root.navigate(3); } }
+    }
+
     Card {
-        title: @tr("Planned for this screen");
-        BulletList {
-            items: [
-                @tr("Choose a game, window or monitor"),
-                @tr("Game audio on or off, with volume"),
-                @tr("Quality profile: up to 1080p60 on the Free plan"),
-                @tr("Destination room"),
-            ];
-        }
+        title: @tr("1. What to share");
         HorizontalLayout {
             alignment: start;
-            VButton { text: @tr("Start streaming"); primary: true; enabled: false; }
+            spacing: Theme.sp-2;
+            VButton {
+                text: root.sources-loading ? @tr("Searching…") : @tr("Refresh list");
+                enabled: !root.sources-loading;
+                clicked => { root.refresh-sources(); }
+            }
+        }
+        StatusLine { text: root.sources-message; error: root.sources.length == 0; }
+        for item[i] in root.sources: SelectRow {
+            title: item.title;
+            detail: item.detail;
+            badge: item.game ? @tr("Game") : "";
+            selected: root.selected-source == i;
+            activated => { root.selected-source = i; }
+        }
+    }
+
+    Card {
+        title: @tr("2. Quality");
+        VSelect {
+            label: @tr("Profile");
+            options: [@tr("Economy"), @tr("Balanced"), @tr("Quality"), @tr("Competitive"), @tr("Custom")];
+            current-index <=> root.profile;
+            selected => { root.prefs-changed(); }
+        }
+        if root.profile == 4: VSelect {
+            label: @tr("Resolution");
+            options: ["1280×720", "1600×900", "1920×1080"];
+            current-index <=> root.custom-height-index;
+            selected => { root.prefs-changed(); }
+        }
+        if root.profile == 4: VSelect {
+            label: @tr("Frame rate");
+            options: ["30 FPS", "60 FPS"];
+            current-index <=> root.custom-fps-index;
+            selected => { root.prefs-changed(); }
+        }
+        if root.profile == 4: VStepper {
+            label: @tr("Bitrate");
+            description: @tr("Higher values improve quality and need more upload bandwidth.");
+            minimum: 1000;
+            maximum: 20000;
+            step: 500;
+            decimals: 0;
+            unit: " kbps";
+            value <=> root.custom-bitrate;
+            changed => { root.prefs-changed(); }
+        }
+        Text { text: root.quality-summary; color: Theme.text-secondary; font-size: Theme.fs-caption; wrap: word-wrap; }
+        VSelect {
+            label: @tr("Encoder");
+            options: root.encoder-options;
+            current-index <=> root.encoder-index;
+            selected => { root.prefs-changed(); }
+        }
+    }
+
+    Card {
+        title: @tr("3. Audio");
+        VSelect {
+            label: @tr("Game audio");
+            options: [@tr("Off"), @tr("Selected app only"), @tr("Entire system")];
+            current-index <=> root.audio-index;
+            selected => { root.prefs-changed(); }
+        }
+        if root.audio-index == 2: StatusLine {
+            text: @tr("Entire system audio includes every app, including Discord voice and notifications. Prefer \"Selected app only\".");
+        }
+        if root.audio-index == 1: Text {
+            text: @tr("Only the audio of the chosen window's process is shared. Monitors fall back to no audio.");
+            color: Theme.text-secondary;
+            font-size: Theme.fs-caption;
+            wrap: word-wrap;
+        }
+    }
+
+    Card {
+        title: @tr("4. Room");
+        if root.room-options.length == 0: Text {
+            text: @tr("You have no rooms yet. Create a private room to get an invite link.");
+            color: Theme.text-secondary;
+            font-size: Theme.fs-body;
+            wrap: word-wrap;
+        }
+        if root.room-options.length == 0: HorizontalLayout {
+            alignment: start;
+            VButton { text: @tr("Create a room"); clicked => { root.navigate(2); } }
+        }
+        if root.room-options.length > 0: VSelect {
+            label: @tr("Destination room");
+            options: root.room-options;
+            current-index <=> root.room-index;
+        }
+    }
+
+    StatusLine { text: root.message; error: root.message-error; }
+    HorizontalLayout {
+        alignment: start;
+        VButton {
+            text: root.starting ? @tr("Starting…") : @tr("Start streaming");
+            primary: true;
+            enabled: !root.live && !root.starting && root.selected-source >= 0 && root.room-options.length > 0;
+            clicked => { root.start-clicked(); }
         }
     }
 }
 
 export component RoomsPage inherits VerticalLayout {
+    in property <[RoomItem]> rooms;
+    in-out property <int> room-index: -1;
+    in property <string> relay-url;
+    in property <int> refocus-token;
+    in-out property <string> new-room-name;
+    in property <bool> busy;
+    in property <string> message;
+    in property <bool> message-error;
+    in property <string> invite-link;
+    callback create-room(string);
+    callback make-invite(int);
+    callback copy-invite;
+    callback close-room(int);
+    callback request-virtual-keyboard(string);
     spacing: Theme.sp-4;
-    PageTitle { title: @tr("Rooms"); subtitle: @tr("Private rooms with invitations, on the official server or your own."); }
-    Notice {
-        stage: @tr("Stage 3");
-        title: @tr("Rooms arrive with the media relay");
-        body: @tr("Creating, joining and inviting to private rooms depends on the Vellcast relay, which can also be self-hosted without a subscription.");
+
+    PageTitle {
+        title: @tr("Rooms");
+        subtitle: @tr("Private rooms with invitations, on your own server or a hosted one.");
+    }
+
+    Card {
+        title: @tr("New private room");
+        Text {
+            text: @tr("Server: {}", root.relay-url);
+            color: Theme.text-secondary;
+            font-size: Theme.fs-caption;
+            overflow: elide;
+        }
+        VTextField {
+            label: @tr("Room name");
+            placeholder: @tr("e.g. Friday night");
+            text: root.new-room-name;
+            refocus-token: root.refocus-token;
+            request-virtual-keyboard(t) => { root.request-virtual-keyboard(t); }
+            edited(t) => { root.new-room-name = t; }
+        }
+        HorizontalLayout {
+            alignment: start;
+            VButton {
+                text: root.busy ? @tr("Please wait…") : @tr("Create room");
+                primary: true;
+                enabled: !root.busy;
+                clicked => { root.create-room(root.new-room-name); }
+            }
+        }
+    }
+
+    StatusLine { text: root.message; error: root.message-error; }
+
+    Card {
+        title: @tr("My rooms");
+        if root.rooms.length == 0: Text {
+            text: @tr("No rooms yet.");
+            color: Theme.text-secondary;
+            font-size: Theme.fs-body;
+        }
+        for room[i] in root.rooms: SelectRow {
+            title: room.name;
+            detail: room.detail;
+            badge: room.live ? @tr("LIVE") : "";
+            selected: root.room-index == i;
+            activated => { root.room-index = i; }
+        }
+        if root.room-index >= 0: HorizontalLayout {
+            alignment: start;
+            spacing: Theme.sp-2;
+            VButton {
+                text: @tr("Create invite link");
+                primary: true;
+                enabled: !root.busy;
+                clicked => { root.make-invite(root.room-index); }
+            }
+            VButton {
+                text: @tr("Close room");
+                enabled: !root.busy;
+                clicked => { root.close-room(root.room-index); }
+            }
+        }
+    }
+
+    if root.invite-link != "": Card {
+        title: @tr("Invite link");
+        Text {
+            text: @tr("Anyone with this link can watch (up to 10 people, valid for 24 hours). Share it only with people you trust.");
+            color: Theme.text-secondary;
+            font-size: Theme.fs-caption;
+            wrap: word-wrap;
+        }
+        Rectangle {
+            height: link.preferred-height + 2 * Theme.sp-2;
+            border-radius: Theme.radius-sm;
+            background: Theme.bg-0;
+            link := Text {
+                x: Theme.sp-2;
+                width: parent.width - 2 * Theme.sp-2;
+                text: root.invite-link;
+                color: Theme.text-primary;
+                font-size: Theme.fs-caption;
+                wrap: char-wrap;
+                vertical-alignment: center;
+            }
+        }
+        HorizontalLayout {
+            alignment: start;
+            VButton { text: @tr("Copy link"); primary: true; clicked => { root.copy-invite(); } }
+        }
     }
 }
 
 export component LivePage inherits VerticalLayout {
+    in property <bool> live;
+    in property <string> status;
+    in property <string> source-title;
+    in property <string> room-name;
+    in property <string> uptime;
+    in property <string> viewers;
+    in property <string> video;
+    in property <string> captured-fps;
+    in property <string> encoded-fps;
+    in property <string> bitrate;
+    in property <string> dropped;
+    in property <string> encode-ms;
+    in property <string> rtt;
+    in property <string> message;
+    in property <bool> message-error;
+    in property <string> invite-link;
+    callback stop;
+    callback make-invite;
+    callback copy-invite;
+    callback navigate(int);
     spacing: Theme.sp-4;
+
     PageTitle { title: @tr("Live"); }
-    Notice {
+
+    if !root.live: Notice {
         title: @tr("No active stream");
-        body: @tr("When you are streaming, status, duration, viewers and the stop button appear here.");
+        body: @tr("Choose what to share and the room in Stream. Status, viewers and the stop button appear here.");
+    }
+    if !root.live: HorizontalLayout {
+        alignment: start;
+        VButton { text: @tr("Go to Stream"); primary: true; clicked => { root.navigate(1); } }
+    }
+    StatusLine { text: root.message; error: root.message-error; }
+
+    if root.live: Card {
+        title: root.source-title;
+        HorizontalLayout {
+            alignment: start;
+            spacing: Theme.sp-3;
+            LiveBadge { text: @tr("LIVE"); }
+            Text { text: root.status; color: Theme.text-secondary; font-size: Theme.fs-body; vertical-alignment: center; }
+        }
+        HorizontalLayout {
+            spacing: Theme.sp-6;
+            Stat { label: @tr("Room"); value: root.room-name; }
+            Stat { label: @tr("Duration"); value: root.uptime; }
+            Stat { label: @tr("Viewers"); value: root.viewers; }
+        }
+        HorizontalLayout {
+            alignment: start;
+            spacing: Theme.sp-2;
+            VButton { text: @tr("Stop streaming"); primary: true; clicked => { root.stop(); } }
+            VButton { text: @tr("Create invite link"); clicked => { root.make-invite(); } }
+            if root.invite-link != "": VButton { text: @tr("Copy link"); clicked => { root.copy-invite(); } }
+        }
+        if root.invite-link != "": Text {
+            text: root.invite-link;
+            color: Theme.text-secondary;
+            font-size: Theme.fs-caption;
+            wrap: char-wrap;
+        }
+    }
+
+    if root.live: Card {
+        title: @tr("Stream health");
+        HorizontalLayout {
+            spacing: Theme.sp-6;
+            Stat { label: @tr("Video"); value: root.video; }
+            Stat { label: @tr("Captured FPS"); value: root.captured-fps; }
+            Stat { label: @tr("Encoded FPS"); value: root.encoded-fps; }
+            Stat { label: @tr("Bitrate"); value: root.bitrate; }
+        }
+        HorizontalLayout {
+            spacing: Theme.sp-6;
+            Stat { label: @tr("Dropped frames"); value: root.dropped; }
+            Stat { label: @tr("Encode time"); value: root.encode-ms; }
+            Stat { label: @tr("Latency to server"); value: root.rtt; }
+        }
+        Text {
+            text: @tr("To change quality, stop and start again with the new settings.");
+            color: Theme.text-secondary;
+            font-size: Theme.fs-caption;
+            wrap: word-wrap;
+        }
     }
 }
 
@@ -116,9 +433,16 @@ export component SettingsPage inherits VerticalLayout {
     in-out property <bool> start-minimized;
     in-out property <bool> close-to-tray;
     in property <bool> background-shortcuts;
+    in-out property <string> relay-url;
+    in-out property <string> room-key;
+    in-out property <string> public-url;
+    in property <string> relay-message;
+    in property <bool> relay-message-error;
     callback changed-setting;
     callback language-selected(int);
-    callback request-virtual-keyboard(string);
+    // Alvo: 0 = nome de exibição, 1 = endereço do servidor, 2 = chave de criação de salas, 4 = endereço público.
+    callback request-virtual-keyboard(int, string);
+    callback test-relay;
     spacing: Theme.sp-4;
 
     PageTitle { title: @tr("Settings"); subtitle: @tr("Changes are saved automatically."); }
@@ -136,12 +460,67 @@ export component SettingsPage inherits VerticalLayout {
             placeholder: @tr("Your name");
             text: root.display-name;
             refocus-token: root.refocus-token;
-            request-virtual-keyboard(t) => { root.request-virtual-keyboard(t); }
+            request-virtual-keyboard(t) => { root.request-virtual-keyboard(0, t); }
             edited(t) => {
                 root.display-name = t;
                 root.changed-setting();
             }
         }
+    }
+
+    Card {
+        title: @tr("Server");
+        Text {
+            text: @tr("Address of the vellcast-relay that receives your stream. Use http://127.0.0.1:8788 when it runs on this PC, or https://… for a server with TLS.");
+            color: Theme.text-secondary;
+            font-size: Theme.fs-caption;
+            wrap: word-wrap;
+        }
+        VTextField {
+            label: @tr("Server address");
+            placeholder: "http://127.0.0.1:8788";
+            text: root.relay-url;
+            refocus-token: root.refocus-token;
+            request-virtual-keyboard(t) => { root.request-virtual-keyboard(1, t); }
+            edited(t) => {
+                root.relay-url = t;
+                root.changed-setting();
+            }
+        }
+        VTextField {
+            label: @tr("Room creation key (only if the server requires one)");
+            placeholder: @tr("Optional");
+            secret: true;
+            text: root.room-key;
+            refocus-token: root.refocus-token;
+            request-virtual-keyboard(t) => { root.request-virtual-keyboard(2, t); }
+            edited(t) => {
+                root.room-key = t;
+                root.changed-setting();
+            }
+        }
+        VTextField {
+            label: @tr("Public address for invite links (optional)");
+            placeholder: "https://…";
+            text: root.public-url;
+            refocus-token: root.refocus-token;
+            request-virtual-keyboard(t) => { root.request-virtual-keyboard(4, t); }
+            edited(t) => {
+                root.public-url = t;
+                root.changed-setting();
+            }
+        }
+        Text {
+            text: @tr("Viewers' browsers need HTTPS to play video. If the server runs on this PC, expose it with an HTTPS tunnel or proxy and enter that address here.");
+            color: Theme.text-secondary;
+            font-size: Theme.fs-caption;
+            wrap: word-wrap;
+        }
+        HorizontalLayout {
+            alignment: start;
+            VButton { text: @tr("Test connection"); clicked => { root.test-relay(); } }
+        }
+        StatusLine { text: root.relay-message; error: root.relay-message-error; }
     }
 
     Card {

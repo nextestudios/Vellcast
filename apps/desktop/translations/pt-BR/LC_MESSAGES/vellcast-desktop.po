@@ -272,3 +272,228 @@ msgid "{n} controller connected"
 msgid_plural "{n} controllers connected"
 msgstr[0] "{n} controle conectado"
 msgstr[1] "{n} controles conectados"
+
+msgid "No rooms yet. Create one in Rooms."
+msgstr "Nenhuma sala ainda. Crie uma em Salas."
+
+msgid "LIVE"
+msgstr "AO VIVO"
+
+msgid "Server address"
+msgstr "Endereço do servidor"
+
+msgid "Room creation key"
+msgstr "Chave de criação de salas"
+
+msgid "Room name"
+msgstr "Nome da sala"
+
+msgid "You are live"
+msgstr "Você está ao vivo"
+
+msgid "Open Live"
+msgstr "Abrir Ao vivo"
+
+msgid "How to stream"
+msgstr "Como transmitir"
+
+msgid "1. Start the Vellcast server (vellcast-relay) on this PC, on your network or on a VPS"
+msgstr "1. Inicie o servidor do Vellcast (vellcast-relay) neste PC, na sua rede ou em uma VPS"
+
+msgid "2. Create a private room in Rooms"
+msgstr "2. Crie uma sala privada em Salas"
+
+msgid "3. Choose a game, window or monitor in Stream and start"
+msgstr "3. Escolha um jogo, janela ou monitor em Transmitir e inicie"
+
+msgid "4. Send the invite link: viewers watch in the browser, no install needed"
+msgstr "4. Envie o link de convite: quem assiste usa o navegador, sem instalar nada"
+
+msgid "Create a room"
+msgstr "Criar uma sala"
+
+msgid "You are already streaming"
+msgstr "Você já está transmitindo"
+
+msgid "Stop the current stream in Live before starting another one."
+msgstr "Pare a transmissão atual em Ao vivo antes de iniciar outra."
+
+msgid "1. What to share"
+msgstr "1. O que compartilhar"
+
+msgid "Searching…"
+msgstr "Procurando…"
+
+msgid "Refresh list"
+msgstr "Atualizar lista"
+
+msgid "Game"
+msgstr "Jogo"
+
+msgid "2. Quality"
+msgstr "2. Qualidade"
+
+msgid "Profile"
+msgstr "Perfil"
+
+msgid "Economy"
+msgstr "Econômico"
+
+msgid "Balanced"
+msgstr "Equilibrado"
+
+msgid "Quality"
+msgstr "Qualidade"
+
+msgid "Competitive"
+msgstr "Competitivo"
+
+msgid "Custom"
+msgstr "Personalizado"
+
+msgid "Resolution"
+msgstr "Resolução"
+
+msgid "Frame rate"
+msgstr "Taxa de quadros"
+
+msgid "Bitrate"
+msgstr "Taxa de bits"
+
+msgid "Higher values improve quality and need more upload bandwidth."
+msgstr "Valores maiores melhoram a qualidade e exigem mais banda de upload."
+
+msgid "Encoder"
+msgstr "Codificador"
+
+msgid "3. Audio"
+msgstr "3. Áudio"
+
+msgid "Game audio"
+msgstr "Áudio do jogo"
+
+msgid "Off"
+msgstr "Desligado"
+
+msgid "Selected app only"
+msgstr "Só o aplicativo escolhido"
+
+msgid "Entire system"
+msgstr "Sistema inteiro"
+
+msgid "Entire system audio includes every app, including Discord voice and notifications. Prefer \"Selected app only\"."
+msgstr "O áudio do sistema inteiro inclui todos os aplicativos, inclusive a voz do Discord e notificações. Prefira \"Só o aplicativo escolhido\"."
+
+msgid "Only the audio of the chosen window's process is shared. Monitors fall back to no audio."
+msgstr "Só o áudio do processo da janela escolhida é compartilhado. Monitores ficam sem áudio nesse modo."
+
+msgid "4. Room"
+msgstr "4. Sala"
+
+msgid "You have no rooms yet. Create a private room to get an invite link."
+msgstr "Você ainda não tem salas. Crie uma sala privada para obter um link de convite."
+
+msgid "Starting…"
+msgstr "Iniciando…"
+
+msgid "Private rooms with invitations, on your own server or a hosted one."
+msgstr "Salas privadas com convite, no seu próprio servidor ou em um hospedado."
+
+msgid "New private room"
+msgstr "Nova sala privada"
+
+msgid "Server: {}"
+msgstr "Servidor: {}"
+
+msgid "e.g. Friday night"
+msgstr "ex.: Sexta à noite"
+
+msgid "Please wait…"
+msgstr "Aguarde…"
+
+msgid "Create room"
+msgstr "Criar sala"
+
+msgid "My rooms"
+msgstr "Minhas salas"
+
+msgid "No rooms yet."
+msgstr "Nenhuma sala ainda."
+
+msgid "Create invite link"
+msgstr "Gerar link de convite"
+
+msgid "Close room"
+msgstr "Encerrar sala"
+
+msgid "Invite link"
+msgstr "Link de convite"
+
+msgid "Anyone with this link can watch (up to 10 people, valid for 24 hours). Share it only with people you trust."
+msgstr "Quem tiver este link pode assistir (até 10 pessoas, válido por 24 horas). Compartilhe só com quem você confia."
+
+msgid "Copy link"
+msgstr "Copiar link"
+
+msgid "Choose what to share and the room in Stream. Status, viewers and the stop button appear here."
+msgstr "Escolha o que compartilhar e a sala em Transmitir. Status, espectadores e o botão de parar aparecem aqui."
+
+msgid "Room"
+msgstr "Sala"
+
+msgid "Duration"
+msgstr "Duração"
+
+msgid "Viewers"
+msgstr "Espectadores"
+
+msgid "Stop streaming"
+msgstr "Parar transmissão"
+
+msgid "Stream health"
+msgstr "Saúde da transmissão"
+
+msgid "Video"
+msgstr "Vídeo"
+
+msgid "Captured FPS"
+msgstr "FPS capturado"
+
+msgid "Encoded FPS"
+msgstr "FPS codificado"
+
+msgid "Dropped frames"
+msgstr "Quadros descartados"
+
+msgid "Encode time"
+msgstr "Tempo de codificação"
+
+msgid "Latency to server"
+msgstr "Latência até o servidor"
+
+msgid "To change quality, stop and start again with the new settings."
+msgstr "Para mudar a qualidade, pare e inicie de novo com as novas configurações."
+
+msgid "Server"
+msgstr "Servidor"
+
+msgid "Address of the vellcast-relay that receives your stream. Use http://127.0.0.1:8788 when it runs on this PC, or https://… for a server with TLS."
+msgstr "Endereço do vellcast-relay que recebe sua transmissão. Use http://127.0.0.1:8788 quando ele roda neste PC, ou https://… para um servidor com TLS."
+
+msgid "Room creation key (only if the server requires one)"
+msgstr "Chave de criação de salas (só se o servidor exigir)"
+
+msgid "Optional"
+msgstr "Opcional"
+
+msgid "Test connection"
+msgstr "Testar conexão"
+
+msgid "Public address for invites"
+msgstr "Endereço público para convites"
+
+msgid "Public address for invite links (optional)"
+msgstr "Endereço público para os links de convite (opcional)"
+
+msgid "Viewers' browsers need HTTPS to play video. If the server runs on this PC, expose it with an HTTPS tunnel or proxy and enter that address here."
+msgstr "O navegador de quem assiste precisa de HTTPS para tocar o vídeo. Se o servidor roda neste PC, exponha-o com um túnel ou proxy HTTPS e informe esse endereço aqui."

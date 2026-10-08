@@ -1,0 +1,3 @@
+# Scripts e textos do pacote Windows precisam de CRLF.
+*.bat text eol=crlf
+infrastructure/windows-mvp/*.txt text eol=crlf

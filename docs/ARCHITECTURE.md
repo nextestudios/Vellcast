@@ -58,9 +58,9 @@ Estado atual do workspace Cargo: somente `crates/protocol` e `services/stage0-se
 ## 3. Fluxo de dados
 
 ### 3.1 Vídeo
-1. **Captura.** O WGC entrega um `ID3D11Texture2D` (BGRA) por frame novo. O frame **fica na GPU**.
-2. **Conversão.** BGRA → NV12 na GPU (Video Processor do D3D11 ou shader), em um pool de texturas reutilizáveis.
-3. **Codificação.** O MFT de hardware recebe a superfície DXGI (sem cópia para a CPU) e produz uma unidade de acesso H.264 em Annex B. Configuração: baixa latência, sem B-frames e GOP fixo (ex.: 2 s), com IDR sob demanda.
+1. **Captura** (`crates/capture`, ADR-018). O WGC entrega um `ID3D11Texture2D` (BGRA) por quadro novo, de um pool *free-threaded* com 2 buffers. O quadro **fica na GPU**: o `Direct3D11CaptureFrame` permanece vivo até o encoder ler a textura. O callback aplica o controle de ritmo (taxa-alvo) e coloca o quadro em uma fila de capacidade 1 (ADR-022).
+2. **Conversão** (`crates/encoder/src/convert.rs`, ADR-019). `ID3D11VideoProcessor` converte BGRA → NV12 e redimensiona em um rodízio de 4 texturas NV12 de tamanho fixo; mudanças de tamanho da janela viram letterbox.
+3. **Codificação** (`crates/encoder/src/mf.rs`, ADR-020). O MFT H.264 (hardware primeiro) recebe a superfície DXGI via `IMFDXGIDeviceManager` (sem cópia para a CPU) e produz uma unidade de acesso em Annex B. Baixa latência, CBR, sem B-frames, GOP de 2 s, IDR sob demanda. A saída é normalizada (`annexb::normalize`): start codes de 4 bytes, sem AUD, SPS/PPS antes de todo IDR; o codec string `avc1.PPCCLL` sai do SPS.
 4. **Empacotamento.** `VideoFrame` (tipo 0x02) com `pts_us` do relógio de captura e `sent_at_us` do relógio de parede. SPS/PPS vão repetidos antes de cada IDR.
 5. **Transporte.** Fila de envio limitada. Sob congestionamento, frames não-keyframe antigos são descartados e uma IDR é pedida ao encoder.
 
@@ -83,8 +83,8 @@ O cliente mede a diferença de relógio com Ping/Pong no estilo NTP: `offset = t
 Thread UI (Slint event loop) ── só desenha e reage a eventos; sem I/O, sem espera
      ▲  slint::invoke_from_event_loop (estado resumido, ≤ 4 Hz para métricas)
      │
-Thread de captura (callback WGC, free-threaded) ─► canal limitado (cap. 2) ─► Thread do encoder
-                                                    descarta o mais antigo        │
+Pool WGC (free-threaded, ritmo) ─► fila "o mais recente vence" (cap. 1) ─► Thread vellcast-pipeline
+                                   substitui o pendente                  (D3D11 + conversão + MFT)
 Thread de áudio (WASAPI evento) ─► Opus ─────────────────────────────┐            ▼
                                                                     ├─► Runtime Tokio (transporte, 1–2 workers)
 Thread do controle (GilRs, só com foco) ─► eventos de navegação ─► UI
@@ -136,9 +136,9 @@ Relay
 | Falha | Comportamento |
 |---|---|
 | Janela capturada fechada | O WGC sinaliza `Closed`; o motor encerra a transmissão com `StreamEnd` e a UI mostra o motivo |
-| Mudança de resolução da fonte | Recria o frame pool, reconfigura ou recria o encoder, envia novo `VideoInit` + IDR com flag de descontinuidade |
-| Perda de dispositivo D3D (`DXGI_ERROR_DEVICE_REMOVED`) | Recria device, sessão de captura e encoder; tenta N vezes com backoff e depois falha visível |
-| Falha do encoder de hardware | Tenta outro encoder detectado. Software só com aviso explícito, por causa do impacto no jogo |
+| Mudança de resolução da fonte | Recria o frame pool; o encoder mantém o tamanho de saída e o conteúdo é encaixado com letterbox (ADR-019) |
+| Perda de dispositivo D3D (`DXGI_ERROR_DEVICE_REMOVED`/`RESET`) | Para a captura, descarta quadros pendentes, recria dispositivo, captura e encoder (até 3 vezes, com aviso na UI) e pede IDR; depois encerra com motivo visível |
+| Falha do encoder de hardware | Na criação, tenta o próximo encoder detectado. Software só como último recurso e com aviso explícito, por causa do impacto no jogo |
 | Rede congestionada | Descarta frames antigos, pede IDR e reduz bitrate (S-001) |
 | Desconexão do transmissor | Relay marca o stream como interrompido e mantém a sala por uma janela de graça; o cliente reconecta com backoff exponencial |
 | Desconexão do espectador | Reconecta com backoff e retoma no próximo keyframe |

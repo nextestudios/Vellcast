@@ -11,10 +11,10 @@
 |---|---|---|---|---|
 | 0 | Validação Discord | Must | — | Testing — validação local concluída; E0-T10 adiada ([ADR-013](DECISIONS.md)) |
 | 1 | Desktop e controles | Must | 0 (local) | Testing — falta Windows real e controle físico |
-| 2 | Captura e encoder | Must | 0 (local) | Backlog |
+| 2 | Captura e encoder | Must | 0 (local) | Testing — compila no Windows; execução real pendente |
 | 3 | Media relay | Must | 0 (local) | Testing — falta Docker e VPS com TLS |
-| 4 | Áudio | Must | 2, 3 | Backlog |
-| 5 | Integração completa | Must | 1, 2, 3, 4, E0-T10 | Backlog |
+| 4 | Áudio | Must | 2, 3 | Testing — compila no Windows; execução real pendente |
+| 5 | Integração completa | Must | 1, 2, 3, 4 (E0-T10 para a Activity) | Testing — MVP Windows + player web pronto para teste |
 | OC | Marco: abertura do código (Open Core) | Should | 5 | Backlog |
 | 6 | Otimização extrema | Must | 5 | Backlog |
 | 7 | Comercialização | Should (MVP) / Must (Premium) | 5 | Backlog |
@@ -82,14 +82,16 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 
 | ID | Tarefa | MoSCoW | Depende de | Critérios de aceite | Status |
 |---|---|---|---|---|---|
-| E2-T01 | Crate `capture` — WGC de janela | M-005 | Etapa 0 | Seleção explícita; resize; fechamento; perda de dispositivo | Backlog |
-| E2-T02 | WGC de monitor | M-006 | E2-T01 | Multi-monitor; mudança de resolução | Backlog |
-| E2-T03 | Fallback DXGI Desktop Duplication (se necessário) | M-006 | E2-T02 | Somente se justificado por teste | Backlog |
-| E2-T04 | Crate `encoder` — detecção de encoders (MF) | M-007, S-006 | E2-T01 | Lista NVENC/AMF/QSV disponíveis | Backlog |
-| E2-T05 | Pipeline D3D11 → encoder H.264 sem cópia para CPU | M-007, M-018 | E2-T04 | Baixa latência; sem B-frames; keyframe sob demanda; fila limitada | Backlog |
-| E2-T06 | Configuração de resolução/FPS/bitrate | M-016 | E2-T05 | Reconfiguração ou reinício controlado | Backlog |
-| E2-T07 | Detecção de jogos | S-003 | E2-T01 | Heurística não invasiva | Backlog |
-| E2-T08 | Medição 1080p60 | M-008, M-023 | E2-T05 | Consumo e limitações registrados por GPU | Backlog |
+| E2-T01 | Crate `capture` — WGC de janela | M-005 | Etapa 0 | Seleção explícita; resize; fechamento; perda de dispositivo | Testing — WGC implementado; compila no Windows (MSVC); execução real pendente |
+| E2-T02 | WGC de monitor | M-006 | E2-T01 | Multi-monitor; mudança de resolução | Testing — compila no Windows; execução real pendente |
+| E2-T03 | Fallback DXGI Desktop Duplication (se necessário) | M-006 | E2-T02 | Somente se justificado por teste | Backlog — só se o WGC falhar nos testes reais |
+| E2-T04 | Crate `encoder` — detecção de encoders (MF) | M-007, S-006 | E2-T01 | Lista NVENC/AMF/QSV disponíveis | Testing — MFT de hardware primeiro, software Microsoft como fallback |
+| E2-T05 | Pipeline D3D11 → encoder H.264 sem cópia para CPU | M-007, M-018 | E2-T04 | Baixa latência; sem B-frames; keyframe sob demanda; fila limitada | Testing — BGRA→NV12 e escala na GPU (ID3D11VideoProcessor); execução real pendente |
+| E2-T06 | Configuração de resolução/FPS/bitrate | M-016 | E2-T05 | Reconfiguração ou reinício controlado | Testing — definidos ao iniciar; mudar exige reiniciar a transmissão |
+| E2-T07 | Detecção de jogos | S-003 | E2-T01 | Heurística não invasiva | Testing — heurística testada; enumeração real pendente |
+| E2-T08 | Medição 1080p60 | M-008, M-023 | E2-T05 | Consumo e limitações registrados por GPU | Blocked — requer máquina Windows com GPU |
+| E2-T09 | Pipeline do `vellcast-core` (captura → encoder → relay, eventos, métricas, recuperação de dispositivo) | M-007, M-018 | E2-T05, E3-T02 | Sessão inicia, transmite e encerra pelo app | Testing — compila no Windows; execução real pendente |
+| E2-T10 | Ferramentas de validação manual (`capture_to_file`, teste de encoder `#[ignore]`) | M-023 | E2-T09 | Executáveis gerados | Done — execução pendente no Windows |
 
 **Entregável:** pipeline de captura e codificação funcional.
 **Critério de aceite:** capturar e codificar 1080p60 em hardware compatível, registrando consumo e limitações.
@@ -130,11 +132,11 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 
 | ID | Tarefa | MoSCoW | Depende de | Critérios de aceite | Status |
 |---|---|---|---|---|---|
-| E4-T01 | Crate `audio` — WASAPI Application Loopback | M-009 | Etapa 2 | Captura por processo quando suportada | Backlog |
-| E4-T02 | Fallback loopback do sistema | M-009 | E4-T01 | Aviso claro ao usuário | Backlog |
-| E4-T03 | Codificação Opus | M-009 | E4-T01 | 48 kHz, 20 ms | Backlog |
-| E4-T04 | Transporte e reprodução | M-009 | E4-T03, Etapa 3 | Áudio reproduzido na Activity (ou fallback documentado) | Backlog |
-| E4-T05 | Sincronização A/V | M-009 | E4-T04 | Skew medido e dentro de limite documentado | Backlog |
+| E4-T01 | Crate `audio` — WASAPI Application Loopback | M-009 | Etapa 2 | Captura por processo quando suportada | Testing — compila no Windows; execução real pendente |
+| E4-T02 | Fallback loopback do sistema | M-009 | E4-T01 | Aviso claro ao usuário | Testing — exclui a árvore do Discord; fallback clássico com aviso |
+| E4-T03 | Codificação Opus | M-009 | E4-T01 | 48 kHz, 20 ms | Testing — libopus compila na CI Windows |
+| E4-T04 | Transporte e reprodução | M-009 | E4-T03, Etapa 3 | Áudio reproduzido na Activity (ou fallback documentado) | Testing — áudio integrado ao pipeline e ao player; execução real pendente |
+| E4-T05 | Sincronização A/V | M-009 | E4-T04 | Skew medido e dentro de limite documentado | In Progress — PTS no relógio QPC comum; skew a medir no Windows |
 
 **Entregável:** transmissão audiovisual funcional.
 **Critério de aceite:** áudio e vídeo reproduzidos com sincronização aceitável nos ambientes suportados e testados.
@@ -148,13 +150,15 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 
 | ID | Tarefa | MoSCoW | Depende de | Critérios de aceite | Status |
 |---|---|---|---|---|---|
-| E5-T01 | Autenticação (OAuth2 Discord no backend) | M-014 | Etapa 3 | Client secret apenas no servidor | Backlog |
-| E5-T02 | Pareamento desktop ↔ Activity | M-015 | E5-T01 | Código de uso único com expiração | Backlog |
-| E5-T03 | Fluxo de salas na UI | M-013 | E5-T01 | Criar/entrar/convidar/encerrar | Backlog |
-| E5-T04 | Fluxo iniciar/encerrar transmissão | M-016 | Etapas 1–4 | Por mouse, teclado e gamepad | Backlog |
-| E5-T05 | Player final na Activity | M-012 | Etapa 3 | Listagem de transmissões autorizadas; volume; tela cheia quando suportada | Backlog |
-| E5-T06 | Perfis de qualidade e atalhos | S-004, S-008 | E5-T04 | Atalhos globais desativados por padrão | Backlog |
-| E5-T07 | Tratamento de erros fim a fim | M-019 | E5-T04 | Mensagens claras e recuperação | Backlog |
+| E5-T01 | Autenticação (OAuth2 Discord no backend) | M-014 | Etapa 3 | Client secret apenas no servidor | Backlog — adiado (ADR-013); no MVP o acesso é por link de convite |
+| E5-T02 | Pareamento desktop ↔ Activity | M-015 | E5-T01 | Código de uso único com expiração | Backlog — adiado (ADR-013); o link de convite substitui no MVP |
+| E5-T03 | Fluxo de salas na UI | M-013 | E5-T01 | Criar/entrar/convidar/encerrar | Testing — validado no macOS contra relay real; Windows pendente |
+| E5-T04 | Fluxo iniciar/encerrar transmissão | M-016 | Etapas 1–4 | Por mouse, teclado e gamepad | Testing — depende do pipeline no Windows |
+| E5-T05 | Player final na Activity | M-012 | Etapa 3 | Listagem de transmissões autorizadas; volume; tela cheia quando suportada | Testing — player web (/watch) validado a 60 fps; Activity no E0-T10 |
+| E5-T06 | Perfis de qualidade e atalhos | S-004, S-008 | E5-T04 | Atalhos globais desativados por padrão | Testing — perfis e modo personalizado; atalhos globais desligados |
+| E5-T07 | Tratamento de erros fim a fim | M-019 | E5-T04 | Mensagens claras e recuperação | Testing — mensagens claras no app e no player; Windows pendente |
+| E5-T08 | Pacote de teste Windows e guia | M-021, M-022 | E5-T04 | `Vellcast-MVP-windows-x64.zip` gerado pela CI; [TESTING_WINDOWS](TESTING_WINDOWS.md) | Testing — gerado pela CI; teste do usuário pendente |
+| E5-T09 | Player web servido pelo relay (S-011) | M-011, M-020 | E3-T01 | Convite → token de espectador → reprodução | Testing — validado no macOS (60 fps, p95 3 ms) |
 
 **Entregável:** MVP de ponta a ponta.
 **Critério de aceite:** um usuário inicia a transmissão no Windows e outro assiste dentro do Discord; o fluxo funciona com controles no desktop.

@@ -9,20 +9,32 @@ use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, 
 use crate::settings::Language;
 
 pub struct Tray {
-    _icon: TrayIcon,
+    icon: TrayIcon,
     show: MenuItem,
+    stop: MenuItem,
     quit: MenuItem,
 }
 
 pub enum TrayCommand {
     Show,
+    /// Disponível só durante uma transmissão.
+    StopStream,
     Quit,
 }
 
-fn labels(lang: Language) -> (&'static str, &'static str) {
+fn labels(lang: Language) -> (&'static str, &'static str, &'static str) {
     match lang {
-        Language::PtBr => ("Mostrar Vellcast", "Sair"),
-        Language::En => ("Show Vellcast", "Quit"),
+        Language::PtBr => ("Mostrar Vellcast", "Parar transmissão", "Sair"),
+        Language::En => ("Show Vellcast", "Stop streaming", "Quit"),
+    }
+}
+
+/// Dica do ícone: deixa claro quando a tela está sendo compartilhada (M-024).
+fn tooltip(live: bool, lang: Language) -> &'static str {
+    match (live, lang) {
+        (false, _) => "Vellcast",
+        (true, Language::PtBr) => "Vellcast — AO VIVO (compartilhando a tela)",
+        (true, Language::En) => "Vellcast — LIVE (sharing your screen)",
     }
 }
 
@@ -61,11 +73,13 @@ impl Tray {
         lang: Language,
         on_command: impl Fn(TrayCommand) + Send + Sync + 'static,
     ) -> anyhow::Result<Self> {
-        let (show_label, quit_label) = labels(lang);
+        let (show_label, stop_label, quit_label) = labels(lang);
         let show = MenuItem::new(show_label, true, None);
+        let stop = MenuItem::new(stop_label, false, None);
         let quit = MenuItem::new(quit_label, true, None);
         let menu = Menu::new();
         menu.append(&show)?;
+        menu.append(&stop)?;
         menu.append(&quit)?;
 
         let icon = TrayIconBuilder::new()
@@ -76,11 +90,13 @@ impl Tray {
             .build()?;
 
         let on_command = std::sync::Arc::new(on_command);
-        let (show_id, quit_id) = (show.id().clone(), quit.id().clone());
+        let (show_id, stop_id, quit_id) = (show.id().clone(), stop.id().clone(), quit.id().clone());
         let menu_cmd = on_command.clone();
         MenuEvent::set_event_handler(Some(move |e: MenuEvent| {
             if e.id == show_id {
                 menu_cmd(TrayCommand::Show);
+            } else if e.id == stop_id {
+                menu_cmd(TrayCommand::StopStream);
             } else if e.id == quit_id {
                 menu_cmd(TrayCommand::Quit);
             }
@@ -96,15 +112,24 @@ impl Tray {
         }));
 
         Ok(Self {
-            _icon: icon,
+            icon,
             show,
+            stop,
             quit,
         })
     }
 
     pub fn set_language(&self, lang: Language) {
-        let (show_label, quit_label) = labels(lang);
+        let (show_label, stop_label, quit_label) = labels(lang);
         self.show.set_text(show_label);
+        self.stop.set_text(stop_label);
         self.quit.set_text(quit_label);
+    }
+
+    pub fn set_live(&self, live: bool, lang: Language) {
+        self.stop.set_enabled(live);
+        if let Err(e) = self.icon.set_tooltip(Some(tooltip(live, lang))) {
+            tracing::debug!(%e, "não foi possível atualizar a dica da bandeja");
+        }
     }
 }

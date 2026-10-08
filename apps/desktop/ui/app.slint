@@ -1,11 +1,11 @@
 // Janela principal: barra lateral, lista de salas, área central e barra de status.
 
 import { Theme, InputState, NavAction, TextOps } from "theme.slint";
-import { FocusRing, VButton } from "widgets.slint";
+import { FocusRing, VButton, LiveBadge } from "widgets.slint";
 import { VirtualKeyboard } from "keyboard.slint";
-import { HomePage, StreamPage, RoomsPage, LivePage, SettingsPage, AccountPage, PlansPage, AboutPage } from "pages.slint";
+import { HomePage, StreamPage, RoomsPage, LivePage, SettingsPage, AccountPage, PlansPage, AboutPage, SourceItem, RoomItem } from "pages.slint";
 
-export { InputState, NavAction, TextOps }
+export { InputState, NavAction, TextOps, SourceItem, RoomItem }
 
 component NavItem inherits Rectangle {
     in property <image> icon;
@@ -116,6 +116,56 @@ export component AppWindow inherits Window {
     in-out property <bool> start-minimized;
     in-out property <bool> close-to-tray;
     in property <bool> background-shortcuts;
+    in-out property <string> relay-url;
+    in-out property <string> room-key;
+    in-out property <string> public-url;
+    in property <string> relay-message;
+    in property <bool> relay-message-error;
+
+    // Transmitir
+    in property <[SourceItem]> sources;
+    in-out property <int> selected-source: -1;
+    in property <string> sources-message;
+    in property <bool> sources-loading;
+    in-out property <int> profile;
+    in-out property <int> custom-height-index;
+    in-out property <int> custom-fps-index;
+    in-out property <float> custom-bitrate;
+    in property <string> quality-summary;
+    in-out property <int> audio-index;
+    in property <[string]> encoder-options;
+    in-out property <int> encoder-index;
+    in-out property <int> stream-room-index;
+    in property <bool> starting;
+    in property <string> stream-message;
+    in property <bool> stream-message-error;
+
+    // Salas
+    in property <[RoomItem]> rooms;
+    in property <[string]> room-names;
+    in-out property <int> rooms-index: -1;
+    in-out property <string> new-room-name;
+    in property <bool> rooms-busy;
+    in property <string> rooms-message;
+    in property <bool> rooms-message-error;
+    in property <string> invite-link;
+
+    // Ao vivo
+    in property <bool> live;
+    in property <string> live-status;
+    in property <string> live-source;
+    in property <string> live-room;
+    in property <string> live-uptime;
+    in property <string> live-viewers;
+    in property <string> live-video;
+    in property <string> live-captured-fps;
+    in property <string> live-encoded-fps;
+    in property <string> live-bitrate;
+    in property <string> live-dropped;
+    in property <string> live-encode-ms;
+    in property <string> live-rtt;
+    in property <string> live-message;
+    in property <bool> live-message-error;
 
     // 0 = nenhum, 1 = teclado virtual, 2 = menu rápido.
     out property <int> modal: 0;
@@ -129,6 +179,19 @@ export component AppWindow inherits Window {
     callback language-selected(int);
     callback minimize-to-tray;
     callback quit-app;
+    callback test-relay;
+    callback refresh-sources;
+    callback stream-prefs-changed;
+    callback start-stream;
+    callback stop-stream;
+    callback create-room(string);
+    callback make-invite(int);
+    callback make-live-invite;
+    callback copy-invite;
+    callback close-room(int);
+
+    // Campo que o teclado virtual está editando: 0 nome, 1 servidor, 2 chave, 3 nome da sala, 4 endereço público.
+    property <int> keyboard-target: 0;
 
     property <[{icon: image, label: string}]> nav-items: [
         { icon: @image-url("icons/house.svg"), label: @tr("Home") },
@@ -152,11 +215,35 @@ export component AppWindow inherits Window {
         menu-fs.focus();
     }
 
-    // Abre o teclado virtual para o nome de exibição.
+    // Abre o teclado virtual para o nome de exibição (atalho usado em testes).
     public function open-keyboard() {
-        vk.value = root.display-name;
+        root.open-keyboard-for(0, root.display-name);
+    }
+
+    public function open-keyboard-for(target: int, value: string) {
+        root.keyboard-target = target;
+        vk.value = value;
         root.modal = 1;
         vk.open();
+    }
+
+    function keyboard-confirmed(text: string) {
+        if (root.keyboard-target == 0) {
+            root.display-name = text;
+            root.settings-changed();
+        } else if (root.keyboard-target == 1) {
+            root.relay-url = text;
+            root.settings-changed();
+        } else if (root.keyboard-target == 2) {
+            root.room-key = text;
+            root.settings-changed();
+        } else if (root.keyboard-target == 4) {
+            root.public-url = text;
+            root.settings-changed();
+        } else {
+            root.new-room-name = text;
+        }
+        root.close-modal();
     }
 
     function close-modal() {
@@ -248,11 +335,28 @@ export component AppWindow inherits Window {
                 padding: Theme.sp-4;
                 spacing: Theme.sp-2;
                 Text { text: @tr("ROOMS"); color: Theme.text-secondary; font-size: Theme.fs-caption; font-weight: 600; }
-                Text {
-                    text: @tr("No rooms yet. Private rooms arrive with the relay in Stage 3.");
+                if root.rooms.length == 0: Text {
+                    text: @tr("No rooms yet. Create one in Rooms.");
                     color: Theme.text-secondary;
                     font-size: Theme.fs-caption;
                     wrap: word-wrap;
+                }
+                for room in root.rooms: HorizontalLayout {
+                    spacing: Theme.sp-2;
+                    Rectangle {
+                        width: 8px;
+                        height: 8px;
+                        y: (parent.height - self.height) / 2;
+                        border-radius: 4px;
+                        background: room.live ? Theme.danger : Theme.text-muted;
+                    }
+                    Text {
+                        text: room.name;
+                        color: room.live ? Theme.text-primary : Theme.text-secondary;
+                        font-size: Theme.fs-body;
+                        overflow: elide;
+                        horizontal-stretch: 1;
+                    }
                 }
                 Rectangle { }
             }
@@ -273,11 +377,72 @@ export component AppWindow inherits Window {
                         if root.current-page == 0: HomePage {
                             display-name: root.display-name;
                             gamepads: root.gamepads;
+                            live: root.live;
+                            room-count: root.rooms.length;
                             navigate(i) => { root.navigate(i); }
                         }
-                        if root.current-page == 1: StreamPage { }
-                        if root.current-page == 2: RoomsPage { }
-                        if root.current-page == 3: LivePage { }
+                        if root.current-page == 1: StreamPage {
+                            sources: root.sources;
+                            selected-source <=> root.selected-source;
+                            sources-message: root.sources-message;
+                            sources-loading: root.sources-loading;
+                            profile <=> root.profile;
+                            custom-height-index <=> root.custom-height-index;
+                            custom-fps-index <=> root.custom-fps-index;
+                            custom-bitrate <=> root.custom-bitrate;
+                            quality-summary: root.quality-summary;
+                            audio-index <=> root.audio-index;
+                            encoder-options: root.encoder-options;
+                            encoder-index <=> root.encoder-index;
+                            room-options: root.room-names;
+                            room-index <=> root.stream-room-index;
+                            live: root.live;
+                            starting: root.starting;
+                            message: root.stream-message;
+                            message-error: root.stream-message-error;
+                            refresh-sources => { root.refresh-sources(); }
+                            prefs-changed => { root.stream-prefs-changed(); }
+                            start-clicked => { root.start-stream(); }
+                            navigate(i) => { root.navigate(i); }
+                        }
+                        if root.current-page == 2: RoomsPage {
+                            rooms: root.rooms;
+                            room-index <=> root.rooms-index;
+                            relay-url: root.relay-url;
+                            refocus-token: root.refocus-token;
+                            new-room-name <=> root.new-room-name;
+                            busy: root.rooms-busy;
+                            message: root.rooms-message;
+                            message-error: root.rooms-message-error;
+                            invite-link: root.invite-link;
+                            create-room(name) => { root.create-room(name); }
+                            make-invite(i) => { root.make-invite(i); }
+                            copy-invite => { root.copy-invite(); }
+                            close-room(i) => { root.close-room(i); }
+                            request-virtual-keyboard(t) => { root.open-keyboard-for(3, t); }
+                        }
+                        if root.current-page == 3: LivePage {
+                            live: root.live;
+                            status: root.live-status;
+                            source-title: root.live-source;
+                            room-name: root.live-room;
+                            uptime: root.live-uptime;
+                            viewers: root.live-viewers;
+                            video: root.live-video;
+                            captured-fps: root.live-captured-fps;
+                            encoded-fps: root.live-encoded-fps;
+                            bitrate: root.live-bitrate;
+                            dropped: root.live-dropped;
+                            encode-ms: root.live-encode-ms;
+                            rtt: root.live-rtt;
+                            message: root.live-message;
+                            message-error: root.live-message-error;
+                            invite-link: root.invite-link;
+                            stop => { root.stop-stream(); }
+                            make-invite => { root.make-live-invite(); }
+                            copy-invite => { root.copy-invite(); }
+                            navigate(i) => { root.navigate(i); }
+                        }
                         if root.current-page == 4: SettingsPage {
                             tray-available: root.tray-available;
                             refocus-token: root.refocus-token;
@@ -289,9 +454,15 @@ export component AppWindow inherits Window {
                             start-minimized <=> root.start-minimized;
                             close-to-tray <=> root.close-to-tray;
                             background-shortcuts: root.background-shortcuts;
+                            relay-url <=> root.relay-url;
+                            room-key <=> root.room-key;
+                            public-url <=> root.public-url;
+                            relay-message: root.relay-message;
+                            relay-message-error: root.relay-message-error;
                             changed-setting => { root.settings-changed(); }
                             language-selected(i) => { root.language-selected(i); }
-                            request-virtual-keyboard(t) => { root.open-keyboard(); }
+                            request-virtual-keyboard(target, t) => { root.open-keyboard-for(target, t); }
+                            test-relay => { root.test-relay(); }
                         }
                         if root.current-page == 5: AccountPage { }
                         if root.current-page == 6: PlansPage { tab <=> root.plan-tab; }
@@ -326,6 +497,10 @@ export component AppWindow inherits Window {
                         vertical-alignment: center;
                     }
                     Rectangle { horizontal-stretch: 1; }
+                    if root.live: VerticalLayout {
+                        alignment: center;
+                        LiveBadge { text: @tr("LIVE"); }
+                    }
                     Text {
                         text: @tr("A Confirm · B Back · LB/RB Section · LT/RT Tab · Start Menu");
                         color: Theme.text-secondary;
@@ -341,13 +516,13 @@ export component AppWindow inherits Window {
         visible: root.modal == 1;
         width: root.width;
         height: root.height;
-        title: @tr("Display name");
-        max-length: 32;
-        confirmed(text) => {
-            root.display-name = text;
-            root.settings-changed();
-            root.close-modal();
-        }
+        title: root.keyboard-target == 0 ? @tr("Display name")
+            : root.keyboard-target == 1 ? @tr("Server address")
+            : root.keyboard-target == 2 ? @tr("Room creation key")
+            : root.keyboard-target == 4 ? @tr("Public address for invites")
+            : @tr("Room name");
+        max-length: root.keyboard-target == 0 ? 32 : root.keyboard-target == 3 ? 64 : 256;
+        confirmed(text) => { root.keyboard-confirmed(text); }
         cancelled => { root.close-modal(); }
     }
 

@@ -136,6 +136,7 @@ Teste de carga: `node tests/benchmarks/relay-viewers.mjs http://127.0.0.1:8788 1
 | `VELLCAST_ROOM_TTL_SECS` | `86400` | Vida máxima de uma sala. |
 | `VELLCAST_ROOM_IDLE_TTL_SECS` | `3600` | Sala sem transmissor e sem espectadores é removida após esse tempo. |
 | `VELLCAST_VIEWER_TOKEN_TTL_SECS` | `43200` | Validade do token de espectador. |
+| `VELLCAST_STATIC_DIR` | pasta `player` ao lado do executável, se existir | Player web (S-011) servido em `/` e `/watch`. Vazio desativa. Ver §6.8. |
 | `VELLCAST_LOG_FORMAT` | texto (`json` na imagem) | `json` para logs estruturados. |
 | `RUST_LOG` | `info` | Nível de log. |
 
@@ -187,6 +188,27 @@ Mesmas regras da seção 5, apontando para a porta `8788`. Pontos específicos:
 ### 6.7 Capacidade
 
 Medição local (Apple M1, loopback, build Release): 1 transmissor 1080p60 a ~8 Mbps para 20 espectadores usou ~5% de um núcleo e < 10 MB de RAM no relay. O limite prático é a **banda de saída** (bitrate × espectadores: 20 × 8 Mbps = 160 Mbps), não a CPU. Dimensionamento e custo em `MONETIZATION.md`.
+
+### 6.8 Player web e links de convite (S-011)
+
+O relay também serve o player web (build de `apps/discord-activity`), para quem recebe um link de convite assistir no navegador sem instalar nada:
+
+- `GET /` e `GET /watch` devolvem o `index.html`; os assets ficam em `/assets/*`. As rotas de API, `/ws`, `/healthz` e `/metrics` têm prioridade.
+- O link gerado pelo desktop é `https://<relay>/watch#room=<id>&invite=<código>`. O código vai no **fragmento** (`#`), que o navegador nunca envia ao servidor; o player troca o código por um token de espectador (`POST /api/rooms/{id}/join`), guarda o token só na aba (`sessionStorage`) e remove o código da barra de endereços.
+- Cabeçalhos: `Content-Security-Policy` restrita à própria origem (sem scripts inline), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` e `Cache-Control: no-cache` no HTML.
+- Para servir a partir do repositório: `VELLCAST_STATIC_DIR=apps/discord-activity/dist` (após `npm run build`).
+
+**HTTPS é obrigatório para quem assiste em outro aparelho.** O WebCodecs (decodificação H.264/Opus no navegador) só existe em contexto seguro: HTTPS ou `localhost`. Um link `http://192.168.x.x:8788` abre a página, mas não toca vídeo. Opções:
+
+| Cenário | Como |
+|---|---|
+| Teste no mesmo PC | `http://127.0.0.1:8788` (localhost é contexto seguro). |
+| Teste rápido com outros aparelhos | Túnel HTTPS: `cloudflared tunnel --url http://localhost:8788`. No desktop, deixe o servidor em `http://127.0.0.1:8788` e preencha **Configurações → Servidor → Endereço público para os links de convite** com o `https://….trycloudflare.com`. Com túnel, todos os espectadores chegam pelo mesmo IP local; o rate limit por IP passa a ser compartilhado. |
+| Uso contínuo | VPS com Dokploy e TLS (§6.5). No desktop, use `https://seu-dominio` como servidor; o app transmite por `wss://` automaticamente. |
+
+### 6.9 Pacote de teste para Windows
+
+O workflow `.github/workflows/windows-mvp.yml` gera o artefato `Vellcast-MVP-windows-x64` (desktop, relay, player, `iniciar-relay.bat`, `LEIA-ME.txt` e avisos de licença) a cada push na `main`. O `iniciar-relay.bat` gera um segredo aleatório em `relay.env` na primeira execução, escuta em `0.0.0.0:8788` e serve o player da pasta `player`. Passo a passo em `docs/TESTING_WINDOWS.md`.
 
 ## 7. Futuro: QUIC (Etapa 6)
 

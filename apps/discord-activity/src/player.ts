@@ -10,6 +10,13 @@ import { Window, mean, nowMs, percentile } from './metrics';
 
 /** Quadros pendentes no decoder acima disso disparam descarte até o próximo keyframe. */
 const MAX_DECODE_QUEUE = 4;
+/**
+ * Ao entrar, o relay envia de uma vez o GOP em cache (até ~1 s de vídeo) para
+ * a imagem aparecer na hora. Nessa janela a fila do decoder cresce de propósito
+ * e não deve disparar descarte.
+ */
+const CATCH_UP_WINDOW_MS = 1500;
+const CATCH_UP_MAX_QUEUE = 120;
 /** Jitter buffer de áudio (s). */
 const AUDIO_LEAD_S = 0.06;
 /** Áudio agendado além disso é considerado atrasado e o relógio é reiniciado. */
@@ -48,6 +55,7 @@ export class Player {
   private audioSchedule: { at: number; ptsUs: number }[] = [];
   private lastVideoPtsUs: number | null = null;
   private waitingKeyframe = true;
+  private catchUpUntil = 0;
   private sentAtByPts = new Map<number, number>();
   private ctx2d: CanvasRenderingContext2D | null;
   private volume = 0.8;
@@ -139,7 +147,9 @@ export class Player {
     if (!decoder || decoder.state !== 'configured') return;
 
     const keyframe = (header.flags & Flags.Keyframe) !== 0;
-    if (!keyframe && decoder.decodeQueueSize > MAX_DECODE_QUEUE) {
+    if (keyframe && this.waitingKeyframe) this.catchUpUntil = nowMs() + CATCH_UP_WINDOW_MS;
+    const limit = nowMs() < this.catchUpUntil ? CATCH_UP_MAX_QUEUE : MAX_DECODE_QUEUE;
+    if (!keyframe && decoder.decodeQueueSize > limit) {
       this.waitingKeyframe = true;
       this.hooks.requestKeyframe();
       this.stats.keyframeRequests++;

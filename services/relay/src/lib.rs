@@ -11,6 +11,7 @@ pub mod ratelimit;
 pub mod room;
 pub mod store;
 pub mod token;
+pub mod web;
 pub mod ws;
 
 use std::collections::HashMap;
@@ -138,7 +139,8 @@ impl Relay {
 }
 
 pub fn router(relay: Arc<Relay>) -> Router {
-    Router::new()
+    let static_dir = relay.config.static_dir.clone();
+    let api = Router::new()
         .route("/healthz", get(|| async { "ok" }))
         .route("/metrics", get(api::metrics))
         .route("/ws", get(ws::upgrade))
@@ -153,7 +155,11 @@ pub fn router(relay: Arc<Relay>) -> Router {
             "/api/rooms/{id}/publisher-token",
             post(api::publisher_token),
         )
-        .with_state(relay)
+        .with_state(relay);
+    match static_dir {
+        Some(dir) => web::with_player(api, &dir),
+        None => api,
+    }
 }
 
 /// Tarefa periódica de limpeza.

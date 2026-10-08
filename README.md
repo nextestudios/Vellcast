@@ -1,34 +1,50 @@
 # Vellcast
 
-Compartilhamento de tela otimizado para jogos: um aplicativo Windows leve, em Rust, que captura e codifica por hardware, e uma Discord Activity para assistir sem instalar nada. Desenvolvido pela [Next Estúdios](https://nextestudios.com).
+Compartilhamento de tela otimizado para jogos: um aplicativo Windows leve, em Rust, que captura e codifica por hardware, e um player no navegador (e, em breve, uma Discord Activity) para assistir sem instalar nada. Desenvolvido pela [Next Estúdios](https://nextestudios.com).
 
-> **Status: ETAPA 0 — validação da Discord Activity.** O aplicativo Windows ainda não existe. Esta etapa comprova, com mídia sintética, que H.264 + Opus via WebSocket e WebCodecs funciona dentro de uma Activity antes de investir no motor de captura. Ver o [roadmap completo](ROADMAP.md).
+> **Status: MVP para Windows em teste.** O app desktop captura, codifica e transmite para o `vellcast-relay`; quem recebe um link de convite assiste no navegador. A integração com o Discord foi adiada (ADR-013). Ver o [roadmap completo](ROADMAP.md) e o [guia de teste no Windows](docs/TESTING_WINDOWS.md).
 
-## O que existe hoje
+## Componentes
 
-| Componente | Caminho | Estado |
+| Componente | Caminho | Função |
 |---|---|---|
-| Protocolo binário v1 | `crates/protocol` | Implementado e testado |
-| Servidor de validação (Axum) | `services/stage0-server` | Implementado; serve a Activity, distribui mídia pré-codificada para N espectadores |
-| Discord Activity (React + WebCodecs) | `apps/discord-activity` | Implementado; validado fora do Discord, validação no Discord pendente |
-| Desktop, captura, encoder, áudio, relay | `apps/desktop`, `crates/*`, `services/relay` | Planejado (ETAPAS 1–5) |
+| App desktop (Rust + Slint) | `apps/desktop` | Salas, convites, escolha da fonte, qualidade, áudio, tela Ao vivo, bandeja, controle e teclado virtual |
+| Motor de transmissão | `crates/vellcast-core`, `crates/capture`, `crates/encoder`, `crates/audio` | Windows Graphics Capture → H.264 por hardware (Media Foundation) + áudio WASAPI → Opus |
+| Transporte do transmissor | `crates/transport` | WebSocket/TLS com fila limitada e reconexão |
+| Relay de mídia | `services/relay` | Salas privadas, convites, tokens, distribuição sem recodificação e player web |
+| Player web / Discord Activity | `apps/discord-activity` | Player WebCodecs: `/watch` (links de convite) e modo Activity (adiado) |
+| Protocolo | `crates/protocol` | Formato binário v1 (`docs/STREAMING_PROTOCOL.md`) |
+| Validação da Etapa 0 | `services/stage0-server` | Servidor de mídia sintética usado para validar o player |
 
-## Rodando a ETAPA 0 localmente
+## Testar no Windows (sem compilar)
 
-Requisitos: Rust estável, Node 22+, ffmpeg com libx264 e libopus (só para gerar a mídia de teste).
+Baixe o artefato **Vellcast-MVP-windows-x64** em **Actions → Windows MVP**, execute `iniciar-relay.bat` e depois `vellcast-desktop.exe`. Passo a passo e checklist em [`docs/TESTING_WINDOWS.md`](docs/TESTING_WINDOWS.md).
+
+## Desenvolvimento
+
+Requisitos: Rust estável, Node 22+. A captura e o encoder só funcionam no Windows; no macOS/Linux a interface roda e mostra que a captura está indisponível.
 
 ```bash
-./scripts/generate-test-media.sh          # gera tests/fixtures/media/ (não versionado)
+# Player web
 (cd apps/discord-activity && npm ci && npm run build)
-cargo run --release -p vellcast-stage0-server
-# abra http://127.0.0.1:8787 e escolha uma transmissão
+
+# Relay servindo o player (segredo aleatório; só para desenvolvimento)
+VELLCAST_RELAY_INSECURE_DEV=1 VELLCAST_STATIC_DIR=apps/discord-activity/dist \
+  cargo run --release -p vellcast-relay
+
+# App desktop (Configurações → Servidor: http://127.0.0.1:8788)
+cargo run --release -p vellcast-desktop
 ```
 
-Desenvolvimento da Activity com hot reload: `cd apps/discord-activity && npm run dev` (porta 5173; `/ws` e `/api` são encaminhados ao servidor na 8787).
+Sem Windows, dá para simular um transmissor com a mídia sintética da Etapa 0 (`./scripts/generate-test-media.sh` exige ffmpeg):
 
-Teste de carga: `node tests/benchmarks/stage0-viewers.mjs ws://127.0.0.1:8787 1080p60 20 30`.
+```bash
+curl -s -X POST localhost:8788/api/rooms -H 'content-type: application/json' -d '{"name":"teste"}'
+VELLCAST_PUBLISHER_TOKEN=<publisherToken> cargo run --release -p vellcast-transport \
+  --example publish_fixture -- ws://127.0.0.1:8788/ws 1080p60
+```
 
-Para testar dentro do Discord, siga [`docs/DISCORD_INTEGRATION.md`](docs/DISCORD_INTEGRATION.md). Docker e Dokploy: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+Etapa 0 (validação do player com mídia sintética): `cargo run --release -p vellcast-stage0-server` e `http://127.0.0.1:8787`. Discord: [`docs/DISCORD_INTEGRATION.md`](docs/DISCORD_INTEGRATION.md). Docker e Dokploy: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ## Verificações
 

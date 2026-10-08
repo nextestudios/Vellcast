@@ -15,6 +15,7 @@ async fn main() -> Result<()> {
         max_publisher_kbps = config.max_publisher_kbps,
         create_room_key = config.create_room_key.is_some(),
         trust_proxy = config.trust_proxy,
+        player = config.static_dir.as_ref().map(|d| d.display().to_string()).unwrap_or_else(|| "desativado".into()),
         "vellcast-relay iniciando"
     );
     let listener = tokio::net::TcpListener::bind(bind)

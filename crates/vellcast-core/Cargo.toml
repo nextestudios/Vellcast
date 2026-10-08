@@ -1,0 +1,29 @@
+[package]
+name = "vellcast-core"
+description = "Orquestração da transmissão: captura → encoder → transporte"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = ["opus"]
+# Codificação Opus (libopus, compilada com cmake no Windows). Desligar apenas
+# para verificação cruzada sem toolchain C (`--no-default-features`).
+opus = ["vellcast-audio/opus"]
+
+[dependencies]
+thiserror.workspace = true
+tracing.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+vellcast-audio = { path = "../audio", default-features = false }
+vellcast-capture.workspace = true
+vellcast-encoder.workspace = true
+vellcast-protocol.workspace = true
+vellcast-transport.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

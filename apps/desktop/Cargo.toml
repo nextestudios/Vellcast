@@ -10,7 +10,10 @@ publish = false
 
 [dependencies]
 vellcast-controller = { path = "../../crates/controller" }
+vellcast-core = { path = "../../crates/vellcast-core" }
 anyhow.workspace = true
+# Área de transferência para o link de convite (sem suporte a imagens).
+arboard = { version = "=3.6.1", default-features = false }
 directories = "=6.0.0"
 serde.workspace = true
 serde_json.workspace = true
@@ -18,6 +21,13 @@ slint = { version = "=1.18.1", default-features = false, features = ["std", "com
 tracing.workspace = true
 tracing-subscriber.workspace = true
 tray-icon = { version = "=0.24.0", default-features = false }
+# Cliente HTTP síncrono do relay (rustls); chamado só em threads de fundo.
+ureq = { version = "=3.4.2", default-features = false, features = ["rustls", "json"] }
+
+[dev-dependencies]
+# Testes de integração do cliente HTTP contra um relay real em porta efêmera.
+vellcast-relay.workspace = true
+tokio.workspace = true
 
 [build-dependencies]
 slint-build = "=1.18.1"

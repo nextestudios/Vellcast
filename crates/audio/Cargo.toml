@@ -1,0 +1,46 @@
+[package]
+name = "vellcast-audio"
+description = "Captura de áudio WASAPI (loopback por processo ou do sistema) e codificação Opus"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = ["opus"]
+# Codificação Opus via libopus (compilada com cmake). Desativar só para
+# verificação cruzada (`cargo check --target x86_64-pc-windows-gnu
+# --no-default-features`) em máquinas sem toolchain C para Windows.
+opus = ["dep:opus"]
+
+[dependencies]
+thiserror.workspace = true
+tracing.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+opus = { version = "=0.4.0", optional = true }
+windows-core = "=0.62.2"
+windows = { version = "=0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_Media_Audio",
+    "Win32_Media_KernelStreaming",
+    "Win32_Media_Multimedia",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Performance",
+    "Win32_System_Threading",
+    "Win32_System_Variant",
+    "Win32_Security",
+    "Win32_Devices_FunctionDiscovery",
+    "Win32_UI_Shell_PropertiesSystem",
+] }
+
+[lints.rust]
+# Necessário para COM/WASAPI. Cada bloco `unsafe` tem um comentário `SAFETY:`.
+unsafe_code = "allow"
+
+[lints.clippy]
+unwrap_used = "warn"
+undocumented_unsafe_blocks = "warn"

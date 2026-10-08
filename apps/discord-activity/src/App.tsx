@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Connection, type ConnectionStatus } from './connection';
+import { Connection, wsUrl, type ConnectionStatus } from './connection';
 import { initDiscord, type DiscordContext } from './discord';
 import { GamepadMonitor, type GamepadReport } from './gamepad';
 import { Player } from './player';
@@ -41,7 +41,17 @@ export function App() {
   useEffect(() => {
     void initDiscord().then(setDiscord);
     fetch('/api/streams')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((r) =>
+        r.ok
+          ? r.json()
+          : Promise.reject(
+              new Error(
+                r.status === 404
+                  ? 'este servidor não tem transmissões de teste. Para assistir, abra o link de convite recebido.'
+                  : `HTTP ${r.status}`,
+              ),
+            ),
+      )
       .then((list: StreamInfo[]) => setStreams(list))
       .catch((e: Error) => setListError(e.message));
     const monitor = new GamepadMonitor(setGamepad);
@@ -59,7 +69,7 @@ export function App() {
     });
     player.setVolume(volume);
     if (audioWantedRef.current) void player.enableAudio();
-    conn = new Connection(selected, {
+    conn = new Connection({ url: wsUrl(selected) }, {
       onPacket: (p) => player.handle(p),
       onConnected: () => player.reset(),
       onStatus: (s, detail) => setStatus({ s, detail }),

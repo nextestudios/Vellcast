@@ -94,6 +94,8 @@ Versões fixadas com `=` no `Cargo.toml`. Licenças conferidas no crates.io em 2
 | muda (via tray-icon e Slint) | 0.19.3 | MIT OR Apache-2.0 | Menu da bandeja | Pendente (cargo deny) |
 | directories | 6.0.0 | MIT OR Apache-2.0 | Pasta de configuração do sistema | Sim (crates.io) |
 | serde / serde_json | — | MIT OR Apache-2.0 | Arquivo de configurações | Pendente (cargo deny) |
+| ureq | 3.4.2 | MIT OR Apache-2.0 | Cliente HTTP da API de salas (rustls + ring; sem OpenSSL) | Sim (crates.io) |
+| arboard | 3.6.1 | MIT OR Apache-2.0 | Copiar o link de convite (sem suporte a imagens) | Sim (crates.io) |
 
 Dependências transitivas do Slint (winit, softbuffer, accesskit, fontique/skrifa etc.) entram no inventário automático (`cargo about`), ainda **pendente**.
 
@@ -110,6 +112,16 @@ Licenças lidas do `cargo metadata` em 2026-10-08.
 | ring | 0.17.14 | Apache-2.0 AND ISC | Criptografia do rustls | Exige manter os avisos de licença ISC |
 | webpki-roots | 1.0.9 | CDLA-Permissive-2.0 | Certificados raiz para TLS | Licença de dados permissiva; exige incluir o texto da licença ao redistribuir |
 | tokio-tungstenite / tungstenite | 0.29.0 / 0.29.0 | MIT / MIT OR Apache-2.0 | WebSocket do transmissor | Há também 0.30.0 na árvore: unificar versões é tarefa de limpeza |
+
+### Rust (`crates/audio`, Etapa 4)
+
+Licenças conferidas no crates.io em 2026-10-08. Dependências de Windows ficam em `[target.'cfg(windows)'.dependencies]`.
+
+| Crate | Versão | Licença | Uso | Observação |
+|---|---|---|---|---|
+| opus | 0.4.0 | MIT OR Apache-2.0 | Binding seguro da libopus | — |
+| opusic-sys (via `opus`) | 0.7.5 | BSD-3-Clause | Compila e vincula a **libopus** estaticamente (cmake) | A libopus é BSD-3-Clause (Xiph.Org e outros): manter o aviso de copyright e o texto da licença na distribuição |
+| windows / windows-core | 0.62.2 | MIT OR Apache-2.0 | WASAPI, COM, Toolhelp, QPC | — |
 
 ### Ativos embutidos (Etapa 1)
 

@@ -1,13 +1,18 @@
-//! Vellcast desktop (ETAPA 1): interface, navegação por controle e bandeja.
+//! Vellcast desktop: interface, navegação por controle, bandeja, salas e transmissão.
 //!
-//! Modelo de threads: a interface roda na thread principal (loop do Slint);
-//! a entrada de gamepad roda em `vellcast-gamepad` e só entrega eventos à
-//! interface via `invoke_from_event_loop`. Não há polling nem animações
-//! contínuas, então a janela oculta não renderiza nada.
+//! Modelo de threads: a interface roda na thread principal (loop do Slint).
+//! A entrada de gamepad roda em `vellcast-gamepad`, o motor de transmissão em
+//! `vellcast-engine` e as chamadas HTTP ao relay em threads curtas; todos só
+//! entregam resultados à interface via `invoke_from_event_loop`. Não há polling
+//! nem animações contínuas, então a janela oculta não renderiza nada.
 
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
+mod actions;
+mod engine;
 mod input;
+mod relay_api;
+mod rooms;
 mod settings;
 mod tray;
 
@@ -42,11 +47,13 @@ const LICENSES: &[&str] = &[
     "tray-icon 0.24 — MIT / Apache-2.0",
     "Lucide icons — ISC",
     "serde, serde_json, anyhow, directories — MIT / Apache-2.0",
+    "ureq 3, rustls, arboard — MIT / Apache-2.0",
+    "ring — Apache-2.0 AND ISC; webpki-roots — CDLA-Permissive-2.0",
     "tracing, tracing-subscriber — MIT",
 ];
 
 /// Estado que vive apenas na thread da interface.
-struct UiState {
+pub(crate) struct UiState {
     settings: Settings,
     settings_path: Option<PathBuf>,
     history: History,
@@ -54,13 +61,20 @@ struct UiState {
     controller: Option<ControllerHandle>,
     tray: Option<Tray>,
     window_visible: bool,
+    rooms: rooms::RoomBook,
+    rooms_path: Option<PathBuf>,
+    sources: Vec<vellcast_core::SourceInfo>,
+    encoders: Vec<vellcast_core::EncoderInfo>,
+    engine: Option<engine::Engine>,
+    live: Option<actions::LiveSession>,
+    live_timer: Option<slint::Timer>,
 }
 
 thread_local! {
     static STATE: RefCell<Option<UiState>> = const { RefCell::new(None) };
 }
 
-fn with_state<R>(f: impl FnOnce(&mut UiState) -> R) -> Option<R> {
+pub(crate) fn with_state<R>(f: impl FnOnce(&mut UiState) -> R) -> Option<R> {
     STATE.with(|s| s.borrow_mut().as_mut().map(f))
 }
 
@@ -84,6 +98,12 @@ fn main() -> anyhow::Result<()> {
             Settings::default()
         }
     };
+
+    let rooms_path = settings_path.as_deref().map(rooms::path_next_to);
+    let room_book = rooms_path
+        .as_deref()
+        .map(|p| rooms::load(p, actions::now_unix()))
+        .unwrap_or_default();
 
     let ui = AppWindow::new()?;
     apply_settings_to_ui(&ui, &settings);
@@ -111,8 +131,16 @@ fn main() -> anyhow::Result<()> {
             controller,
             tray: None,
             window_visible: false,
+            rooms: room_book,
+            rooms_path,
+            sources: Vec::new(),
+            encoders: Vec::new(),
+            engine: None,
+            live: None,
+            live_timer: None,
         });
     });
+    actions::init(&ui);
 
     // A bandeja precisa do loop de eventos já ativo (exigência do macOS).
     let weak = ui.as_weak();
@@ -129,6 +157,8 @@ fn main() -> anyhow::Result<()> {
 
     // Continua rodando com a janela oculta na bandeja.
     slint::run_event_loop_until_quit()?;
+    // Encerra a transmissão (se houver) antes de sair: o motor para a sessão no Drop.
+    STATE.with(|s| drop(s.borrow_mut().take()));
     Ok(())
 }
 
@@ -147,9 +177,16 @@ fn apply_settings_to_ui(ui: &AppWindow, s: &Settings) {
     ui.set_start_minimized(s.start_minimized);
     ui.set_close_to_tray(s.close_to_tray);
     ui.set_background_shortcuts(s.background_shortcuts);
+    ui.set_relay_url(s.relay_url.clone().into());
+    ui.set_room_key(s.room_key.clone().into());
+    ui.set_public_url(s.public_url.clone().into());
 }
 
-fn settings_from_ui(ui: &AppWindow, previous: &Settings) -> Settings {
+fn settings_from_ui(
+    ui: &AppWindow,
+    previous: &Settings,
+    encoders: &[vellcast_core::EncoderInfo],
+) -> Settings {
     Settings {
         language: Language::from_index(ui.get_language_index()),
         display_name: ui.get_display_name().to_string(),
@@ -159,6 +196,10 @@ fn settings_from_ui(ui: &AppWindow, previous: &Settings) -> Settings {
         start_minimized: ui.get_start_minimized(),
         close_to_tray: ui.get_close_to_tray(),
         background_shortcuts: previous.background_shortcuts,
+        relay_url: ui.get_relay_url().to_string(),
+        room_key: ui.get_room_key().to_string(),
+        public_url: ui.get_public_url().to_string(),
+        stream: actions::stream_prefs_from_ui(ui, &previous.stream, encoders),
     }
     .sanitized()
 }
@@ -174,9 +215,9 @@ fn select_language(lang: Language) {
     }
 }
 
-fn persist(ui: &AppWindow) {
+pub(crate) fn persist(ui: &AppWindow) {
     with_state(|st| {
-        let new = settings_from_ui(ui, &st.settings);
+        let new = settings_from_ui(ui, &st.settings, &st.encoders);
         if new == st.settings {
             return;
         }
@@ -192,17 +233,29 @@ fn persist(ui: &AppWindow) {
         if new.display_name != ui.get_display_name().as_str() {
             ui.set_display_name(new.display_name.clone().into());
         }
+        if new.relay_url != ui.get_relay_url().as_str() {
+            ui.set_relay_url(new.relay_url.clone().into());
+        }
         st.settings = new;
     });
+}
+
+/// Troca de tela registrando o histórico (Voltar) e ajustando o timer da tela Ao vivo.
+pub(crate) fn navigate_to(ui: &AppWindow, page: i32) {
+    let current = ui.get_current_page();
+    if current != page {
+        with_state(|st| st.history.push(current, page));
+        ui.set_current_page(page);
+    }
+    actions::update_live_timer(ui);
 }
 
 fn wire_callbacks(ui: &AppWindow) {
     let weak = ui.as_weak();
     ui.on_navigate(move |page| {
-        let Some(ui) = weak.upgrade() else { return };
-        let current = ui.get_current_page();
-        with_state(|st| st.history.push(current, page));
-        ui.set_current_page(page);
+        if let Some(ui) = weak.upgrade() {
+            navigate_to(&ui, page);
+        }
     });
 
     let weak = ui.as_weak();
@@ -223,6 +276,7 @@ fn wire_callbacks(ui: &AppWindow) {
         });
         if let Some(ui) = weak.upgrade() {
             persist(&ui);
+            actions::on_language_changed(&ui);
         }
     });
 
@@ -263,6 +317,11 @@ fn create_tray(ui: &AppWindow) -> bool {
                     show_window(&ui);
                 }
             }
+            TrayCommand::StopStream => {
+                if let Some(ui) = weak.upgrade() {
+                    actions::stop_stream(&ui, None);
+                }
+            }
             TrayCommand::Quit => {
                 let _ = slint::quit_event_loop();
             }
@@ -289,6 +348,7 @@ fn show_window(ui: &AppWindow) {
         w.focus_window();
     });
     with_state(|st| st.window_visible = true);
+    actions::update_live_timer(ui);
 }
 
 fn hide_window(ui: &AppWindow) {
@@ -304,6 +364,8 @@ fn hide_window(ui: &AppWindow) {
             c.set_active(false);
         }
     });
+    // Oculto na bandeja: a transmissão continua, as métricas da interface param.
+    actions::update_live_timer(ui);
 }
 
 /// O controle só age com a janela do Vellcast em foco (spec §13).
@@ -380,6 +442,7 @@ fn handle_action(ui: &AppWindow, action: Action) {
             if let Some(page) = with_state(|st| st.history.back()).flatten() {
                 ui.set_current_page(page);
                 ui.set_nav_focus_token(ui.get_nav_focus_token() + 1);
+                actions::update_live_timer(ui);
             }
         }
         Route::Section(delta) => {
@@ -388,6 +451,7 @@ fn handle_action(ui: &AppWindow, action: Action) {
             with_state(|st| st.history.push(current, next));
             ui.set_current_page(next);
             ui.set_nav_focus_token(ui.get_nav_focus_token() + 1);
+            actions::update_live_timer(ui);
         }
         Route::Tab(delta) => ui.invoke_tab_step(delta),
         Route::Scroll(delta) => ui.invoke_scroll_step(delta),

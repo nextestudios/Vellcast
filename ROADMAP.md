@@ -34,10 +34,10 @@ flowchart LR
 |---|---|---|---|---|
 | 0 | Validação Discord | M | macOS + Discord | 🧪 validação local concluída; teste no Discord ⏸️ adiado |
 | 1 | Desktop e controles | M | macOS (dev) + Windows (validação) | 🧪 implementada; falta Windows real e controle físico |
-| 2 | Captura e encoder | M | **Windows com GPU** | ⬜ |
+| 2 | Captura e encoder | M | **Windows com GPU** | 🧪 implementada; compila no Windows; execução real pendente |
 | 3 | Media relay | M | macOS/Linux | 🧪 implementada; falta Docker e VPS com TLS |
-| 4 | Áudio | M | **Windows** | ⬜ |
-| 5 | Integração completa — **MVP** | M | Windows + Discord | ⬜ |
+| 4 | Áudio | M | **Windows** | 🧪 implementada; compila no Windows; execução real pendente |
+| 5 | Integração completa — **MVP** | M | Windows (+ Discord para a Activity) | 🧪 MVP Windows + player web pronto para teste |
 | OC | Abertura do código (Open Core) | S | — | ⬜ |
 | 6 | Otimização extrema | M | Windows com GPU + jogos | ⬜ |
 | 7 | Comercialização | S no MVP / M no Premium | Linux (servidor) | ⬜ |
@@ -84,14 +84,16 @@ Aplicativo Windows leve em Rust + Slint, 100% navegável por controle.
 ### Etapa 2 — Captura e encoder · M
 Capturar e codificar 1080p60 nativamente, mantendo os quadros na GPU.
 
-- [ ] ⬜ E2-T01 — Captura de janela (Windows Graphics Capture)
-- [ ] ⬜ E2-T02 — Captura de monitor
-- [ ] ⬜ E2-T03 — Fallback DXGI Desktop Duplication (só se necessário)
-- [ ] ⬜ E2-T04 — Detecção de encoders (NVENC, AMD, Quick Sync)
-- [ ] ⬜ E2-T05 — Pipeline Direct3D 11 → H.264 por hardware sem cópia para a CPU
-- [ ] ⬜ E2-T06 — Configuração de resolução, FPS e bitrate
-- [ ] ⬜ E2-T07 — Detecção automática de jogos (S)
-- [ ] ⬜ E2-T08 — Medição 1080p60 por GPU
+- [ ] 🧪 E2-T01 — Captura de janela (Windows Graphics Capture)
+- [ ] 🧪 E2-T02 — Captura de monitor
+- [ ] ⬜ E2-T03 — Fallback DXGI Desktop Duplication (só se o WGC falhar nos testes)
+- [ ] 🧪 E2-T04 — Detecção de encoders (hardware primeiro, software como fallback)
+- [ ] 🧪 E2-T05 — Pipeline Direct3D 11 → NV12 na GPU → H.264 sem cópia para a CPU
+- [ ] 🧪 E2-T06 — Configuração de resolução, FPS e bitrate
+- [ ] 🧪 E2-T07 — Detecção automática de jogos (S)
+- [ ] ⛔ E2-T08 — Medição 1080p60 por GPU — requer máquina Windows
+- [ ] 🧪 E2-T09 — Pipeline do `vellcast-core` (captura → encoder → relay)
+- [x] ✅ E2-T10 — Ferramentas de validação manual (`capture_to_file`)
 
 ### Etapa 3 — Media relay · M
 Servidor `vellcast-relay` que recebe uma transmissão e distribui para vários espectadores, sem recodificar.
@@ -114,23 +116,25 @@ Servidor `vellcast-relay` que recebe uma transmissão e distribui para vários e
 ### Etapa 4 — Áudio · M
 Transmitir o áudio do jogo, sincronizado com o vídeo.
 
-- [ ] ⬜ E4-T01 — Captura WASAPI por processo (Application Loopback)
-- [ ] ⬜ E4-T02 — Fallback: áudio do sistema inteiro, com aviso ao usuário
-- [ ] ⬜ E4-T03 — Codificação Opus (48 kHz, 20 ms)
-- [ ] ⬜ E4-T04 — Transporte e reprodução
-- [ ] ⬜ E4-T05 — Sincronização A/V medida
+- [ ] 🧪 E4-T01 — Captura WASAPI por processo (Application Loopback)
+- [ ] 🧪 E4-T02 — Fallback: áudio do sistema excluindo o Discord, com aviso ao usuário
+- [ ] 🧪 E4-T03 — Codificação Opus (48 kHz, 20 ms)
+- [ ] 🧪 E4-T04 — Transporte e reprodução
+- [ ] 🔨 E4-T05 — Sincronização A/V (relógio comum pronto; medir no Windows)
 
 ### Etapa 5 — Integração completa (MVP) · M
 Desktop, relay e Discord Activity funcionando juntos de ponta a ponta.
 
-- [ ] ⬜ E5-T01 — Autenticação OAuth2 do Discord no backend
-- [ ] ⬜ E5-T02 — Pareamento desktop ↔ Activity por código temporário
-- [ ] ⬜ E5-T03 — Fluxo de salas na interface (criar, entrar, convidar, encerrar)
-- [ ] ⬜ E5-T04 — Fluxo de iniciar e encerrar transmissão (mouse, teclado e controle)
-- [ ] ⬜ E5-T05 — Player final na Activity
-- [ ] ⬜ E5-T06 — Perfis de qualidade e atalhos (S)
-- [ ] ⬜ E5-T07 — Tratamento de erros de ponta a ponta
-- [ ] ⬜ Pré-requisito: E0-T10 (teste em Activity real)
+- [ ] ⏸️ E5-T01 — Autenticação OAuth2 do Discord — adiado; no MVP o acesso é por link de convite
+- [ ] ⏸️ E5-T02 — Pareamento desktop ↔ Activity — adiado; o link de convite substitui no MVP
+- [ ] 🧪 E5-T03 — Fluxo de salas na interface (criar, convidar, encerrar)
+- [ ] 🧪 E5-T04 — Fluxo de iniciar e encerrar transmissão (mouse, teclado e controle)
+- [ ] 🧪 E5-T05 — Player (web em `/watch`; Activity depende do E0-T10)
+- [ ] 🧪 E5-T06 — Perfis de qualidade e atalhos (S)
+- [ ] 🧪 E5-T07 — Tratamento de erros de ponta a ponta
+- [ ] 🧪 E5-T08 — Pacote de teste Windows (`Vellcast-MVP-windows-x64.zip`) e guia [`docs/TESTING_WINDOWS.md`](docs/TESTING_WINDOWS.md)
+- [ ] 🧪 E5-T09 — Player web servido pelo relay (S-011)
+- [ ] ⏸️ Para a Activity: E0-T10 (teste em Activity real)
 
 ### Marco OC — Abertura do código (Open Core) · S
 Repositório continua **privado** até concluir este marco (alvo: fim da Etapa 5).

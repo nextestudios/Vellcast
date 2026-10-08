@@ -203,3 +203,44 @@ kbd {
   .stage { min-height: 56vw; }
   .hint { display: none; }
 }
+
+/* Modo "assistir pelo relay" (/watch). */
+.watch {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.watch .topbar { flex: none; }
+.watch-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-2);
+}
+.watch .stage { min-height: 50vh; }
+.watch .stage canvas { width: 100%; height: 100%; object-fit: contain; }
+.watch-overlay {
+  position: absolute;
+  inset: auto var(--space-4) var(--space-4) var(--space-4);
+  max-width: 640px;
+  margin: 0 auto;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  background: rgba(14, 16, 20, 0.9);
+  color: var(--text-primary);
+  text-align: center;
+}
+.watch-overlay.error { color: var(--danger); }
+.watch-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-4);
+  font-size: 13px;
+}
+.watch-stats dt { color: var(--text-secondary); }
+.watch-stats dd { margin: 0 0 var(--space-2); font-variant-numeric: tabular-nums; }
+.watch .statusbar { flex: none; }
+.badge.live { color: var(--on-accent); background: var(--accent); font-weight: 600; }

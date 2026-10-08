@@ -105,3 +105,77 @@ Formato: contexto → decisão → consequências. Status possíveis: **Proposta
 **Decisão:** Strings da UI com `@tr()`, idioma-fonte inglês e catálogo `pt-BR` em `apps/desktop/translations/pt-BR/LC_MESSAGES/vellcast-desktop.po`, embutido no build (`with_bundled_translations`). O padrão é pt-BR e a troca acontece ao vivo pelo `select_bundled_translation`. Um teste falha se alguma string `@tr` não tiver tradução pt-BR.
 **Consequências:** Sem gettext nem arquivos `.mo` em tempo de execução. O inglês é a fonte porque o Slint trata o idioma-fonte como `en`.
 
+
+## ADR-023 — Áudio: WASAPI Application Loopback com exclusão do Discord
+**Status:** Aceita (2026-10-08)
+**Contexto:** O áudio transmitido deve ser o do jogo (M-009) sem retransmitir a chamada de voz do Discord (spec §17). O Windows 10 2004+ oferece loopback por processo (`VAD\Process_Loopback`), que inclui **ou** exclui uma única árvore de processos.
+**Decisão:** Janela selecionada → loopback **incluindo** a árvore do processo da janela. Modo sistema → loopback **excluindo** a árvore do Discord (raiz detectada por nome de executável e PID pai); sem Discord aberto, exclui o próprio Vellcast. Sem suporte a loopback por processo, o modo sistema cai para o loopback clássico do dispositivo padrão e emite aviso de que a voz do Discord pode ser capturada. Para `AudioTarget::Process`, a indisponibilidade é devolvida como erro (`ProcessLoopbackUnavailable`) para o núcleo decidir o fallback e avisar o usuário.
+**Consequências:** Só um processo pode ser excluído: com dois clientes Discord abertos (ex.: estável + Canary), um deles pode ser capturado (há aviso). No fallback clássico não há como excluir o Discord.
+
+## ADR-024 — Áudio em 48 kHz estéreo f32, blocos de 20 ms no relógio QPC
+**Status:** Aceita (2026-10-08)
+**Decisão:** Pedir ao WASAPI 48 kHz estéreo `f32` com `AUTOCONVERTPCM | SRC_DEFAULT_QUALITY`; se o dispositivo recusar (loopback clássico), usar o formato de mixagem e converter em Rust (downmix por máscara de canais, LFE descartado, reamostragem linear). Os pacotes usam o `qpcPosition` do `GetBuffer` como PTS, relativo à mesma origem QPC do vídeo. Um montador de blocos garante PTS monotônicos e contíguos: lacunas viram silêncio (até 2 s; acima disso a linha do tempo recomeça), sobreposições são cortadas e jitter de até 10 ms é ignorado. Durante silêncio sem pacotes, a linha do tempo é completada até `agora − 100 ms`.
+**Consequências:** A/V alinhado por construção, sem acúmulo de buffer. Deriva lenta entre o relógio do dispositivo e o QPC é corrigida em degraus de ≥ 10 ms (pequeno corte ou silêncio). A reamostragem linear é de qualidade de transmissão, não de masterização; é usada só no fallback.
+
+## ADR-025 — Opus via crate `opus` (libopus), 128 kbps, modo Audio
+**Status:** Aceita (2026-10-08)
+**Contexto:** Encoders Opus em Rust puro existem (ex.: `rusty-opus`, criado em 2026-07), mas são recentes. A libopus é a referência, com licença BSD-3-Clause.
+**Decisão:** `opus` 0.4.0 (MIT/Apache-2.0), que compila a libopus estaticamente via `opusic-sys` (cmake), só no Windows. 20 ms por pacote, 48 kHz estéreo, 128 kbps VBR, `Application::Audio`. A feature `opus` (padrão) pode ser desligada só para verificação cruzada sem toolchain C; sem ela a captura falha ao iniciar, em vez de transmitir algo diferente.
+**Consequências:** Build Windows precisa de cmake (presente nos runners do GitHub e no Visual Studio). Obrigação de manter o aviso BSD da libopus na distribuição (`LICENSING.md`).
+
+## ADR-018 — Captura WGC com o crate `windows`, sem `windows-capture`
+**Status:** Aceita (2026-10-08)
+**Contexto:** O crate `windows-capture` (MIT) encapsula o WGC e é popular, mas traz encoder e gravação próprios e esconde parte do controle sobre o pool de quadros e o tempo de vida das texturas, que o pipeline precisa para não copiar quadros.
+**Decisão:** `vellcast-capture` usa o `windows` 0.62.2 (o mesmo já presente no `Cargo.lock`) direto: `Direct3D11CaptureFramePool::CreateFreeThreaded` (2 buffers), `GraphicsCaptureSession` com cursor configurável e `IsBorderRequired = false` quando o sistema permitir, evento `Closed` para fonte perdida. O `Direct3D11CaptureFrame` fica vivo dentro do `CapturedFrame` até o encoder consumir a textura.
+**Consequências:** Mais código `unsafe` (documentado com `SAFETY:`), em troca de zero cópia e nenhuma dependência extra. Em versões do Windows sem `IsBorderRequired`, a borda amarela do sistema aparece na janela capturada.
+
+## ADR-019 — Conversão BGRA → NV12 e escala na GPU com `ID3D11VideoProcessor`
+**Status:** Aceita (2026-10-08)
+**Contexto:** Encoders H.264 de hardware esperam NV12. Converter na CPU exigiria ler cada quadro da GPU (proibido pelo princípio 3.1).
+**Decisão:** Um `ID3D11VideoProcessor` converte e redimensiona direto para um rodízio de 4 texturas NV12 de tamanho fixo (definido no início: a fonte cabe em `max_width`×`max_height`, sem ampliar, dimensões pares). Se a janela muda de tamanho durante a transmissão, o conteúdo é encaixado com barras pretas (letterbox) em vez de recriar o encoder. Entrada RGB de faixa completa; saída BT.709 de faixa de estúdio.
+**Consequências:** Mudança de tamanho não interrompe o fluxo nem exige novo `VideoInit`. Uma janela que cresce muito depois de iniciada não ganha resolução até reiniciar a transmissão.
+
+## ADR-020 — Encoder Media Foundation: hardware primeiro, software Microsoft como último recurso
+**Status:** Aceita (2026-10-08)
+**Contexto:** O MVP precisa ser testável em qualquer PC, mas o produto exige codificação por hardware. Em notebooks híbridos, o MFT de uma GPU pode não aceitar o dispositivo D3D11 da outra.
+**Decisão:** Enumerar MFTs H.264 (`MFTEnumEx`): hardware (NVIDIA/AMD/Intel, ordem do sistema) e depois os síncronos de software. Tentar cada candidato até um aceitar o `IMFDXGIDeviceManager` do dispositivo da captura e os tipos de mídia. Configuração: baixa latência, CBR, GOP de 2 s, 0 B-frames, perfil High (Main como alternativa), keyframe sob demanda via `CODECAPI_AVEncVideoForceKeyFrame`. Encoders assíncronos são tratados pelo modelo de eventos (`METransformNeedInput`/`HaveOutput`) sem bloquear. O encoder de software, se não aceitar Direct3D, recebe NV12 copiado para memória — **somente** nesse fallback, com aviso explícito ao usuário.
+**Consequências:** Funciona em PCs sem encoder de hardware, com custo de CPU visível. NVENC/AMF/QSV via SDKs próprios ficam para a Etapa 6, se benchmarks justificarem.
+
+## ADR-021 — Relógio único (QPC) para vídeo e áudio
+**Status:** Aceita (2026-10-08)
+**Contexto:** O WGC informa `SystemRelativeTime` em unidades de 100 ns derivadas do QPC; o WASAPI informa posições em ticks brutos de QPC.
+**Decisão:** A sessão define a origem (`QueryPerformanceCounter`) **antes** de iniciar a captura. Vídeo: `pts_us = (SystemRelativeTime − origem_hns) / 10`. Áudio: o `vellcast-audio` recebe a origem em ticks brutos e converte para µs. Os dois chegam ao relay no mesmo eixo de tempo.
+**Consequências:** Sincronização A/V depende só de os dois lados respeitarem a mesma origem; não há relógio de parede no caminho de mídia.
+
+## ADR-022 — Fila "o mais recente vence" e controle de ritmo no callback da captura
+**Status:** Aceita (2026-10-08)
+**Contexto:** Monitores de 144 Hz entregam mais quadros que a taxa-alvo, e um encoder ocupado não pode acumular atraso.
+**Decisão:** O callback do WGC aplica um controle de ritmo em grade (média exata na taxa-alvo, sem rajadas após inatividade) e coloca o quadro em uma fila de capacidade 1: um quadro novo substitui o pendente, que volta imediatamente ao pool. O encoder assíncrono só recebe quadro quando pede entrada; caso contrário o quadro é descartado e contabilizado.
+**Consequências:** Memória e latência limitadas por construção. Sob carga, a transmissão perde quadros em vez de atrasar.
+
+## ADR-026 — Player web servido pelo relay como cliente do MVP (S-011)
+**Status:** Aceita (2026-10-08)
+**Contexto:** Com o Discord adiado (ADR-013), o MVP precisa de um jeito de assistir sem instalar nada.
+**Decisão:** O relay serve o build de `apps/discord-activity` em `/` e `/watch` (`VELLCAST_STATIC_DIR`, padrão: pasta `player` ao lado do executável). O mesmo player tem dois modos: Activity/Etapa 0 e relay (`/watch`). A API e `/ws` têm prioridade sobre os arquivos; o HTML sai com CSP restrita à própria origem, `nosniff` e `no-referrer`.
+**Consequências:** Um único binário de servidor atende transmissor, espectadores e página; nenhum serviço web extra. A futura Activity reaproveita o mesmo player e protocolo.
+
+## ADR-027 — Convite no fragmento da URL, trocado por token de espectador
+**Status:** Aceita (2026-10-08)
+**Decisão:** O link é `<relay>/watch#room=<id>&invite=<código>`. O fragmento nunca vai ao servidor nem a logs de proxy. O player troca o código (uso limitado) por um token de espectador via `POST /api/rooms/{id}/join`, guarda-o só na aba (`sessionStorage`), remove o código da barra de endereços (`history.replaceState`) e envia o token como primeira mensagem `Auth` do WebSocket. O desktop gera convites de até 10 usos válidos por 24 h.
+**Consequências:** Recarregar a página reaproveita o token; uma nova aba ou outro aparelho consome mais um uso do convite.
+
+## ADR-028 — HTTPS obrigatório para espectadores fora do PC; endereço público opcional
+**Status:** Aceita (2026-10-08)
+**Contexto:** O WebCodecs só existe em contexto seguro (HTTPS ou `localhost`). Um link `http://192.168.x.x` abre a página mas não decodifica vídeo.
+**Decisão:** O desktop tem dois endereços: o do servidor (para transmitir e gerenciar salas) e um **endereço público opcional** para os links (túnel ou proxy HTTPS). O app avisa quando o link gerado só funciona neste PC ou não usa HTTPS. A documentação indica túnel HTTPS para testes e VPS com TLS (Dokploy) para uso contínuo.
+**Consequências:** Teste em LAN puro (sem TLS) não é suportado no MVP. TLS embutido no relay (certificado próprio) pode ser avaliado se o túnel/proxy se mostrar uma barreira.
+
+## ADR-029 — Desktop: motor em thread própria e HTTP em threads curtas
+**Status:** Aceita (2026-10-08)
+**Decisão:** `vellcast-core` roda na thread `vellcast-engine` (a sessão é criada e destruída nela, sem exigir `Send`). Chamadas ao relay usam `ureq` (síncrono, rustls) em threads curtas. Tudo chega à interface por `invoke_from_event_loop`. O timer de métricas (1 Hz) só roda com a transmissão ativa, a janela visível e a tela Ao vivo aberta; a contagem de espectadores é consultada a cada 3 s nessas mesmas condições.
+**Consequências:** Nenhuma operação de captura, encoder ou rede bloqueia a interface; sem polling com a janela oculta. Mudar a qualidade durante a transmissão exige parar e iniciar de novo (aceito no MVP).
+
+## ADR-030 — Salas do desktop persistidas com o token de dono
+**Status:** Aceita (2026-10-08)
+**Decisão:** As salas criadas ficam em `rooms.json` no diretório de configuração do usuário (até 20, expiradas removidas ao carregar), incluindo o token de dono necessário para convites, tokens de transmissor e encerramento. `Debug` de salas e configurações omite tokens e chaves; nada disso vai para logs. Um token de transmissor novo é pedido ao relay a cada início de transmissão.
+**Consequências:** Reiniciar o relay (estado em memória) invalida as salas salvas; o app detecta `room_not_found`, remove a sala e orienta o usuário. Persistência no relay (E3-T11) elimina esse caso.

@@ -291,6 +291,8 @@ export component VTextField inherits Rectangle {
     in property <string> label;
     in property <string> placeholder;
     in property <string> text;
+    // Oculta o conteúdo (chaves e senhas).
+    in property <bool> secret: false;
     // Incrementado pela janela quando o teclado virtual fecha; o campo que o
     // abriu recupera o foco (UX_GUIDELINES §5).
     in property <int> refocus-token;
@@ -361,6 +363,7 @@ export component VTextField inherits Rectangle {
                 color: Theme.text-primary;
                 font-size: Theme.fs-body;
                 single-line: true;
+                input-type: root.secret ? InputType.password : InputType.text;
                 enabled: root.editing;
                 edited => { root.edited(self.text); }
                 accepted => { scope.focus(); }
@@ -446,5 +449,142 @@ export component BulletList inherits VerticalLayout {
         spacing: Theme.sp-2;
         Text { text: "•"; color: Theme.accent; font-size: Theme.fs-body; }
         Text { text: item; color: Theme.text-secondary; font-size: Theme.fs-body; wrap: word-wrap; horizontal-stretch: 1; }
+    }
+}
+
+// Linha de lista selecionável (fontes de captura, salas). Confirmar seleciona;
+// Cima/Baixo (Tab) percorre as linhas como qualquer outro controle.
+export component SelectRow inherits Rectangle {
+    in property <string> title;
+    in property <string> detail;
+    in property <string> badge;
+    in property <bool> selected;
+    callback activated;
+
+    min-height: Theme.control-height + 8px;
+    border-radius: Theme.radius;
+    background: root.selected ? Theme.bg-3 : (ta.has-hover ? Theme.bg-hover : transparent);
+    accessible-role: list-item;
+    accessible-label: root.title;
+    accessible-item-selected: root.selected;
+    accessible-action-default => { root.activated(); }
+
+    fs := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " ") {
+                root.activated();
+                return accept;
+            }
+            reject
+        }
+    }
+    ta := TouchArea {
+        clicked => {
+            fs.focus();
+            root.activated();
+        }
+    }
+    Rectangle {
+        x: 0;
+        width: 3px;
+        height: root.selected ? parent.height - 16px : 0;
+        y: (parent.height - self.height) / 2;
+        background: Theme.accent;
+        border-radius: 2px;
+    }
+    HorizontalLayout {
+        padding-left: Theme.sp-4;
+        padding-right: Theme.sp-3;
+        spacing: Theme.sp-3;
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            Text {
+                text: root.title;
+                color: Theme.text-primary;
+                font-size: Theme.fs-body;
+                font-weight: root.selected ? 600 : 400;
+                overflow: elide;
+            }
+            if root.detail != "": Text {
+                text: root.detail;
+                color: Theme.text-secondary;
+                font-size: Theme.fs-caption;
+                overflow: elide;
+            }
+        }
+        if root.badge != "": VerticalLayout {
+            alignment: center;
+            Rectangle {
+                height: 20px;
+                width: badge-text.preferred-width + 2 * Theme.sp-2;
+                border-radius: 10px;
+                background: Theme.bg-0;
+                badge-text := Text {
+                    text: root.badge;
+                    color: Theme.accent;
+                    font-size: Theme.fs-caption;
+                    font-weight: 600;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+    FocusRing { visible-ring: fs.has-focus; }
+}
+
+// Mensagem de status/erro dentro de uma tela.
+export component StatusLine inherits Rectangle {
+    in property <string> text;
+    in property <bool> error: false;
+    visible: root.text != "";
+    height: root.text == "" ? 0 : label.preferred-height + 2 * Theme.sp-2;
+    border-radius: Theme.radius-sm;
+    background: root.error ? #F0625D22 : Theme.bg-3;
+    label := Text {
+        x: Theme.sp-3;
+        width: parent.width - 2 * Theme.sp-3;
+        text: root.text;
+        color: root.error ? Theme.danger : Theme.text-primary;
+        font-size: Theme.fs-body;
+        wrap: word-wrap;
+        vertical-alignment: center;
+    }
+}
+
+// Par rótulo/valor para métricas.
+export component Stat inherits VerticalLayout {
+    in property <string> label;
+    in property <string> value;
+    spacing: 2px;
+    Text { text: root.label; color: Theme.text-secondary; font-size: Theme.fs-caption; }
+    Text { text: root.value; color: Theme.text-primary; font-size: Theme.fs-body-strong; font-weight: 600; }
+}
+
+// Indicador "AO VIVO" (M-024: captura sempre visível ao usuário).
+// Texto escuro sobre `danger`: contraste ~6:1 (texto branco ficaria abaixo de 4.5:1).
+export component LiveBadge inherits Rectangle {
+    in property <string> text;
+    height: 22px;
+    width: live-text.preferred-width + 2 * Theme.sp-2 + 12px;
+    border-radius: 11px;
+    background: Theme.danger;
+    Rectangle {
+        x: Theme.sp-2;
+        width: 8px;
+        height: 8px;
+        y: (parent.height - self.height) / 2;
+        border-radius: 4px;
+        background: Theme.on-accent;
+    }
+    live-text := Text {
+        x: Theme.sp-2 + 12px;
+        text: root.text;
+        color: Theme.on-accent;
+        font-size: Theme.fs-caption;
+        font-weight: 700;
+        vertical-alignment: center;
+        height: parent.height;
     }
 }
