@@ -206,7 +206,11 @@ jobs:
                 return true; }, IntPtr.Zero);
               return list; } }
           "@
-          [Win]::Visible([uint32]$p.Id) | ForEach-Object { Write-Output "janela visível: $_" }
+          $wins = [Win]::Visible([uint32]$p.Id)
+          $wins | ForEach-Object { Write-Output "janela visível: $_" }
+          # "Winit Thread Event Target" é a janela interna do winit (16x16, transparente,
+          # fora da barra de tarefas) que recebe mensagens do sistema; o usuário não a vê.
+          $visible = @($wins | Where-Object { $_ -notlike "Winit Thread Event Target*" }).Count -gt 0
           $ws = [math]::Round($p.WorkingSet64 / 1MB, 1)
           Stop-Process -Id $p.Id
           if ($backup) { $backup | Set-Content -Encoding utf8 $cfg } else { Remove-Item $cfg }

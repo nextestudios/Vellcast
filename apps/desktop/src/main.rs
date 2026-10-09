@@ -180,9 +180,10 @@ fn main() -> anyhow::Result<()> {
         ui.set_tray_available(tray_ok);
         tracing::info!(start_hidden, tray_ok, "estado inicial da janela");
         if start_hidden && tray_ok {
-            // No Windows a janela nativa pode ser criada visível mesmo sem `show()`
-            // (o E2E mostrou a janela aberta com início minimizado). Oculta
-            // explicitamente agora e de novo após a criação tardia da janela.
+            // Defensivo: garante a janela oculta mesmo se o backend criar a janela
+            // nativa antes da decisão (agora e de novo após 500 ms). No Windows, a
+            // única janela "visível" do processo é a interna do winit (Thread Event
+            // Target, 16x16 e transparente), que o usuário não vê.
             ensure_hidden(&ui);
             let weak = ui.as_weak();
             slint::Timer::single_shot(std::time::Duration::from_millis(500), move || {
