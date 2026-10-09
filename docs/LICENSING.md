@@ -99,6 +99,12 @@ Versões fixadas com `=` no `Cargo.toml`. Licenças conferidas no crates.io em 2
 
 Dependências transitivas do Slint (winit, softbuffer, accesskit, fontique/skrifa etc.) entram no inventário automático (`cargo about`), ainda **pendente**.
 
+### JavaScript — dependências transitivas notáveis
+
+| Pacote | Licença | Origem | Observação |
+|---|---|---|---|
+| big-integer 1.6.52 | Unlicense | transitiva do `@discord/embedded-app-sdk` | Dedicação ao domínio público; permissiva, sem obrigações de atribuição |
+
 ### Rust (relay e `crates/transport`, Etapa 3)
 
 Licenças lidas do `cargo metadata` em 2026-10-08.
