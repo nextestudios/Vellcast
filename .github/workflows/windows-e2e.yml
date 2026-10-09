@@ -117,6 +117,40 @@ jobs:
           Get-ChildItem e2e-out\telas | Format-Table Name, Length
           if ((Get-ChildItem e2e-out\telas\*.bmp).Count -lt 9) { throw "nem todas as telas foram capturadas" }
 
+      - name: App desktop — transmissão pelo próprio app (servidor de testes)
+        run: |
+          $base = "https://vellcast.nextestudios.com"
+          $before = (Invoke-RestMethod "$base/metrics").publisherSessionsTotal
+          $env:VELLCAST_DEV_AUTOSTREAM = "1"
+          $env:VELLCAST_DEV_PAGE = "3"
+          $env:VELLCAST_DEV_WAIT_MS = "25000"
+          $env:VELLCAST_DEV_SNAPSHOT = "$PWD\e2e-out\telas\ao-vivo-transmitindo.bmp"
+          $env:RUST_LOG = "info"
+          $p = Start-Process target\release\vellcast-desktop.exe -PassThru -Wait -RedirectStandardError desktop-stream.log
+          Remove-Item Env:VELLCAST_DEV_AUTOSTREAM, Env:VELLCAST_DEV_WAIT_MS
+          Get-Content desktop-stream.log -Tail 30 -ErrorAction SilentlyContinue
+          $after = (Invoke-RestMethod "$base/metrics").publisherSessionsTotal
+          Write-Output "sessões de transmissor no servidor: antes $before, depois $after"
+          if ($after -le $before) { throw "o app não chegou a transmitir para o servidor" }
+          "### Transmissão pelo app desktop`n`nSessões de transmissor no servidor de testes: $before → $after" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+
+      - name: App desktop — CPU e RAM ociosos
+        run: |
+          Remove-Item Env:VELLCAST_DEV_SNAPSHOT, Env:VELLCAST_DEV_PAGE -ErrorAction SilentlyContinue
+          $p = Start-Process target\release\vellcast-desktop.exe -PassThru
+          Start-Sleep -Seconds 10
+          $p.Refresh(); $cpu0 = $p.TotalProcessorTime.TotalMilliseconds; $t0 = Get-Date
+          $samples = @()
+          foreach ($i in 1..6) { Start-Sleep -Seconds 5; $p.Refresh(); $samples += [math]::Round($p.WorkingSet64 / 1MB, 1) }
+          $p.Refresh(); $cpu1 = $p.TotalProcessorTime.TotalMilliseconds; $secs = ((Get-Date) - $t0).TotalSeconds
+          $cores = [Environment]::ProcessorCount
+          $cpuPct = [math]::Round(($cpu1 - $cpu0) / ($secs * 1000) * 100, 2)
+          $private = [math]::Round($p.PrivateMemorySize64 / 1MB, 1)
+          Stop-Process -Id $p.Id
+          $msg = "CPU ociosa: $cpuPct% de 1 núcleo ($cores núcleos) | working set (MB): $($samples -join ', ') | memória privada: $private MB"
+          Write-Output $msg
+          "### App desktop ocioso (Windows, renderer de software)`n`n$msg" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+
       - name: Logs do relay
         if: always()
         run: |
@@ -131,4 +165,5 @@ jobs:
             e2e-out
             sources.txt
             relay.*.log
+            desktop-stream.log
           retention-days: 14

@@ -5,7 +5,8 @@
 //! `VELLCAST_DEV_TABS=<n>` (envia n Tabs para mostrar o anel de foco),
 //! `VELLCAST_DEV_ACTIONS=down,down,confirm,...` (ações de controle simuladas,
 //! processadas pelo mesmo caminho do gamepad real) e `VELLCAST_DEV_WAIT_MS=<ms>`
-//! (espera antes da captura, para resultados assíncronos).
+//! (espera antes da captura, para resultados assíncronos) e `VELLCAST_DEV_AUTOSTREAM=1`
+//! (cria sala e transmite o primeiro monitor; usado pelo E2E no Windows).
 
 use std::time::Duration;
 
@@ -20,6 +21,9 @@ pub fn schedule(ui: &AppWindow) {
     let Ok(path) = std::env::var("VELLCAST_DEV_SNAPSHOT") else {
         return;
     };
+    if std::env::var("VELLCAST_DEV_AUTOSTREAM").as_deref() == Ok("1") {
+        crate::actions::dev_autostream(ui);
+    }
     let weak = ui.as_weak();
     Timer::single_shot(Duration::from_millis(600), move || {
         let Some(ui) = weak.upgrade() else { return };
@@ -122,7 +126,7 @@ fn write_bmp(path: &str, width: u32, height: u32, rgba: &[u8]) -> std::io::Resul
     out.extend_from_slice(&(data_len as u32).to_le_bytes());
     out.extend_from_slice(&[0; 16]);
     for y in (0..height as usize).rev() {
-        for px in rgba[y * row..(y + 1) * row].chunks_exact(4) {
+        for px in rgba[y * row..(y + 1) * row].as_chunks::<4>().0 {
             out.extend_from_slice(&[px[2], px[1], px[0], px[3]]);
         }
     }

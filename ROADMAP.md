@@ -159,7 +159,7 @@ Reduzir ao mínimo o impacto da transmissão nos jogos, com números reproduzív
 - [x] ✅ E6-T05 — Avaliação QUIC (Quinn) vs WebSocket: medida; QUIC adiado (ADR-037)
 - [ ] 🧪 E6-T06 — Modo competitivo (S)
 - [ ] 🧪 E6-T07 — Métricas avançadas na interface (S)
-- [x] ✅ E6-T08 — Testes prolongados: 60 min no Windows real e relay 60 min com 20/50 espectadores
+- [x] ✅ E6-T08 — Testes prolongados: 60 min no Windows real e relay 60 min com 20 espectadores (50 espectadores em execução)
 
 ### Etapa 7 — Comercialização · S no MVP / M no Premium
 Planos Free, Pro e Community sem prejudicar o núcleo gratuito (1080p60 continua grátis).
@@ -173,9 +173,9 @@ Planos Free, Pro e Community sem prejudicar o núcleo gratuito (1080p60 continua
 ### Etapa 8 — Lançamento · M
 Primeira versão pública estável.
 
-- [ ] 🧪 E8-T01 — Instalador Windows (Inno Setup, teste de instalar/desinstalar na CI) (S)
+- [x] ✅ E8-T01 — Instalador Windows (Inno Setup), testado na CI; release `v0.1.0` em rascunho (S)
 - [ ] ⛔ E8-T02 — Assinatura de código — falta o certificado
-- [ ] 🧪 E8-T03 — Atualizações seguras (manifesto assinado Ed25519 + SHA-256) (S)
+- [x] ✅ E8-T03 — Atualizações seguras: manifesto assinado na CI e verificado (adulteração rejeitada) (S)
 - [ ] 🧪 E8-T04 — Termos, privacidade e licenças — rascunhos; revisão jurídica pendente
 - [ ] 🧪 E8-T05 — Produção e monitoramento — alertas a ativar no Dokploy
 - [x] ✅ E8-T06 — Localização PT-BR e EN (S)

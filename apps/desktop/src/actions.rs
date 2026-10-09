@@ -1048,3 +1048,34 @@ pub fn on_language_changed(ui: &AppWindow) {
         ui.set_selected_source(selected);
     }
 }
+
+/// Fluxo automático para o E2E no Windows (feature `dev-snapshot`): cria uma
+/// sala, escolhe o primeiro monitor e inicia a transmissão pelo mesmo caminho
+/// do botão "Iniciar transmissão". Só roda com `VELLCAST_DEV_AUTOSTREAM=1`.
+#[cfg(feature = "dev-snapshot")]
+pub fn dev_autostream(ui: &AppWindow) {
+    use slint::Timer;
+    use std::time::Duration;
+
+    create_room(ui, "E2E Windows");
+    let weak = ui.as_weak();
+    // Espera a sala ser criada e a lista de fontes carregar.
+    Timer::single_shot(Duration::from_secs(5), move || {
+        let Some(ui) = weak.upgrade() else { return };
+        let monitor = with_state(|st| {
+            st.sources
+                .iter()
+                .position(|s| s.kind == vellcast_core::SourceKind::Monitor)
+        })
+        .flatten();
+        match monitor {
+            Some(i) => {
+                ui.set_selected_source(i as i32);
+                ui.set_stream_room_index(0);
+                tracing::info!(source = i, "E2E: iniciando transmissão pelo app");
+                start_stream(&ui);
+            }
+            None => tracing::error!("E2E: nenhum monitor na lista de fontes"),
+        }
+    });
+}

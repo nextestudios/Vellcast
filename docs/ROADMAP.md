@@ -203,7 +203,7 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 | E6-T05 | Avaliação QUIC (Quinn) vs WebSocket | S-005 | E6-T01 | Relatório e decisão registrados | Done — avaliação Quinn × WebSocket medida; decisão: adiado (ADR-037) |
 | E6-T06 | Modo competitivo | S-002 | E6-T04 | Benchmark com/sem | Testing — política competitiva (bitrate → FPS) testada; efeito em jogo exige Windows com GPU |
 | E6-T07 | Métricas avançadas na UI | S-007 | E6-T01 | Seção própria | Testing — métricas avançadas (alvo adaptativo, CPU, RAM) na tela Ao vivo |
-| E6-T08 | Testes prolongados e de falha | M-025 | E6-T02 | ≥ 60 min estáveis | Done — 60 min no Windows real (transmissor sem vazamento, áudio contínuo) e relay 60 min com 20/50 espectadores |
+| E6-T08 | Testes prolongados e de falha | M-025 | E6-T02 | ≥ 60 min estáveis | Done — 60 min no Windows real (transmissor sem vazamento, áudio contínuo) e relay 60 min com 20 espectadores (50 espectadores em execução) |
 
 **Entregável:** versão otimizada com relatório de desempenho.
 **Critério de aceite:** resultados reproduzíveis em hardware de referência, documentando diferenças entre jogar com e sem o Vellcast transmitindo.
@@ -235,9 +235,9 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 
 | ID | Tarefa | MoSCoW | Depende de | Critérios de aceite | Status |
 |---|---|---|---|---|---|
-| E8-T01 | Instalador Windows | S-016 | Etapa 6 | Instalação/desinstalação limpas | Testing — instalador Inno Setup com teste de instalar/desinstalar na CI |
+| E8-T01 | Instalador Windows | S-016 | Etapa 6 | Instalação/desinstalação limpas | Done — instalador Inno Setup gerado e testado na CI (instalação/desinstalação silenciosas); release v0.1.0 em rascunho |
 | E8-T02 | Assinatura de código | S-016 | E8-T01 | Quando certificado disponível | Blocked — falta certificado de assinatura de código (segredos WINDOWS_CERT_*) |
-| E8-T03 | Atualizações seguras | S-012 | E8-T01 | Pacotes assinados e verificados | Testing — atualizador com manifesto Ed25519 + SHA-256; chave de assinatura no segredo do repositório |
+| E8-T03 | Atualizações seguras | S-012 | E8-T01 | Pacotes assinados e verificados | Done — manifesto v0.1.0 assinado na CI; assinatura confere com a chave embutida, manifesto adulterado é rejeitado e o SHA-256 do instalador bate. Com o repositório privado, a URL padrão exige autenticação (usar VELLCAST_UPDATE_URL ou tornar público) |
 | E8-T04 | Termos, privacidade e divulgação de licenças | M-022, M-024 | — | Inventário de licenças de terceiros publicado | Testing — rascunhos de termos e privacidade (LGPD) e avisos de licenças automáticos; revisão jurídica pendente |
 | E8-T05 | Deploy de produção e monitoramento | S-014 | Etapa 3 | Health checks e alertas | Testing — relay em produção com health check; alertas a ativar no Dokploy (OPERATIONS.md) |
 | E8-T06 | Localização PT-BR/EN | S-013 | E1-T09 | Sem strings não traduzidas | Done — teste de i18n cobre todas as strings (pt-BR/en) |
