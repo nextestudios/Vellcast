@@ -3,7 +3,7 @@
 Visão única de tudo o que será feito, da validação inicial ao lançamento, organizada pela metodologia **MoSCoW**.
 Critérios de aceite, dependências e notas de cada tarefa estão em [`docs/ROADMAP.md`](docs/ROADMAP.md) (fonte da verdade); a classificação completa dos requisitos está em [`docs/MOSCOW.md`](docs/MOSCOW.md).
 
-Atualizado em: **2026-10-09**
+Atualizado em: **2026-10-09** (fim do dia)
 
 **Legenda:** ✅ concluído · 🧪 em teste · 🔨 em andamento · ⛔ bloqueado · ⏸️ adiado · ⬜ não iniciado
 **MoSCoW:** **M** = Must Have · **S** = Should Have · **C** = Could Have · **W** = Won't Have (fora do MVP)
@@ -33,7 +33,7 @@ flowchart LR
 | Etapa | Nome | Prioridade | Ambiente necessário | Situação |
 |---|---|---|---|---|
 | 0 | Validação Discord | M | macOS + Discord | ⛔ código pronto (OAuth, pareamento, Activity); falta criar a aplicação no Discord |
-| 1 | Desktop e controles | M | macOS (dev) + Windows (validação) | 🧪 executada no Windows (metas de CPU/RAM atingidas); falta controle físico e teste manual da bandeja |
+| 1 | Desktop e controles | M | macOS (dev) + Windows (validação) | ✅ executada no Windows (CPU 0,16–0,47%, 36 MB); só falta o controle físico (E1-T05) |
 | 2 | Captura e encoder | M | **Windows com GPU** | 🧪 executada no Windows real (caminho CPU); caminho GPU e jogos exigem GPU real |
 | 3 | Media relay | M | macOS/Linux | ✅ em produção em `vellcast.nextestudios.com`; 60 min estável |
 | 4 | Áudio | M | **Windows** | ✅ executada no Windows real; sincronia A/V de 9,2 ms |
@@ -77,7 +77,7 @@ Aplicativo Windows leve em Rust + Slint, 100% navegável por controle.
 - [ ] ⛔ E1-T05 — Crate `controller` (GilRs) — falta teste com controle físico
 - [x] ✅ E1-T06 — Sistema de foco e modais navegáveis
 - [x] ✅ E1-T07 — Teclado virtual
-- [ ] 🧪 E1-T08 — Modo bandeja sem renderização em segundo plano
+- [x] ✅ E1-T08 — Modo bandeja: oculto no Windows, 0,16% de CPU e 27,5 MB
 - [x] ✅ E1-T09 — Preparação de i18n (PT-BR e EN, troca em tempo real)
 - [x] ✅ E1-T10 — CPU/RAM no Windows: 0,47% de CPU ociosa, 36 MB (metas: <1% e <80 MB)
 
@@ -218,13 +218,20 @@ Electron (W-001) · navegador completo embutido no transmissor (W-002) · chat d
 
 ## 5. Pendências que dependem do responsável
 
-| Pendência | Desbloqueia |
-|---|---|
-| Criar a aplicação no Discord Developer Portal (Client ID) e uma URL HTTPS pública | E0-T10 → Etapa 5 |
-| Máquina Windows 11 com GPU (NVIDIA, AMD ou Intel) para testes reais | Etapas 1 (medição), 2, 4 e 6 |
-| Confirmar a licença Apache-2.0 do código próprio | Marco OC |
-| Controles físicos para teste (Xbox, DualShock 4, DualSense) | Validação de M-003 |
-| Certificado de assinatura de código | E8-T02 |
+Tudo o que podia ser feito e validado sem estas ações está concluído. Cada item abaixo destrava as tarefas indicadas.
+
+| Pendência | Como fazer | Destrava |
+|---|---|---|
+| Aplicação no Discord | Seguir [`docs/DISCORD_INTEGRATION.md`](docs/DISCORD_INTEGRATION.md) §4: criar o app, habilitar Activities, URL Mapping `/` → `vellcast.nextestudios.com`, definir `VELLCAST_DISCORD_CLIENT_ID/SECRET` no Dokploy e redeploy | E0-T10, E5-T01, E5-T02, E5-T05 (M-012, M-014, M-015) |
+| PC Windows com GPU (NVIDIA, AMD ou Intel) e um jogo | Instalar `Vellcast-Setup-x64.exe` (release `v0.1.0`) e seguir [`docs/TESTING_WINDOWS.md`](docs/TESTING_WINDOWS.md) | E2-T05, E2-T07, E2-T08, E6-T03 |
+| Controle físico (Xbox, DualShock 4 ou DualSense) | Navegar pelo app só com o controle (checklist M-003/M-004 do guia) | E1-T05 |
+| Certificado de assinatura de código (OV/EV) | Adicionar os segredos `WINDOWS_CERT_PFX_BASE64` e `WINDOWS_CERT_PASSWORD` no GitHub | E8-T02 |
+| Conta no provedor de pagamento (Stripe ou Mercado Pago) | Criar conta e chaves de produção; configurar o webhook (DEPLOYMENT §6.11) | E7-T03 (S-015) |
+| Revisão jurídica | Revisar `docs/legal/TERMOS.md` e `docs/legal/PRIVACIDADE.md` com os dados da empresa | E8-T04 |
+| Alertas de produção | Ativar notificações no Dokploy e um monitor externo ([`docs/OPERATIONS.md`](docs/OPERATIONS.md) §2) | E8-T05 |
+| Execução final do checklist | Seguir [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md) no PC com GPU | E8-T07 |
+| Licença, marca e abertura do código | Confirmar Apache-2.0, decidir o repositório da cloud-api, registrar a marca no INPI, aprovar tornar público e habilitar Private Vulnerability Reporting | OC-T01, OC-T03, OC-T04, OC-T09 |
+| Servidor no Brasil (recomendado) | Contratar VPS em São Paulo e ligar ao Dokploy; ou ativar BBR no VPS atual (DEPLOYMENT §6.10) | Qualidade 1080p60 para espectadores no Brasil |
 
 ## 6. Regras do processo
 

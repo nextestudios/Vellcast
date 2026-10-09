@@ -83,8 +83,8 @@ As tabelas são preenchidas somente com dados reais. Resultados de ambiente loca
 | Ocioso, janela visível (renderer de software) — macOS | 0,05–0,27% de 1 núcleo | 32–33 MB (`phys_footprint`) | Medido no macOS; Windows pendente |
 | Ocioso, oculto na bandeja — macOS | 0,03–0,10% de 1 núcleo | 20 MB (`phys_footprint`) | Medido no macOS; Windows pendente |
 | Ocioso, janela visível (femtovg/OpenGL) — macOS | 0,05% de 1 núcleo | 41 MB (`phys_footprint`) | Medido no macOS (referência para o ADR-014) |
-| Ocioso, janela visível — Windows 11 | — | — | Pendente (máquina Windows) |
-| Ocioso, minimizado/bandeja — Windows 11 | — | — | Pendente (máquina Windows) |
+| Ocioso, janela visível — Windows (VM da CI, sem GPU) | 0,16–0,47% de 1 núcleo | 36,2 MB (working set), 9 MB privada | Medido |
+| Ocioso, minimizado/bandeja — Windows (VM da CI, sem GPU) | 0,16% de 1 núcleo | 27,5 MB (working set) | Medido |
 
 Metodologia (macOS): Apple M1 8 GB, macOS 27.0.1, build Release, 20–30 s ociosos, amostragem por `ps` (CPU) e `footprint` (memória). O RSS do `ps` (~80–100 MB) inclui páginas compartilhadas de frameworks do macOS e não representa o custo real do app. A máquina estava sob carga (load average entre 8 e 18) durante as medições. Ver `apps/desktop/README.md`.
 

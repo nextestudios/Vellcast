@@ -10,7 +10,7 @@
 | Etapa | Nome | Prioridade | Depende de | Status |
 |---|---|---|---|---|
 | 0 | Validação Discord | Must | — | Blocked — Activity, OAuth e pareamento prontos; falta a aplicação no Discord (E0-T10) |
-| 1 | Desktop e controles | Must | 0 (local) | Testing — executado no Windows; falta controle físico e bandeja manual |
+| 1 | Desktop e controles | Must | 0 (local) | Done (exceto E1-T05: controle físico) — executado no Windows real |
 | 2 | Captura e encoder | Must | 0 (local) | Testing — executada no Windows (CI, sem GPU); falta GPU real |
 | 3 | Media relay | Must | 0 (local) | Done — em produção em vellcast.nextestudios.com; 60 min estável |
 | 4 | Áudio | Must | 2, 3 | Done — executada no Windows real; sincronia A/V de 9,2 ms no transporte |
@@ -66,7 +66,7 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 | E1-T05 | Crate `controller` (GilRs + XInput quando necessário) | M-003, S-010 | E1-T02 | Mapeamento da seção 13; deadzone; repetição controlada; conexão/desconexão | Blocked — lógica testada (16 testes); falta validar com controle físico (Xbox/DualShock/DualSense) |
 | E1-T06 | Sistema de foco e modais | M-003 | E1-T04, E1-T05 | Foco sempre visível; modais navegáveis | Done — foco e modais validados pelo mesmo caminho do gamepad (ações simuladas); controle físico em E1-T05 |
 | E1-T07 | Teclado virtual | M-004 | E1-T06 | Requisitos da seção 14 | Done — teclado virtual renderizado no Windows e validado com ações simuladas; controle físico em E1-T05 |
-| E1-T08 | Modo bandeja | M-017 | E1-T02 | Sem renderização quando minimizado | Testing — bandeja sem redesenho oculto; clique e menu da bandeja exigem teste manual no Windows |
+| E1-T08 | Modo bandeja | M-017 | E1-T02 | Sem renderização quando minimizado | Done — Windows: início minimizado sem janela visível, 0,16% de CPU e 27,5 MB na bandeja; clique no ícone e menu a confirmar no teste manual |
 | E1-T09 | Preparação de i18n | S-013 | E1-T04 | Strings externalizadas | Done — pt-BR/en com troca em tempo real; teste falha se faltar tradução (ADR-017) |
 | E1-T10 | Medição de CPU/RAM em Release | M-023 | E1-T08 | Ocioso e minimizado medidos em Windows real | Done — Windows (VM da CI, renderer de software): CPU ociosa 0,47% de 1 núcleo, working set 36 MB (metas: <1% e <80 MB) |
 
