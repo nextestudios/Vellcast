@@ -12,6 +12,9 @@ services:
       - "127.0.0.1:8788:8788"
     restart: unless-stopped
     read_only: true
+    # Salas, convites e revogações sobrevivem a reinícios (VELLCAST_DB_PATH no relay.env).
+    volumes:
+      - relay-data:/data
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     healthcheck:
@@ -19,3 +22,6 @@ services:
       interval: 15s
       timeout: 3s
       retries: 3
+
+volumes:
+  relay-data:

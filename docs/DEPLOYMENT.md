@@ -124,7 +124,9 @@ Teste de carga: `node tests/benchmarks/relay-viewers.mjs http://127.0.0.1:8788 1
 
 | Variável | Padrão | Descrição |
 |---|---|---|
-| `VELLCAST_RELAY_SECRET` | — (obrigatória) | Segredo HMAC dos tokens, ≥ 32 bytes. Trocar o segredo invalida todos os tokens. |
+| `VELLCAST_RELAY_SECRET` | — (obrigatória) | Segredo HMAC dos tokens, ≥ 32 bytes. Trocar o segredo sem `VELLCAST_RELAY_SECRET_PREVIOUS` invalida todos os tokens. |
+| `VELLCAST_RELAY_SECRET_PREVIOUS` | vazio | Segredo anterior, aceito **só para verificar** tokens durante a rotação (§6.12). Tokens novos usam sempre o atual. |
+| `VELLCAST_DB_PATH` | vazio (memória) | Arquivo SQLite das salas, convites e revogações (ex.: `/data/relay.db`). Vazio = estado só em memória, perdido ao reiniciar. Mídia nunca é gravada. |
 | `VELLCAST_RELAY_INSECURE_DEV` | desligado | `1` gera segredo aleatório (apenas desenvolvimento). |
 | `VELLCAST_BIND` | `127.0.0.1:8788` (`0.0.0.0:8788` na imagem) | Endereço HTTP/WebSocket. |
 | `VELLCAST_CREATE_ROOM_KEY` | vazio | Se definida, `POST /api/rooms` exige `Authorization: Bearer <chave>`. Recomendado em servidores expostos. |
@@ -151,6 +153,7 @@ Os logs nunca incluem tokens, convites, IPs de espectadores nem conteúdo de mí
 | `POST /api/rooms/{id}/invites` `{maxUses?, ttlSecs?}` | dono | `201 {code, maxUses, expiresAt}` (o código aparece uma vez; o relay guarda só o hash) |
 | `POST /api/rooms/{id}/join` `{invite}` | convite válido | `{viewerToken, room}` |
 | `POST /api/rooms/{id}/publisher-token` | dono | novo token de transmissor |
+| `POST /api/rooms/{id}/revoke` `{token?, allViewers?}` | dono | revoga um token da sala (ex.: transmissor vazado) e/ou todos os tokens de espectador emitidos até agora; conexões afetadas são encerradas na hora |
 | `DELETE /api/rooms/{id}` | dono | `204`; desconecta transmissor e espectadores |
 | `GET /ws` | mensagem `Auth` | mídia (ver `STREAMING_PROTOCOL.md`) |
 | `GET /healthz` | — | `ok` |
@@ -163,6 +166,9 @@ Tokens vão sempre em `Authorization: Bearer`, nunca na URL.
 ```bash
 docker build -f infrastructure/docker/relay.Dockerfile -t vellcast-relay .
 docker run --rm -p 127.0.0.1:8788:8788 -e VELLCAST_RELAY_SECRET=$(openssl rand -hex 32) vellcast-relay
+# Com salas persistentes (sobrevivem a reinícios e redeploys):
+docker run --rm -p 127.0.0.1:8788:8788 -e VELLCAST_RELAY_SECRET=… \
+  -e VELLCAST_DB_PATH=/data/relay.db -v vellcast-relay-data:/data vellcast-relay
 ```
 
 Self-hosting com Compose: copie `infrastructure/docker/relay.env.example` para `relay.env` (ignorado pelo git), preencha o segredo e rode `docker compose -f infrastructure/docker/docker-compose.relay.yml up -d --build`. O exemplo roda como usuário sem privilégios, com sistema de arquivos somente leitura, sem capabilities, e publica a porta só em `127.0.0.1` para ficar atrás do proxy com TLS. O relay encerra de forma limpa com `SIGTERM`.
@@ -174,7 +180,8 @@ Self-hosting com Compose: copie `infrastructure/docker/relay.env.example` para `
 3. **Environment**: `VELLCAST_RELAY_SECRET` (gerado com `openssl rand -hex 32`, guardado só no Dokploy), `VELLCAST_CREATE_ROOM_KEY`, `VELLCAST_TRUST_PROXY=true`.
 4. **Domains**: domínio do relay, container port `8788`, HTTPS com Let's Encrypt. O Traefik do Dokploy termina o TLS e encaminha o upgrade de WebSocket.
 5. Health check em `/healthz`.
-6. Uma réplica só: o estado das salas fica em memória (ver `ARCHITECTURE.md` §5). Escalar horizontalmente exige roteamento por sala, que ainda não existe.
+6. **Salas persistentes (recomendado):** em **Advanced → Volumes/Mounts**, adicione um volume (*Volume Mount*) com *Mount Path* `/data` e defina `VELLCAST_DB_PATH=/data/relay.db` em **Environment**; depois **Redeploy**. Sem isso, cada redeploy apaga as salas e os links de convite.
+7. Uma réplica só: o estado ao vivo (mídia e conexões) fica em memória e o SQLite aceita um único processo escritor (ver `ARCHITECTURE.md` §5). Escalar horizontalmente exige roteamento por sala, que ainda não existe.
 
 ### 6.6 Proxy reverso
 
@@ -230,6 +237,36 @@ A rota Europa → Brasil não sustenta 4–8 Mbps por conexão; o relay em si n�
 - Antes de escolher um VPS, meça a vazão de uma conexão até ele: `curl -o /dev/null -w "%{speed_download}\n" https://<host>/<arquivo-grande>` deve passar com folga do bitrate pretendido (8 Mbps = 1 MB/s).
 
 O ajuste automático de bitrate (S-001, Etapa 6) reduzirá o impacto de rotas ruins, mas não substitui um servidor próximo.
+
+### 6.11 Vellcast Cloud API (Etapa 7, serviço comercial opcional)
+
+`services/cloud-api` só é necessário no serviço oficial com planos pagos. Um relay self-hosted não precisa dele.
+
+| Variável | Obrigatória | Descrição |
+|---|---|---|
+| `VELLCAST_CLOUD_ENTITLEMENT_KEY` | Sim | Chave (≥ 32 bytes) compartilhada com o relay hospedado; o relay usa a mesma variável para exigir entitlements |
+| `VELLCAST_CLOUD_BIND` | Não (`127.0.0.1:8789`) | Endereço HTTP |
+| `VELLCAST_CLOUD_DB` | Não (`vellcast-cloud.db`) | Arquivo SQLite (na imagem: `/data/vellcast-cloud.db`, monte um volume) |
+| `VELLCAST_CLOUD_ADMIN_EMAIL` | Não | Conta que vira administradora ao se cadastrar (acesso a `/admin`) |
+| `VELLCAST_CLOUD_RELAY_KEY` | Não | Chave (≥ 32 bytes) que relays usam em `POST /api/usage`; sem ela o endpoint fica desligado |
+| `STRIPE_WEBHOOK_SECRET` | Não | Segredo do webhook do Stripe (**modo de teste**); sem ele o webhook responde 503 |
+| `VELLCAST_TRUST_PROXY` | Atrás do Traefik | IP real do cliente para o rate limit de login |
+| `VELLCAST_CLOUD_INSECURE_COOKIES=1` | Só local sem HTTPS | Remove `Secure` dos cookies |
+
+Dokploy: aplicação com `infrastructure/docker/cloud-api.Dockerfile`, volume persistente em `/data`, domínio com HTTPS (ex.: `cloud.seudominio.com`) e health check em `/healthz`. No relay hospedado, defina a mesma `VELLCAST_CLOUD_ENTITLEMENT_KEY`; a partir daí, `POST /api/rooms` exige o cabeçalho `X-Vellcast-Entitlement` com um token de `POST /api/entitlements/token`.
+
+Endpoints: `POST /api/auth/signup|login|logout`, `GET /api/me`, `GET /api/plans`, `POST /api/entitlements/token`, `POST /api/usage`, `POST /api/billing/webhooks/stripe`, `GET /admin` (painel) e `GET /healthz`.
+
+### 6.12 Revogação de tokens e rotação do segredo
+
+- **Token vazado:** o dono chama `POST /api/rooms/{id}/revoke` com `{"token": "<token>"}`. O relay grava o `nonce` do token como revogado até a expiração dele e derruba a conexão que o estiver usando. Para o transmissor, peça um token novo em `/publisher-token`.
+- **Expulsar todos os espectadores:** `{"allViewers": true}` invalida todos os tokens de espectador emitidos até agora (inclusive os do segundo corrente) e desconecta quem estiver assistindo. Gere convites novos para quem deve continuar.
+- Com `VELLCAST_DB_PATH`, as revogações sobrevivem a reinícios; em memória, valem até o relay reiniciar.
+- **Rotação do segredo sem queda:**
+  1. Gere o novo segredo (`openssl rand -hex 32`).
+  2. No Dokploy, mova o valor atual de `VELLCAST_RELAY_SECRET` para `VELLCAST_RELAY_SECRET_PREVIOUS` e coloque o novo em `VELLCAST_RELAY_SECRET`. Redeploy.
+  3. Espere a validade máxima dos tokens (24 h por padrão, `VELLCAST_ROOM_TTL_SECS`) e apague `VELLCAST_RELAY_SECRET_PREVIOUS`. Redeploy.
+  Durante a janela, tokens antigos continuam funcionando e todos os novos são assinados com o segredo novo.
 
 ## 7. Futuro: QUIC (Etapa 6)
 

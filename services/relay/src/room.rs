@@ -137,6 +137,8 @@ pub struct LiveRoom {
     inner: Mutex<Inner>,
     tx: broadcast::Sender<Relayed>,
     closed: watch::Sender<bool>,
+    /// Incrementado a cada revogação: conexões ativas reavaliam seus tokens.
+    revocations: watch::Sender<u64>,
     viewers: AtomicUsize,
     keyframe_interval: Duration,
 }
@@ -151,6 +153,7 @@ impl LiveRoom {
     ) -> Self {
         let (tx, _) = broadcast::channel(queue.max(1));
         let (closed, _) = watch::channel(false);
+        let (revocations, _) = watch::channel(0);
         Self {
             id,
             max_viewers,
@@ -166,6 +169,7 @@ impl LiveRoom {
             }),
             tx,
             closed,
+            revocations,
             viewers: AtomicUsize::new(0),
             keyframe_interval,
         }
@@ -350,6 +354,15 @@ impl LiveRoom {
             && inner.publisher.is_none()
             && self.viewers.load(Ordering::Acquire) == 0
             && now.saturating_duration_since(inner.last_activity) >= idle_ttl
+    }
+
+    /// Avisa as conexões ativas que algum token da sala foi revogado.
+    pub fn notify_revocation(&self) {
+        self.revocations.send_modify(|n| *n = n.wrapping_add(1));
+    }
+
+    pub fn revocation_signal(&self) -> watch::Receiver<u64> {
+        self.revocations.subscribe()
     }
 
     pub fn close(&self) {

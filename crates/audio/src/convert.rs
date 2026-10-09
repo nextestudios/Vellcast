@@ -358,7 +358,7 @@ mod tests {
         let frames = out.len() / 2;
         assert!((47_990..=48_001).contains(&frames), "{frames}");
         // Rampa continua monotônica nas fronteiras dos blocos.
-        for w in out.chunks_exact(2).collect::<Vec<_>>().windows(2) {
+        for w in out.as_chunks::<2>().0.iter().collect::<Vec<_>>().windows(2) {
             assert!(w[1][0] >= w[0][0] - 1e-6);
         }
     }

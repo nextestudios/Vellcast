@@ -69,3 +69,36 @@ jobs:
           cache-dependency-path: apps/discord-activity/package-lock.json
       - run: npm ci
       - run: npm run build
+
+  # OC-T02: licenças compatíveis, avisos do RustSec, duplicatas e origens.
+  licenses:
+    name: Licenças e segurança das dependências
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: EmbarkStudios/cargo-deny-action@v2.1.1
+        with:
+          command: check licenses advisories bans sources
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Licenças npm do player
+        working-directory: apps/discord-activity
+        run: |
+          npm ci
+          npx --yes license-checker-rseidelsohn@5.0.1 --production --summary \
+            --onlyAllow "MIT;ISC;Apache-2.0;BSD-2-Clause;BSD-3-Clause;0BSD;BlueOak-1.0.0;CC0-1.0;Python-2.0"
+
+  # OC-T07: nenhum segredo no histórico do git (falsos positivos em .gitleaksignore).
+  secrets:
+    name: Varredura de segredos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: |
+          curl -sSfL -o gitleaks.tgz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          tar -xzf gitleaks.tgz gitleaks
+          ./gitleaks git --redact --no-banner -v .

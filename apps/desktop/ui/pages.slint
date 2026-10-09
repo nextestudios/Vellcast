@@ -233,8 +233,10 @@ export component RoomsPage inherits VerticalLayout {
     in property <string> message;
     in property <bool> message-error;
     in property <string> invite-link;
+    in property <string> pairing-code;
     callback create-room(string);
     callback make-invite(int);
+    callback make-pairing(int);
     callback copy-invite;
     callback close-room(int);
     callback request-virtual-keyboard(string);
@@ -298,10 +300,32 @@ export component RoomsPage inherits VerticalLayout {
                 clicked => { root.make-invite(root.room-index); }
             }
             VButton {
+                text: @tr("Pair with Discord");
+                enabled: !root.busy;
+                clicked => { root.make-pairing(root.room-index); }
+            }
+            VButton {
                 text: @tr("Close room");
                 enabled: !root.busy;
                 clicked => { root.close-room(root.room-index); }
             }
+        }
+    }
+
+    if root.pairing-code != "": Card {
+        title: @tr("Discord pairing code");
+        Text {
+            text: @tr("Open the Vellcast Activity in a Discord voice channel and enter this code. It works once and expires in 5 minutes.");
+            color: Theme.text-secondary;
+            font-size: Theme.fs-caption;
+            wrap: word-wrap;
+        }
+        Text {
+            text: root.pairing-code;
+            color: Theme.accent;
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: 4px;
         }
     }
 
@@ -348,6 +372,9 @@ export component LivePage inherits VerticalLayout {
     in property <string> dropped;
     in property <string> encode-ms;
     in property <string> rtt;
+    in property <string> target;
+    in property <string> app-cpu;
+    in property <string> app-ram;
     in property <string> message;
     in property <bool> message-error;
     in property <string> invite-link;
@@ -415,6 +442,23 @@ export component LivePage inherits VerticalLayout {
         }
         Text {
             text: @tr("To change quality, stop and start again with the new settings.");
+            color: Theme.text-secondary;
+            font-size: Theme.fs-caption;
+            wrap: word-wrap;
+        }
+    }
+
+    // Métricas avançadas (S-007): atualizadas só com esta tela visível.
+    if root.live: Card {
+        title: @tr("Advanced metrics");
+        HorizontalLayout {
+            spacing: Theme.sp-6;
+            Stat { label: @tr("Adaptive target"); value: root.target; }
+            Stat { label: @tr("App CPU"); value: root.app-cpu; }
+            Stat { label: @tr("App memory"); value: root.app-ram; }
+        }
+        Text {
+            text: @tr("Bitrate and FPS adjust automatically to the network and to the encoder load, never above the chosen quality.");
             color: Theme.text-secondary;
             font-size: Theme.fs-caption;
             wrap: word-wrap;
@@ -654,9 +698,42 @@ export component PlansPage inherits VerticalLayout {
 export component AboutPage inherits VerticalLayout {
     in property <string> version;
     in property <[string]> licenses;
+    // Atualizações (S-012): sempre por ação do usuário.
+    in property <string> update-status;
+    in property <bool> update-error;
+    in property <bool> update-available;
+    in property <bool> update-busy;
+    callback check-updates;
+    callback install-update;
     spacing: Theme.sp-4;
 
     PageTitle { title: @tr("About"); subtitle: @tr("Vellcast {} · Next Estúdios · nextestudios.com", root.version); }
+
+    Card {
+        title: @tr("Updates");
+        Text {
+            text: @tr("Updates are signed by Next Estúdios and verified before installing. Nothing is downloaded or installed without your confirmation.");
+            color: Theme.text-secondary;
+            font-size: Theme.fs-caption;
+            wrap: word-wrap;
+        }
+        HorizontalLayout {
+            spacing: Theme.sp-2;
+            alignment: start;
+            VButton {
+                text: @tr("Check for updates");
+                enabled: !root.update-busy;
+                clicked => { root.check-updates(); }
+            }
+            if root.update-available: VButton {
+                text: @tr("Download and install");
+                primary: true;
+                enabled: !root.update-busy;
+                clicked => { root.install-update(); }
+            }
+        }
+        StatusLine { text: root.update-status; error: root.update-error; }
+    }
 
     Card {
         title: @tr("Privacy");

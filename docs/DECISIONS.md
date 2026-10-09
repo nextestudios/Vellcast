@@ -185,3 +185,123 @@ Formato: contexto → decisão → consequências. Status possíveis: **Proposta
 **Contexto:** O diagnóstico na CI Windows (runner sem GPU) mostrou que a enumeração de fontes e do encoder de software funciona, mas o pipeline falhava em `ID3D11VideoDevice indisponível`: adaptadores básicos (VMs, Área de Trabalho Remota, driver genérico) não oferecem `ID3D11VideoProcessor`.
 **Decisão:** Quando o processador de vídeo não existe, o encoder de software recebe NV12 convertido na CPU (`crates/encoder/src/cpu_convert.rs`: BT.709 estúdio, letterbox, vizinho mais próximo). Encoders de hardware continuam exigindo o caminho de GPU, sem nenhuma cópia para a CPU.
 **Consequências:** O MVP funciona em qualquer Windows 10 2004+, inclusive sem GPU, com custo maior de CPU (o app já avisa quando usa codificação por software). A CI passa a exercitar o encoder real do Windows.
+
+## ADR-032 — Adaptação de qualidade por controlador AIMD com histerese
+**Status:** Aceita (2026-10-08)
+**Contexto:** S-001 pede ajuste de bitrate à rede; a medição em produção (DEPLOYMENT §6.10) mostrou rotas que sustentam só 1–2 Mbps por conexão.
+**Decisão:** Controlador puro em `crates/vellcast-core/src/adapt.rs`, chamado uma vez por segundo pelo pipeline. Rede congestionada (descartes no transporte, fila de envio > ~0,5 s do bitrate atual ou RTT > 3× o mínimo observado e +150 ms) → bitrate ×0,7, no máximo uma redução a cada 2 s. Recuperação aditiva (+5% do máximo) só após 5 s estáveis; FPS só volta após 15 s. Limites: nunca acima da qualidade escolhida, piso de 500 kbps e 30 FPS. O bitrate é aplicado em tempo real com `CODECAPI_AVEncCommonMeanBitRate`; o FPS, descartando quadros antes do encoder.
+**Consequências:** Testado com sinais sintéticos (11 testes). Encoders que recusam mudar o bitrate em tempo real ficam só com o ajuste de FPS (registrado em log); o comportamento por GPU precisa ser medido no Windows real.
+
+## ADR-033 — Modo competitivo: bitrate → FPS → recomendação de resolução
+**Status:** Aceita (2026-10-08)
+**Contexto:** S-002 pede preservar o desempenho do jogo, reduzindo a carga da transmissão quando necessário, sem métricas invasivas do jogo.
+**Decisão:** O perfil Competitivo ativa `Adaptation::Competitive`: a sobrecarga do encoder (quadros recusados ou tempo de codificação > 85% do intervalo entre quadros) reage já na primeira janela, primeiro reduzindo o bitrate (×0,8 até 60% do máximo), depois o FPS (60 → 45 → 30 → 24). A resolução não muda durante a transmissão (exigiria reiniciar o encoder e o decoder do espectador): no FPS mínimo, o app recomenda transmitir de novo com uma resolução menor. A prioridade do processo nunca é aumentada.
+**Consequências:** Reação rápida à carga com recuperação mais lenta (10 s para bitrate, 30 s para FPS). Sinais vêm só do próprio pipeline; nada é lido do processo do jogo.
+
+## ADR-034 — Métricas avançadas do próprio processo sem dependência extra
+**Status:** Aceita (2026-10-08)
+**Contexto:** S-007 pede CPU e RAM do app junto das métricas da transmissão.
+**Decisão:** `apps/desktop/src/procstats.rs` lê `GetProcessTimes` e `GetProcessMemoryInfo` (memória privada) no Windows, via a crate `windows` já usada no projeto; fora do Windows os valores aparecem como "—". A amostragem acontece só quando a tela Ao vivo recebe métricas (1 Hz, tela visível).
+**Consequências:** Sem `sysinfo` nem threads extras. O valor de CPU é relativo à máquina inteira (todos os núcleos).
+
+## ADR-050 — OAuth2 do Discord trocado no relay; sessão Vellcast própria
+**Status:** Aceita (2026-10-08)
+**Contexto:** A Activity precisa identificar o usuário (M-014) sem expor o client secret e sem confiar em identidade enviada pelo frontend.
+**Decisão:** O relay recebe o `code` do `authorize`, troca por access token em `oauth2/token`, confirma o usuário em `users/@me` e emite uma sessão HMAC de 2 h (`room = "discord-user:<id>"`, que nunca colide com IDs de sala). O cliente HTTP é o `ureq` 3 (rustls), já presente no workspace e executado em `spawn_blocking`, em vez de adicionar `reqwest`. Recurso desligado sem `VELLCAST_DISCORD_CLIENT_ID/SECRET`.
+**Consequências:** Uma única peça de backend (o relay) atende o MVP e o self-hosting; a Cloud API pode assumir as contas depois sem mudar a Activity.
+
+## ADR-051 — Pareamento por código curto em vez de login no desktop
+**Status:** Aceita (2026-10-08)
+**Contexto:** M-015 pede vincular o app Windows a uma sessão da Activity sem compartilhar credenciais do Discord.
+**Decisão:** O dono da sala gera no desktop um código de 8 caracteres (alfabeto sem ambiguidades, 5 min, uso único, até 3 ativos por sala). Digitado na Activity, o código vincula a instância (`instanceId`) à sala até ela expirar; todos os participantes da instância passam a assistir. Estado em memória, como as salas. Checagem opcional de participação na instância com token de bot.
+**Consequências:** O desktop não precisa de OAuth nem de navegador embutido. Sem token de bot, quem tiver uma sessão e o `instanceId` vê as salas da instância (risco aceito no MVP; ativar o bot fecha a brecha).
+
+## ADR-045 — Instalador Windows com Inno Setup, por usuário
+**Status:** Aceita (2026-10-08)
+**Contexto:** S-016 pede instalação, atualização e desinstalação simples. Opções: Inno Setup 6, WiX v4 (MSI) e MSIX.
+**Decisão:** Inno Setup 6 (`infrastructure/installer/vellcast.iss`), instalação por usuário sem administrador (opcional para todos), atalho no Menu Iniciar, início com o Windows **desligado por padrão**, `CloseApplications` para atualizar com o app aberto e desinstalação que pergunta antes de apagar configurações. Compilado e testado em modo silencioso na CI (`windows-mvp.yml`).
+**Consequências:** Um único `.exe` simples de assinar e atualizar. MSI (implantação corporativa via GPO) e MSIX (Microsoft Store) ficam para depois, se houver demanda.
+
+## ADR-046 — Atualizações assinadas com Ed25519, iniciadas pelo usuário
+**Status:** Aceita (2026-10-08)
+**Contexto:** S-012 pede atualizações seguras sem serviços pesados; o spec proíbe processamento oculto.
+**Decisão:** Manifesto JSON (`version`, `url` HTTPS, `sha256`, `notes`) com assinatura Ed25519 destacada (`.sig`, base64), gerados por `tools/release-sign` no workflow de release. O app (`apps/desktop/src/updater.rs`, `ed25519-dalek`) verifica a assinatura com a chave pública embutida **antes** de interpretar o manifesto, compara a versão, baixa o instalador para a pasta temporária, confere o SHA-256 e só abre o instalador depois do clique do usuário. Sem verificação automática em segundo plano. URL padrão: ativo do último release do GitHub; `VELLCAST_UPDATE_URL` permite outro servidor.
+**Consequências:** Comprometer o host do download não basta para distribuir binário malicioso. A chave privada fica só no segredo `UPDATE_SIGNING_KEY`; perdê-la exige publicar uma versão com nova chave pública por outro canal. Enquanto o repositório for privado, a URL padrão não é acessível sem autenticação (usar `VELLCAST_UPDATE_URL` ou tornar o repositório público).
+
+## ADR-047 — Assinatura de código opcional na CI
+**Status:** Aceita (2026-10-08) — certificado pendente
+**Decisão:** Os passos de `signtool` (binários e instalador, SHA-256 com carimbo de tempo) só rodam quando os segredos `WINDOWS_CERT_PFX_BASE64` e `WINDOWS_CERT_PASSWORD` existem; sem eles, a CI emite um aviso e segue.
+**Consequências:** Builds sem certificado continuam funcionando para testes; o SmartScreen avisa até haver um certificado (OV ou EV) comprado pela Next Estúdios.
+
+## ADR-048 — Inventário de licenças automatizado (cargo-deny e cargo-about)
+**Status:** Aceita (2026-10-08)
+**Decisão:** `deny.toml` define as licenças aceitas (permissivas + CDLA-Permissive-2.0 dos certificados raiz) e trata o Slint por exceção (opção Royalty-free 2.0, ADR-006); o job "Licenças e segurança" da CI roda `cargo deny check licenses advisories bans sources` e verifica as licenças npm do player. O pacote e o instalador trazem `THIRD-PARTY-NOTICES.txt` gerado por `cargo-about` + `license-checker`.
+**Consequências:** Dependência com licença nova ou incompatível quebra a CI até ser avaliada; vulnerabilidades conhecidas (RustSec) também.
+
+## ADR-049 — Higiene do repositório para abertura do código
+**Status:** Aceita (2026-10-08)
+**Decisão:** `SECURITY.md` com GitHub Private Vulnerability Reporting (sem e-mail pessoal), `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1), modelos de issue e PR, varredura de segredos com gitleaks na CI (falsos positivos em `.gitleaksignore`) e revisão de segurança registrada em `docs/security/`.
+**Consequências:** O repositório fica pronto para abertura assim que o responsável decidir licença, separação da parte comercial e marca (OC-T01, OC-T03, OC-T04, OC-T09).
+
+## ADR-040 — Cloud API em Axum + SQLite (rusqlite), esquema portável para PostgreSQL
+**Status:** Aceita (2026-10-08)
+**Contexto:** A Etapa 7 precisa de contas, planos, assinaturas, entitlements e cotas. A spec pede solução simples para começar e avaliar PostgreSQL para a infraestrutura comercial, sem Redis sem necessidade demonstrada.
+**Decisão:** `services/cloud-api` em Axum com SQLite embutido via `rusqlite` 0.40 (feature `bundled`, MIT; SQLite em domínio público). O acesso é síncrono atrás de um `Mutex` (operações curtas); o hash de senha roda em `spawn_blocking`. Migrações por `PRAGMA user_version`. O esquema usa só TEXT/INTEGER, chaves e índices simples, sem recursos exclusivos do SQLite além de `ON CONFLICT`, que também existe no PostgreSQL. `sqlx` foi descartado por exigir mais dependências e consultas assíncronas que não trazem ganho neste volume.
+**Consequências:** Um arquivo de banco por instância (volume `/data`), sem serviço externo. Escalar para várias instâncias exige migrar para PostgreSQL; a camada `Db` concentra todo o SQL para facilitar a troca.
+
+## ADR-041 — Senhas Argon2id e sessões opacas
+**Status:** Aceita (2026-10-08)
+**Decisão:** Senhas com Argon2id (m = 19 MiB, t = 2, p = 1; recomendação OWASP) via `argon2` 0.6 (`hash_password_into`, formato próprio versionado), mínimo de 10 caracteres. Sessões com token aleatório de 32 bytes; o banco guarda só o SHA-256. Entrega em cookie `HttpOnly; SameSite=Lax; Secure` ou `Authorization: Bearer` para o app desktop. Login e cadastro limitados por IP; contas inexistentes passam pela mesma verificação de custo para não revelar e-mails pelo tempo de resposta. O painel exige token CSRF (HMAC do hash da sessão) em todo formulário.
+**Consequências:** Sem confirmação de e-mail nem recuperação de senha nesta versão (exigem envio de e-mail; ficam para antes da cobrança real).
+
+## ADR-042 — Entitlements como tokens HMAC curtos verificados pelo relay hospedado
+**Status:** Aceita (2026-10-08)
+**Contexto:** O relay oficial precisa aplicar limites de plano sem consultar a cloud-api a cada pedido, e o relay self-hosted não pode depender dela (W-013).
+**Decisão:** A cloud-api emite tokens `ve1.<payload>.<hmac>` de 10 minutos com plano, espectadores por sala, salas por conta e resolução/FPS máximos (crate `vellcast-entitlement`). O relay só os exige quando `VELLCAST_CLOUD_ENTITLEMENT_KEY` está definida e então limita espectadores por sala e salas ativas por conta. Sem a chave, nada muda. A resolução nunca é limitada abaixo de 1080p60 (W-014).
+**Consequências:** Revogação imediata não existe (vale até expirar, no máximo 10 min). A contagem de salas por conta fica em memória no relay, consistente com o armazenamento atual das salas.
+
+## ADR-043 — Assinaturas vendidas fora do Discord até haver elegibilidade
+**Status:** Aceita (2026-10-08)
+**Contexto:** Em 2026-10-08, a documentação oficial do Discord restringe Premium Apps a desenvolvedores dos EUA, da UE e do Reino Unido; o Brasil não é elegível (MONETIZATION §6).
+**Decisão:** A cobrança acontece fora do Discord, por provedor de pagamento integrado à cloud-api (Stripe implementado em modo de teste; Mercado Pago avaliado para BRL/Pix). A Activity não exibe preços nem links de compra até a revisão dos Monetization Terms e da Developer Policy vigentes.
+**Consequências:** Reavaliar se o Discord ampliar as regiões; a arquitetura de entitlements já é independente do provedor.
+
+## ADR-044 — Webhooks de cobrança verificados, idempotentes e com máquina de estados simples
+**Status:** Aceita (2026-10-08)
+**Decisão:** O Vellcast nunca processa cartões. O webhook verifica `Stripe-Signature` (HMAC-SHA256 de `t.corpo`, tolerância de 5 minutos contra replay), registra o ID do evento para idempotência e aplica `customer.subscription.created/updated/deleted`. Estados internos: `active` (inclui `trialing`), `past_due` (mantém o plano até o fim do período pago) e `canceled`. Uma assinatura cancelada não é reativada por evento atrasado de período anterior. Eventos para contas inexistentes são aceitos e ignorados (evita reenvio infinito do provedor).
+**Consequências:** Ativação real exige a conta do responsável no provedor e o checkout gravando `account_id` e `plan` nos metadados da assinatura.
+
+## ADR-036 — Escrita em lote para espectadores e transmissor; benchmarks em `crates/perf`
+**Status:** Aceita (2026-10-08)
+**Contexto:** E6-T01/E6-T02 pediam benchmarks reproduzíveis e redução de alocações e cópias no relay, com números antes/depois.
+**Decisão:** (1) `crates/perf` (não distribuído) concentra os benchmarks: `fanout_bench` mede o relay em processo com um alocador contador restrito às threads do relay; `quic_eval` compara transportes. O crate permite `unsafe` só para o alocador contador. (2) Cada espectador drena as mensagens pendentes (até 64) com `feed` e faz um único `flush`; o snapshot inicial (configuração + GOP em cache) também vira uma única escrita; o transmissor (`crates/transport`) drena sua fila do mesmo jeito. Configurável por `VELLCAST_BATCH_WRITES=0` para comparação.
+**Consequências:** Medido: o relay continua sem alocação por espectador (0,03 alocação por mensagem entregue, só o buffer de entrada) e o p99 local caiu de 2,3–3,0 ms para ~1,7 ms; CPU dentro do ruído. A primeira versão do lote alocava um `Vec` por mensagem; o benchmark detectou e a versão final reaproveita o vetor. Resultados em `PERFORMANCE.md` §3.5.
+
+## ADR-037 — QUIC entre desktop e relay: adiado; se adotado, Quinn com BBR e um stream por quadro
+**Status:** Aceita (2026-10-08)
+**Contexto:** S-005 pedia avaliar QUIC (Quinn) contra o WebSocket/TCP atual. A Activity do Discord só aceita WebSocket (DISCORD_INTEGRATION.md), então a avaliação vale apenas para o trecho desktop → relay.
+**Medições** (`PERFORMANCE.md` §3.6, loopback com perda/atraso simulados): sem perda, QUIC e TCP empatam na latência mediana (~24 ms com 20 ms de atraso de ida). Com Cubic (padrão do Quinn), o QUIC desaba com 1–3% de perda (315/600 e 81/600 quadros entregues), como prevê a fórmula de Mathis para controle de congestionamento baseado em perda (≈2,9 Mbps sustentáveis com 1% de perda e RTT de 40 ms, abaixo dos 8 Mbps). Com BBR, o QUIC entregou 600/600 em todos os cenários, p99 de 83 ms com 1% de perda e recuperação de 27 ms após um apagão de 300 ms (TCP modelado: 203 ms; QUIC Cubic: 781 ms). O QUIC custou ~6× mais CPU no processo (10–12% contra 1,3–1,8%), por criptografia e processamento por pacote em espaço de usuário. O modelo de TCP não reduz a janela após perdas, então um TCP real com Cubic sofreria o mesmo limite do QUIC Cubic.
+**Decisão:** Manter WebSocket/TCP como único transporte no MVP. Não integrar QUIC agora: o ganho só aparece em redes com perda, custa CPU no PC do jogador (prioridade 1 do projeto), exige UDP liberado no servidor (Traefik/Dokploy não encaminham QUIC para a aplicação sem configuração extra) e precisaria de fallback para TCP de qualquer forma. Se for adotado depois: Quinn com **BBR**, um stream unidirecional por quadro com prioridade FIFO e fallback automático para WebSocket.
+**Ação de baixo custo derivada:** a rota Europa → Brasil medida em produção limitou uma conexão TCP a 1,2–2,2 Mbps (DEPLOYMENT.md §6.10). Habilitar **BBR no kernel do servidor do relay** (`net.ipv4.tcp_congestion_control=bbr` com `net.core.default_qdisc=fq`) aplica o mesmo princípio ao TCP existente, sem mudar o protocolo; deve ser medido no VPS antes e depois.
+**Reavaliar quando:** houver medições em redes reais com perda (Wi-Fi/4G do transmissor) mostrando quadros atrasados que o BBR no servidor não resolva.
+
+
+## ADR-057 — Fallback DXGI Desktop Duplication não é necessário no MVP
+**Status:** Aceita (2026-10-09)
+**Contexto:** E2-T03 previa implementar DXGI Desktop Duplication apenas se o Windows Graphics Capture falhasse nos testes reais.
+**Evidência:** no Windows real (workflow `windows-e2e`), o WGC capturou monitor e janela, codificou H.264 e transmitiu pelo relay a espectadores (ver PERFORMANCE §3.3).
+**Decisão:** não implementar o fallback agora. Reabrir se testes com jogos em tela cheia exclusiva ou drivers específicos mostrarem falhas do WGC.
+**Consequências:** menos código nativo e superfície de manutenção; WGC exige Windows 10 2004+, já requisito do produto.
+
+## ADR-055 — Salas persistentes em SQLite opcional no relay
+**Status:** Aceita (2026-10-09)
+**Contexto:** Com o estado só em memória, cada reinício ou redeploy do relay apagava salas, convites e links (E3-T11). O trait `RoomStore` já separava metadados do caminho de mídia.
+**Decisão:** `SqliteStore` (`rusqlite` 0.40.2 com SQLite embutido, a mesma versão da cloud-api) ativado por `VELLCAST_DB_PATH`; WAL, `synchronous=NORMAL`, chaves estrangeiras e migrações por `PRAGMA user_version`. Guarda só salas, convites (hash) e revogações. Na inicialização, o relay recria o estado ao vivo de cada sala não expirada. Sem a variável, o comportamento continua em memória.
+**Consequências:** Links e tokens sobrevivem a redeploys quando o volume `/data` é montado. Continua uma réplica só (um escritor no SQLite); mídia nunca vai para disco. Para a Cloud com várias réplicas, uma implementação PostgreSQL do mesmo trait.
+
+## ADR-056 — Revogação de tokens por nonce e rotação do segredo com segredo anterior
+**Status:** Aceita (2026-10-09)
+**Contexto:** Tokens são credenciais *bearer* válidas até expirar; a única revogação era encerrar a sala ou trocar o segredo (derrubando tudo) (E3-T12).
+**Decisão:** (a) O dono revoga um token específico (o relay verifica o token informado e guarda o `nonce` até a expiração) ou todos os tokens de espectador emitidos antes de um instante (novo campo `iat` nos tokens; tokens antigos sem `iat` contam como emitidos no início). A revogação é checada na API e no `Auth` do WebSocket, e um sinal por sala faz as conexões ativas reavaliarem seus tokens. (b) `VELLCAST_RELAY_SECRET_PREVIOUS` é aceito só na verificação, permitindo rotação sem queda.
+**Consequências:** Vazamentos são contidos sem encerrar a sala. Cada verificação consulta o store (leitura curta). A revogação em massa usa granularidade de segundos: tokens emitidos no mesmo segundo da revogação também ficam inválidos.
+

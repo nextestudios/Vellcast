@@ -12,10 +12,13 @@ mod actions;
 mod engine;
 mod input;
 mod local_relay;
+mod procstats;
 mod relay_api;
 mod rooms;
 mod settings;
 mod tray;
+mod update_ui;
+mod updater;
 
 #[cfg(feature = "dev-snapshot")]
 mod dev;
@@ -294,6 +297,8 @@ fn wire_callbacks(ui: &AppWindow) {
     ui.on_quit_app(|| {
         let _ = slint::quit_event_loop();
     });
+
+    update_ui::wire(ui);
 
     let weak = ui.as_weak();
     ui.window().on_close_requested(move || {

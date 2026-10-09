@@ -42,10 +42,12 @@
 | Exaustão de memória | Filas limitadas por espectador, cache de GOP limitado em bytes, mensagens limitadas (4 MiB transmissor, 1 KiB espectador), espectador travado desconectado após 10 s | `room.rs`, `ws.rs`, `config.rs` |
 | Transmissor abusando de banda | Token bucket de bytes de entrada (40 Mbps padrão) → `bitrate_exceeded` | `ws.rs` |
 | Payload malicioso para espectadores | `VideoInit`/`AudioInit` validados como JSON com limites antes de repassar; tipos desconhecidos rejeitados | `ws.rs` |
-| Retenção de dados | Nada é gravado em disco; estado (salas, convites com hash) só em memória e removido por TTL | `store.rs` |
+| Retenção de dados | Mídia nunca é gravada. Por padrão nada vai para disco; com `VELLCAST_DB_PATH`, só metadados (salas, convites como hash SHA-256, nonces revogados) em SQLite, removidos por TTL | `store.rs`, `store_sqlite.rs` |
+| Token vazado | Revogação individual por `nonce` e revogação em massa de espectadores pelo dono (`POST /api/rooms/{id}/revoke`); conexões ativas são encerradas na hora; verificada na API e no `Auth` | `api.rs` (`revoke`), `ws.rs`, `store.rs` |
+| Rotação do segredo | `VELLCAST_RELAY_SECRET_PREVIOUS` aceito só na verificação; tokens novos sempre com o segredo atual | `token.rs`, `config.rs` |
 | Relay sem segredo configurado | Recusa iniciar sem `VELLCAST_RELAY_SECRET`, exceto com flag explícita de desenvolvimento | `config.rs` |
 
-**Replay:** tokens são credenciais *bearer* com expiração. Reutilizar o mesmo token de espectador ou transmissor é intencional (é o que permite a reconexão). Os itens de uso único (convites) são consumidos no servidor. **Limitações conhecidas:** ainda não há revogação individual de token (encerrar a sala revoga todos os tokens dela; trocar o segredo revoga todos os tokens do servidor); não há contas de usuário (o "dono" é quem tem o token de dono). Contas, identidade Discord e pareamento entram na ETAPA 5.
+**Replay:** tokens são credenciais *bearer* com expiração. Reutilizar o mesmo token de espectador ou transmissor é intencional (é o que permite a reconexão). Os itens de uso único (convites) são consumidos no servidor. **Limitações conhecidas:** a revogação em massa cobre só espectadores (tokens de dono e de transmissor são revogados individualmente; o próprio token de dono não pode ser revogado por ele mesmo — encerre a sala); no modo em memória as revogações somem ao reiniciar o relay; não há contas de usuário no relay (o "dono" é quem tem o token de dono). Contas, identidade Discord e pareamento entram na ETAPA 5.
 
 > **ETAPA 0:** o servidor de validação (`stage0-server`) **não tem autenticação**. Ele serve apenas mídia sintética e não deve ficar exposto além do tempo de teste. Isso é uma limitação aceita e documentada.
 

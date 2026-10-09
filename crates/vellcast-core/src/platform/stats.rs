@@ -26,6 +26,8 @@ pub(super) struct LiveStats {
     /// RTT em µs; 0 = desconhecido.
     rtt_us: AtomicU64,
     audio_active: AtomicBool,
+    target_bitrate_kbps: AtomicU32,
+    target_fps: AtomicU32,
 }
 
 impl LiveStats {
@@ -41,7 +43,16 @@ impl LiveStats {
             reconnects: AtomicU64::new(0),
             rtt_us: AtomicU64::new(0),
             audio_active: AtomicBool::new(false),
+            target_bitrate_kbps: AtomicU32::new(0),
+            target_fps: AtomicU32::new(0),
         }
+    }
+
+    /// Alvo atual definido pela adaptação de qualidade.
+    pub fn set_targets(&self, bitrate_kbps: u32, fps: u32) {
+        self.target_bitrate_kbps
+            .store(bitrate_kbps, Ordering::Relaxed);
+        self.target_fps.store(fps, Ordering::Relaxed);
     }
 
     pub fn add_dropped(&self, n: u64) {
@@ -61,6 +72,8 @@ impl LiveStats {
             audio_active: self.audio_active.load(Ordering::Relaxed),
             reconnects: self.reconnects.load(Ordering::Relaxed),
             rtt_ms: (rtt > 0).then(|| rtt as f32 / 1000.0),
+            target_bitrate_kbps: self.target_bitrate_kbps.load(Ordering::Relaxed),
+            target_fps: self.target_fps.load(Ordering::Relaxed),
         }
     }
 }

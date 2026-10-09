@@ -96,6 +96,18 @@ Regras:
 - Nenhuma thread do motor eleva a prioridade a ponto de competir com o jogo. O Modo Competitivo reduz a carga (bitrate → FPS → resolução) com histerese.
 - O controle só é lido com a janela em foco. Atalhos globais são opcionais e vêm desligados.
 
+### 4.1 Adaptação de qualidade (S-001, S-002)
+
+Uma vez por segundo o pipeline entrega ao controlador (`crates/vellcast-core/src/adapt.rs`) os sinais da última janela: bytes na fila do transporte, quadros descartados pela rede, quadros recusados pelo encoder, RTT e tempo médio de codificação. O controlador devolve um bitrate e um FPS-alvo:
+
+| Situação | Equilibrado | Competitivo |
+|---|---|---|
+| Rede congestionada | bitrate ×0,7 (≥ 2 s entre reduções) | bitrate ×0,7 (≥ 1 s entre reduções) |
+| Encoder sobrecarregado | após 3 s: FPS 60 → 45 → 30 | na hora: bitrate ×0,8 até 60%, depois FPS até 24, depois recomenda resolução menor |
+| Estável | +5% do bitrate após 5 s; FPS volta após 15 s | +5% após 10 s; FPS volta após 30 s |
+
+O bitrate é aplicado no encoder em tempo real (`CODECAPI_AVEncCommonMeanBitRate`); o FPS reduzido é obtido descartando quadros antes do encoder (o mais recente fica guardado para repetição). Reduções geram `SessionEvent::Warning` (no máximo um a cada 15 s); `SessionStats` expõe `target_bitrate_kbps` e `target_fps`, mostrados em "Métricas avançadas".
+
 ## 5. Internos do relay
 
 Implementado em `services/relay` (ETAPA 3). Módulos: `api` (HTTP), `ws` (sessões), `room` (estado de mídia), `store` (metadados), `token`, `ratelimit`, `metrics`, `config`.

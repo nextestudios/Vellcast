@@ -89,6 +89,7 @@ fn run() -> Result<(), String> {
             encoder: EncoderPreference::Auto,
             relay_ws_url: url,
             publisher_token: token,
+            adaptation: vellcast_core::Adaptation::Balanced,
         },
         Box::new(move |event| {
             println!("EVENTO {event:?}");
@@ -105,7 +106,7 @@ fn run() -> Result<(), String> {
         std::thread::sleep(Duration::from_secs(5));
         let s = session.stats();
         println!(
-            "STATS {{\"t\":{},\"captured_fps\":{:.1},\"encoded_fps\":{:.1},\"bitrate_kbps\":{:.0},\"encode_ms\":{:.2},\"dropped\":{},\"net_dropped\":{},\"audio\":{},\"reconnects\":{}}}",
+            "STATS {{\"t\":{},\"captured_fps\":{:.1},\"encoded_fps\":{:.1},\"bitrate_kbps\":{:.0},\"encode_ms\":{:.2},\"dropped\":{},\"net_dropped\":{},\"audio\":{},\"reconnects\":{},\"target_kbps\":{},\"target_fps\":{}}}",
             start.elapsed().as_secs(),
             s.captured_fps,
             s.encoded_fps,
@@ -114,7 +115,9 @@ fn run() -> Result<(), String> {
             s.frames_dropped,
             s.network_dropped,
             s.audio_active,
-            s.reconnects
+            s.reconnects,
+            s.target_bitrate_kbps,
+            s.target_fps
         );
         let stopped = log
             .lock()

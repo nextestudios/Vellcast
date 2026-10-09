@@ -87,7 +87,7 @@ fn authorize(relay: &Relay, headers: &HeaderMap, room: &str, roles: &[Role]) -> 
         metrics::inc(&relay.metrics.auth_failures);
         unauthorized()
     })?;
-    if claims.room != room {
+    if claims.room != room || relay.is_revoked(&claims) {
         metrics::inc(&relay.metrics.auth_failures);
         return Err(unauthorized());
     }
@@ -174,6 +174,21 @@ pub async fn create_room(
             return Err(unauthorized());
         }
     }
+    let entitlement = crate::entitlement::authorize(&relay, &headers).map_err(|denied| {
+        metrics::inc(&relay.metrics.auth_failures);
+        match denied {
+            crate::entitlement::EntitlementDenied::Invalid => ApiError(
+                StatusCode::UNAUTHORIZED,
+                ErrorCode::Unauthorized,
+                "entitlement da Vellcast Cloud ausente ou inválido",
+            ),
+            crate::entitlement::EntitlementDenied::RoomLimit => ApiError(
+                StatusCode::FORBIDDEN,
+                ErrorCode::Forbidden,
+                "limite de salas do plano atingido",
+            ),
+        }
+    })?;
     let name = sanitize_name(&body.name)?;
     if relay.store.len() >= relay.config.max_rooms {
         return Err(ApiError(
@@ -186,6 +201,10 @@ pub async fn create_room(
         .max_viewers
         .unwrap_or(relay.config.max_viewers_per_room)
         .clamp(1, relay.config.max_viewers_per_room);
+    // Modo hospedado: o plano limita os espectadores por sala.
+    let max_viewers = entitlement.as_ref().map_or(max_viewers, |e| {
+        max_viewers.min(e.max_viewers.max(1) as usize)
+    });
 
     let now = unix_now();
     let record = RoomRecord {
@@ -196,15 +215,11 @@ pub async fn create_room(
         expires_at: now + relay.config.room_ttl.as_secs(),
         max_viewers,
         invites: HashMap::new(),
+        revoked: HashMap::new(),
+        viewers_revoked_before: 0,
     };
     let c = &relay.config;
-    let live = Arc::new(LiveRoom::new(
-        record.id.clone(),
-        max_viewers,
-        c.viewer_queue,
-        c.gop_cache_bytes,
-        c.keyframe_request_interval,
-    ));
+    let live = Arc::new(relay.new_live_room(&record.id, max_viewers));
     relay.store.insert(record.clone()).map_err(|_| {
         ApiError(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -213,6 +228,9 @@ pub async fn create_room(
         )
     })?;
     relay.insert_room(Arc::clone(&live));
+    if let Some(e) = &entitlement {
+        relay.account_rooms.record(&e.sub, &record.id);
+    }
     metrics::inc(&relay.metrics.rooms_created);
 
     let (owner_token, _) = relay.signer.issue(&record.id, Role::Owner, c.room_ttl, now);
@@ -396,6 +414,85 @@ pub async fn publisher_token(
         .min(Duration::from_secs(record.expires_at.saturating_sub(now)));
     let (publisher_token, _) = relay.signer.issue(&id, Role::Publisher, ttl, now);
     Ok(Json(PublisherToken { publisher_token }))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Revoke {
+    /// Token a revogar (ex.: um token de transmissor vazado). Precisa ser desta sala.
+    pub token: Option<String>,
+    /// Revoga todos os tokens de espectador emitidos até agora; quem estiver
+    /// assistindo é desconectado e links já usados deixam de valer.
+    #[serde(default)]
+    pub all_viewers: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Revoked {
+    pub revoked_token: bool,
+    pub revoked_viewers_before: Option<u64>,
+}
+
+/// Revogação pelo dono: um token específico e/ou todos os espectadores.
+/// Conexões ativas com tokens revogados são encerradas.
+pub async fn revoke(
+    State(relay): State<Arc<Relay>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Json(body): Json<Revoke>,
+) -> ApiResult<Json<Revoked>> {
+    rate_limit(&relay, peer, &headers)?;
+    let owner = authorize(&relay, &headers, &id, &[Role::Owner])?;
+    let (_, live) = lookup(&relay, &id)?;
+    if body.token.is_none() && !body.all_viewers {
+        return Err(bad_request("informe `token` ou `allViewers`"));
+    }
+    let internal = |_| {
+        ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            ErrorCode::Internal,
+            "falha ao registrar a revogação",
+        )
+    };
+    let mut revoked_token = false;
+    if let Some(token) = &body.token {
+        if token.len() > crate::token::MAX_TOKEN_LEN {
+            return Err(bad_request("token inválido"));
+        }
+        let target = relay
+            .signer
+            .verify(token, unix_now())
+            .map_err(|_| bad_request("token inválido ou expirado"))?;
+        if target.room != id {
+            return Err(bad_request("o token não pertence a esta sala"));
+        }
+        if target.nonce == owner.nonce {
+            return Err(bad_request("o dono não pode revogar o próprio token"));
+        }
+        relay
+            .store
+            .revoke_token(&id, &target.nonce, target.exp)
+            .map_err(internal)?;
+        revoked_token = true;
+    }
+    let mut revoked_viewers_before = None;
+    if body.all_viewers {
+        // +1: tokens emitidos neste mesmo segundo também ficam inválidos.
+        let before = unix_now() + 1;
+        relay
+            .store
+            .revoke_viewers_before(&id, before)
+            .map_err(internal)?;
+        revoked_viewers_before = Some(before);
+    }
+    live.notify_revocation();
+    tracing::info!(room = %id, revoked_token, all_viewers = body.all_viewers, "tokens revogados");
+    Ok(Json(Revoked {
+        revoked_token,
+        revoked_viewers_before,
+    }))
 }
 
 pub async fn metrics(State(relay): State<Arc<Relay>>) -> Json<metrics::Snapshot> {

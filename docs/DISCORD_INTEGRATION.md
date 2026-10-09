@@ -1,6 +1,6 @@
 # Integração com Discord Activities
 
-Status: **Activity mínima implementada e testada fora do Discord. Validação dentro de uma Activity real: Blocked** (requer aplicação no Discord Developer Portal e URL HTTPS pública).
+Status: **Activity com autenticação OAuth2 (backend), pareamento e player implementados e testados com API do Discord simulada. Validação dentro de uma Activity real: Blocked** — requer o responsável criar a aplicação no Discord Developer Portal (seção 4). A URL HTTPS pública já existe: `https://vellcast.nextestudios.com`.
 
 Documentação oficial:
 - Visão geral: https://docs.discord.com/developers/activities/overview
@@ -23,30 +23,50 @@ A Activity e o servidor estão na **mesma origem**:
 - A página usa caminhos relativos: `fetch('/api/streams')` e `wss://<origem>/ws?stream=...`.
 - Assim, não é preciso usar `patchUrlMappings` (que altera `fetch`/`WebSocket` globais). Se algum dia houver mais de um backend, o mapeamento passa a ser por prefixo (ex.: `/relay` → host do relay).
 
-## 3. Embedded App SDK
+## 3. Embedded App SDK, autenticação e pareamento (M-014, M-015)
 
-- Pacote: `@discord/embedded-app-sdk` **2.5.0** (MIT).
-- Detecção: a página está dentro do Discord quando a URL contém `frame_id`. Fora disso, roda em **modo navegador** (útil para testes locais) e o SDK nem é carregado (import dinâmico).
-- Na ETAPA 0 só se chama `new DiscordSDK(clientId)` + `await sdk.ready()`, e a UI mostra `platform`, `instanceId`, `guildId` e `channelId`.
-- **OAuth2 (`authorize` → troca do código no backend → `authenticate`) fica para a ETAPA 5.** A troca exige o `client_secret`, que só pode existir no servidor; nada de identidade vindo do frontend é confiável.
+- Pacote: `@discord/embedded-app-sdk` **2.5.0** (MIT), carregado só dentro do Discord (import dinâmico).
+- Dentro do Discord (URL com `frame_id`) a página abre o `ActivityApp`; fora dele, `/watch` (convite) e a página de validação continuam iguais. `?stage0` força a página de validação dentro do Discord.
+
+### 3.1 Autenticação (OAuth2 no backend)
+
+1. `sdk.ready()` → `sdk.commands.authorize({ client_id, response_type: 'code', state: '', prompt: 'none', scope: ['identify'] })` (escopo mínimo).
+2. A Activity envia o `code` para `POST /api/discord/token` (mesma origem, via URL Mapping).
+3. O relay troca o código em `https://discord.com/api/v10/oauth2/token` com o **client secret, que só existe no servidor**, consulta `GET /users/@me` com o access token e emite uma **sessão Vellcast** (HMAC, 2 h) vinculada ao ID do usuário. A identidade nunca vem do frontend.
+4. A Activity chama `sdk.commands.authenticate({ access_token })`.
+
+### 3.2 Pareamento desktop ↔ Activity
+
+1. No app desktop: **Salas → selecionar a sala → Parear com o Discord**. O relay (`POST /api/rooms/{id}/pairing`, só com token de dono) gera um código de 8 caracteres (sem 0/O/1/I/L), válido por 5 minutos e de uso único.
+2. Na Activity, alguém digita o código (teclado físico ou teclado na tela, navegável por controle) → `POST /api/discord/pair` com a sessão e o `instanceId` da Activity.
+3. O relay vincula a instância à sala (até expirar a sala) e todos os participantes dessa instância passam a ver a transmissão em `GET /api/discord/instances/{instanceId}/streams`, que devolve tokens de espectador novos a cada consulta.
+4. Proteções: rate limit estrito por IP nas trocas de código e tentativas de pareamento, código de uso único, limite de 3 códigos ativos por sala e 8 salas por instância, `instanceId` validado. Com `VELLCAST_DISCORD_BOT_TOKEN` definido, o relay também confirma pela API do Discord que o usuário está na instância (`GET /applications/{app}/activity-instances/{instance}`); sem ele, quem conhece o `instanceId` e tem uma sessão Discord poderia listar as salas daquela instância (risco aceito no MVP, documentado em `SECURITY.md`).
+
+### 3.3 Configuração do servidor
+
+| Variável (Dokploy → Environment) | Obrigatória | Uso |
+|---|---|---|
+| `VELLCAST_DISCORD_CLIENT_ID` | sim | ID da aplicação (público) |
+| `VELLCAST_DISCORD_CLIENT_SECRET` | sim | segredo OAuth2 — **nunca** no repositório nem no build da Activity |
+| `VELLCAST_DISCORD_BOT_TOKEN` | não | confirma que o usuário participa da instância |
+| `VELLCAST_DISCORD_API_BASE` | não | só para testes (API simulada) |
+
+Sem client ID/secret as rotas `/api/discord/*` respondem 503 e o restante do relay funciona normalmente.
 
 ## 4. Passo a passo para validar no Discord (E0-T10)
 
-Pré-requisitos que dependem do responsável pelo projeto:
+**Bloqueado até o responsável criar a aplicação no Discord.** Depois disso, cerca de 15 minutos:
 
-1. Criar uma aplicação em https://discord.com/developers/applications e habilitar **Activities**.
-2. Obter uma URL HTTPS pública para o servidor. Opções:
-   - túnel temporário: `cloudflared tunnel --url http://localhost:8787`;
-   - ou deploy via Dokploy (ver `DEPLOYMENT.md`).
-3. Em **Activities → URL Mappings**: `/` → host da etapa 2 (sem `https://`).
-4. Build da Activity com o client ID (é um ID público, não um segredo):
-   ```bash
-   cd apps/discord-activity
-   echo "VITE_DISCORD_CLIENT_ID=<id>" > .env
-   npm run build
-   ```
-5. Rodar o servidor (`cargo run --release -p vellcast-stage0-server`) e abrir a Activity em um canal de voz.
-6. Para cada cliente (Desktop, Web, Mobile): selecionar `720p30` e `1080p60`, ativar o áudio, aguardar 60 s e usar **Copiar relatório**. Registrar os resultados em `PERFORMANCE.md`.
+1. https://discord.com/developers/applications → **New Application** (ex.: "Vellcast").
+2. **Activities → Settings**: habilitar Activities.
+3. **Activities → URL Mappings**: prefixo `/` → `vellcast.nextestudios.com` (sem `https://`).
+4. **OAuth2 → Redirects**: adicionar `https://127.0.0.1` (exigido pelo portal; o SDK cuida do retorno). Copiar **Client ID** e **Client Secret**.
+5. (Opcional) **Bot**: gerar o token, para a checagem de participação na instância.
+6. Dokploy → aplicação do relay → **Environment**: definir as variáveis da tabela 3.3.
+7. Build do player com o client ID (público): no Dokploy, **Build Args** `VITE_DISCORD_CLIENT_ID=<id>` (o `infrastructure/docker/relay.Dockerfile` já repassa o arg ao build do player). **Redeploy**.
+8. No Discord Desktop: entrar em um canal de voz → **Activities** → Vellcast (enquanto a aplicação não é pública, só membros da equipe do app veem a Activity; adicionar testadores em **App Testers**).
+9. No app desktop: criar sala → **Parear com o Discord** → digitar o código na Activity → iniciar a transmissão.
+10. Repetir em Discord Web e Mobile e preencher a matriz abaixo.
 
 ## 5. Matriz de validação
 

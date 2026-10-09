@@ -1,0 +1,19 @@
+name: Sugerir melhoria
+description: Ideia para o Vellcast
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Qual problema isso resolve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposta
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área
+      options: [App desktop, Controles, Captura/encoder, Áudio, Servidor (relay), Player/Discord, Documentação, Outra]

@@ -151,6 +151,15 @@ impl StreamPrefs {
     }
 
     /// Qualidade efetiva (o plano gratuito vai até 1080p60, sem restrição artificial).
+    /// Adaptação durante a transmissão: o perfil Competitivo prioriza o desempenho do jogo.
+    pub fn adaptation(&self) -> vellcast_core::Adaptation {
+        if self.profile == 3 {
+            vellcast_core::Adaptation::Competitive
+        } else {
+            vellcast_core::Adaptation::Balanced
+        }
+    }
+
     pub fn quality(&self) -> vellcast_core::Quality {
         use vellcast_core::{Quality, QualityProfile};
         let profile = match self.profile {

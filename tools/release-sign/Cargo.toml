@@ -1,0 +1,19 @@
+[package]
+name = "vellcast-release-sign"
+description = "Gera chaves e assina manifestos de atualização do Vellcast (Ed25519)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+base64.workspace = true
+ed25519-dalek = { version = "=3.0.0", default-features = false, features = ["fast", "zeroize"] }
+getrandom.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[lints]
+workspace = true

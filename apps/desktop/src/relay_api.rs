@@ -328,6 +328,40 @@ pub fn get_room(base: &str, room_id: &str, owner_token: &str) -> Result<RoomView
     )
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PairingCode {
+    /// O relay também devolve `expiresAt` (5 min); a interface só informa o prazo fixo.
+    pub code: String,
+}
+
+/// Código de pareamento com a Discord Activity (5 min, uso único).
+pub fn pairing_code(base: &str, room_id: &str, owner_token: &str) -> Result<PairingCode, ApiError> {
+    crate::local_relay::ensure(base);
+    let base = normalize_base(base)?;
+    let room = checked_room(room_id)?;
+    finish(
+        agent()
+            .post(format!("{base}/api/rooms/{room}/pairing"))
+            .header("Authorization", format!("Bearer {owner_token}"))
+            .send_empty(),
+    )
+}
+
+/// Exibe o código em dois blocos para facilitar a leitura: `ABCD-EFGH`.
+pub fn format_pairing_code(code: &str) -> String {
+    let chars: Vec<char> = code.chars().collect();
+    if chars.len() == 8 {
+        format!(
+            "{}-{}",
+            chars[..4].iter().collect::<String>(),
+            chars[4..].iter().collect::<String>()
+        )
+    } else {
+        code.to_owned()
+    }
+}
+
 /// `GET /healthz` do relay.
 pub fn health(base: &str) -> Result<(), ApiError> {
     let base = normalize_base(base)?;
@@ -436,6 +470,12 @@ mod tests {
         assert!(link_plays_in_browser("http://127.0.0.1:8788"));
         // HTTP em IP de rede não é contexto seguro: o WebCodecs fica indisponível.
         assert!(!link_plays_in_browser("http://192.168.0.10:8788"));
+    }
+
+    #[test]
+    fn formats_pairing_code_in_two_blocks() {
+        assert_eq!(format_pairing_code("ABCD2345"), "ABCD-2345");
+        assert_eq!(format_pairing_code("ABC"), "ABC");
     }
 
     #[test]

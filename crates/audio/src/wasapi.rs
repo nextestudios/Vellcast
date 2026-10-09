@@ -747,7 +747,7 @@ impl CaptureThread {
                 match stream.converter.as_mut() {
                     Some(conv) => conv.convert(bytes, frames as usize, silent, gain, &mut samples),
                     None if silent => samples.resize(frames as usize * 2, 0.0),
-                    None => samples.extend(bytes.chunks_exact(4).map(|b| {
+                    None => samples.extend(bytes.as_chunks::<4>().0.iter().map(|b| {
                         (f32::from_le_bytes([b[0], b[1], b[2], b[3]]) * gain).clamp(-1.0, 1.0)
                     })),
                 }
@@ -770,10 +770,10 @@ impl CaptureThread {
 
             if source == Source::Endpoint && last_device_check.elapsed() >= DEVICE_CHECK_INTERVAL {
                 last_device_check = Instant::now();
-                if let Some(current) = current_default_device_id() {
-                    if stream.device_id.as_deref() != Some(current.as_str()) {
-                        return Exit::Restart("dispositivo de saída padrão mudou".into());
-                    }
+                if let Some(current) = current_default_device_id()
+                    && stream.device_id.as_deref() != Some(current.as_str())
+                {
+                    return Exit::Restart("dispositivo de saída padrão mudou".into());
                 }
             }
         }

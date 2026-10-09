@@ -14,7 +14,7 @@ use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
-use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::broadcast::error::{RecvError, TryRecvError};
 use vellcast_protocol::messages::{
     AudioInit, AuthOk, AuthRequest, ConnectRole, ErrorCode, VideoInit, encode_json, error_message,
 };
@@ -25,7 +25,7 @@ use vellcast_protocol::{
 
 use crate::ratelimit::TokenBucket;
 use crate::room::{LiveRoom, Relayed, RoomState};
-use crate::token::Role;
+use crate::token::{Claims, Role};
 use crate::{Relay, metrics, random_id, unix_now};
 
 type Sink = SplitSink<WebSocket, Message>;
@@ -33,6 +33,39 @@ type Source = SplitStream<WebSocket>;
 
 /// Limite do texto de configuração (codec string etc.).
 const MAX_INIT_LEN: usize = 1024;
+/// Mensagens enviadas por espectador em um único `flush`.
+const MAX_BATCH: usize = 64;
+
+/// Decide se uma mensagem distribuída segue para um espectador: descarta
+/// quadros velhos e, após perda, tudo até o próximo keyframe.
+struct Gate<'a> {
+    waiting_keyframe: &'a mut bool,
+    stale_after: std::time::Duration,
+}
+
+impl Gate<'_> {
+    fn admit(&mut self, msg: Relayed, relay: &Relay, room: &LiveRoom) -> Option<Bytes> {
+        match msg.kind {
+            MessageType::VideoFrame => {
+                if msg.received_at.elapsed() > self.stale_after {
+                    metrics::inc(&relay.metrics.stale_frames_dropped);
+                    *self.waiting_keyframe = true;
+                    room.request_keyframe(Instant::now());
+                    return None;
+                }
+                if *self.waiting_keyframe {
+                    if !msg.keyframe {
+                        return None;
+                    }
+                    *self.waiting_keyframe = false;
+                }
+            }
+            MessageType::StreamPaused | MessageType::StreamEnd => *self.waiting_keyframe = true,
+            _ => {}
+        }
+        Some(msg.data)
+    }
+}
 
 pub async fn upgrade(
     ws: WebSocketUpgrade,
@@ -65,6 +98,7 @@ struct Authed {
     role: ConnectRole,
     room: Arc<LiveRoom>,
     nonce: String,
+    claims: Claims,
 }
 
 async fn authenticate(
@@ -101,6 +135,9 @@ async fn authenticate(
     if !allowed {
         return Err((ErrorCode::Forbidden, "token sem permissão para este papel"));
     }
+    if relay.is_revoked(&claims) {
+        return Err((ErrorCode::Unauthorized, "token revogado"));
+    }
     let room = relay
         .room(&claims.room)
         .ok_or((ErrorCode::RoomNotFound, "sala não encontrada"))?;
@@ -110,7 +147,8 @@ async fn authenticate(
     Ok(Authed {
         role: req.role,
         room,
-        nonce: claims.nonce,
+        nonce: claims.nonce.clone(),
+        claims,
     })
 }
 
@@ -138,7 +176,7 @@ async fn handle(socket: WebSocket, relay: Arc<Relay>) {
             }
             metrics::inc(&relay.metrics.viewer_sessions_total);
             let room = Arc::clone(&authed.room);
-            run_viewer(&relay, &room, &session_id, sink, source).await;
+            run_viewer(&relay, &room, &authed.claims, &session_id, sink, source).await;
             room.release_viewer();
         }
     }
@@ -189,6 +227,7 @@ async fn run_publisher(
     mut source: Source,
 ) {
     let room = authed.room;
+    let claims = authed.claims;
     let mut lease = match room.attach_publisher(session_id, &authed.nonce) {
         Ok(l) => l,
         Err(code) => {
@@ -201,6 +240,7 @@ async fn run_publisher(
         let _ = sink.send(Message::Binary(ok)).await;
     }
     let mut closed = room.closed_signal();
+    let mut revocations = room.revocation_signal();
     let bytes_per_sec = relay.config.max_publisher_kbps as f64 * 1000.0 / 8.0;
     // Rajada de 2 s: keyframes são bem maiores que a média.
     let mut ingress = TokenBucket::new(bytes_per_sec * 2.0, bytes_per_sec, Instant::now());
@@ -273,6 +313,12 @@ async fn run_publisher(
                 send_error(&mut sink, ErrorCode::RoomClosed, "sala encerrada").await;
                 break true;
             }
+            _ = revocations.changed() => {
+                if relay.is_revoked(&claims) {
+                    send_error(&mut sink, ErrorCode::Unauthorized, "token revogado").await;
+                    break true;
+                }
+            }
         }
     };
     room.detach_publisher(session_id, graceful);
@@ -282,6 +328,7 @@ async fn run_publisher(
 async fn run_viewer(
     relay: &Relay,
     room: &LiveRoom,
+    claims: &Claims,
     session_id: &str,
     mut sink: Sink,
     mut source: Source,
@@ -290,6 +337,9 @@ async fn run_viewer(
     let mut rx = join.rx;
     let send_timeout = relay.config.send_timeout;
     let stale_after = relay.config.stale_after;
+    let batch_writes = relay.config.batch_writes;
+    // Reaproveitado entre lotes: nenhuma alocação por mensagem no caminho quente.
+    let mut batch: Vec<Bytes> = Vec::with_capacity(MAX_BATCH);
 
     let mut initial = Vec::with_capacity(join.snapshot.len() + 1);
     initial.extend(auth_ok(room, ConnectRole::Viewer, session_id));
@@ -297,12 +347,21 @@ async fn run_viewer(
         initial.extend(encode(&Header::new(MessageType::StreamPaused, 0), &[]).ok());
     }
     initial.extend(join.snapshot);
-    for msg in initial {
-        metrics::add(&relay.metrics.bytes_out, msg.len() as u64);
-        if sink.send(Message::Binary(msg)).await.is_err() {
-            return;
+    // Configuração + GOP em cache (até centenas de mensagens): uma única escrita.
+    let initial_bytes: u64 = initial.iter().map(|m| m.len() as u64).sum();
+    let write_initial = async {
+        for msg in initial {
+            sink.feed(Message::Binary(msg)).await?;
         }
+        sink.flush().await
+    };
+    if !matches!(
+        tokio::time::timeout(send_timeout, write_initial).await,
+        Ok(Ok(()))
+    ) {
+        return;
     }
+    metrics::add(&relay.metrics.bytes_out, initial_bytes);
     let mut waiting_keyframe = !join.has_keyframe;
     if waiting_keyframe && join.state == RoomState::Live {
         room.request_keyframe(Instant::now());
@@ -310,6 +369,7 @@ async fn run_viewer(
     tracing::debug!(room = %room.id, session = %session_id, "espectador conectado");
 
     let mut closed = room.closed_signal();
+    let mut revocations = room.revocation_signal();
     let idle = tokio::time::sleep(relay.config.client_idle_timeout);
     tokio::pin!(idle);
 
@@ -339,7 +399,7 @@ async fn run_viewer(
                 }
             }
             outgoing = rx.recv() => {
-                let msg = match outgoing {
+                let first = match outgoing {
                     Ok(m) => m,
                     Err(RecvError::Lagged(n)) => {
                         metrics::add(&relay.metrics.lagged_messages, n);
@@ -349,28 +409,53 @@ async fn run_viewer(
                     }
                     Err(RecvError::Closed) => break,
                 };
-                match msg.kind {
-                    MessageType::VideoFrame => {
-                        if msg.received_at.elapsed() > stale_after {
-                            metrics::inc(&relay.metrics.stale_frames_dropped);
-                            waiting_keyframe = true;
-                            room.request_keyframe(Instant::now());
-                            continue;
-                        }
-                        if waiting_keyframe {
-                            if !msg.keyframe {
-                                continue;
+                // Monta um lote com o que já está na fila: as mensagens são
+                // enfileiradas com `feed` e enviadas com um único `flush`
+                // (uma escrita no socket por lote em vez de uma por mensagem).
+                batch.clear();
+                let mut gate = Gate { waiting_keyframe: &mut waiting_keyframe, stale_after };
+                if let Some(data) = gate.admit(first, relay, room) {
+                    batch.push(data);
+                }
+                if batch_writes {
+                    let mut closed_now = false;
+                    while batch.len() < MAX_BATCH {
+                        match rx.try_recv() {
+                            Ok(m) => {
+                                if let Some(data) = gate.admit(m, relay, room) {
+                                    batch.push(data);
+                                }
                             }
-                            waiting_keyframe = false;
+                            Err(TryRecvError::Lagged(n)) => {
+                                metrics::add(&relay.metrics.lagged_messages, n);
+                                *gate.waiting_keyframe = true;
+                                room.request_keyframe(Instant::now());
+                            }
+                            Err(TryRecvError::Closed) => {
+                                closed_now = true;
+                                break;
+                            }
+                            Err(TryRecvError::Empty) => break,
                         }
                     }
-                    MessageType::StreamPaused | MessageType::StreamEnd => waiting_keyframe = true,
-                    _ => {}
+                    if closed_now && batch.is_empty() {
+                        break;
+                    }
                 }
-                let len = msg.data.len() as u64;
-                match tokio::time::timeout(send_timeout, sink.send(Message::Binary(msg.data))).await {
+                if batch.is_empty() {
+                    continue;
+                }
+                let count = batch.len() as u64;
+                let len: u64 = batch.iter().map(|b| b.len() as u64).sum();
+                let write = async {
+                    for data in batch.drain(..) {
+                        sink.feed(Message::Binary(data)).await?;
+                    }
+                    sink.flush().await
+                };
+                match tokio::time::timeout(send_timeout, write).await {
                     Ok(Ok(())) => {
-                        metrics::inc(&relay.metrics.messages_out);
+                        metrics::add(&relay.metrics.messages_out, count);
                         metrics::add(&relay.metrics.bytes_out, len);
                     }
                     Ok(Err(_)) => break,
@@ -383,6 +468,12 @@ async fn run_viewer(
             _ = closed.changed() => {
                 send_error(&mut sink, ErrorCode::RoomClosed, "sala encerrada").await;
                 break;
+            }
+            _ = revocations.changed() => {
+                if relay.is_revoked(claims) {
+                    send_error(&mut sink, ErrorCode::Unauthorized, "token revogado").await;
+                    break;
+                }
             }
             () = &mut idle => {
                 send_error(&mut sink, ErrorCode::IdleTimeout, "inatividade").await;

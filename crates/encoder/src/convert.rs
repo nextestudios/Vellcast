@@ -372,10 +372,10 @@ impl CpuConverter {
         &mut self,
         desc: &D3D11_TEXTURE2D_DESC,
     ) -> Result<ID3D11Texture2D, EncoderError> {
-        if let Some((tex, w, h, fmt)) = &self.staging {
-            if (*w, *h, *fmt) == (desc.Width, desc.Height, desc.Format) {
-                return Ok(tex.clone());
-            }
+        if let Some((tex, w, h, fmt)) = &self.staging
+            && (*w, *h, *fmt) == (desc.Width, desc.Height, desc.Format)
+        {
+            return Ok(tex.clone());
         }
         let staging_desc = D3D11_TEXTURE2D_DESC {
             Width: desc.Width,

@@ -32,6 +32,7 @@ use vellcast_protocol::messages::{AudioInit, VideoInit};
 use vellcast_transport::{Publisher, PublisherConfig, PublisherEvent, SendOutcome};
 
 use self::stats::{LiveStats, RateWindow};
+use super::adapt::{Adapter, Reason, Signals};
 use super::*;
 
 /// Intervalo entre keyframes automáticos.
@@ -42,6 +43,10 @@ const INIT_TIMEOUT: Duration = Duration::from_secs(15);
 const MAX_DEVICE_RESETS: u32 = 3;
 /// Quadros em codificação rastreados para medir o tempo de codificação.
 const MAX_INFLIGHT: usize = 16;
+/// Intervalo entre decisões da adaptação de qualidade.
+const ADAPT_INTERVAL: Duration = Duration::from_secs(1);
+/// Intervalo mínimo entre avisos de redução de qualidade na interface.
+const ADAPT_WARNING_INTERVAL: Duration = Duration::from_secs(15);
 
 pub fn list_sources() -> Result<Vec<SourceInfo>> {
     let sources = vellcast_capture::list_sources().map_err(map_capture_error)?;
@@ -272,6 +277,18 @@ struct Pipeline {
     /// os keyframes periódicos e a imagem para quem entra depois.
     last_frame: Option<CapturedFrame>,
     last_submit: Instant,
+    /// Adaptação de bitrate/FPS (S-001/S-002).
+    adapter: Adapter,
+    started: Instant,
+    last_adapt: Instant,
+    /// FPS efetivo enviado ao encoder (≤ FPS da captura).
+    target_fps: u32,
+    /// Totais acumulados na última decisão, para calcular os deltas da janela.
+    prev_network_dropped: u64,
+    prev_encoder_dropped: u64,
+    /// `Some(false)` quando o encoder recusou mudar o bitrate em tempo real.
+    runtime_bitrate: Option<bool>,
+    last_adapt_warning: Option<Instant>,
 }
 
 impl Pipeline {
@@ -333,6 +350,9 @@ impl Pipeline {
             height: out_h,
             fps: config.quality.fps,
         });
+        shared
+            .stats
+            .set_targets(config.quality.bitrate_kbps, config.quality.fps);
         if !gpu.encoder.descriptor().hardware {
             events(SessionEvent::Warning {
                 message: "Nenhum encoder de hardware disponível: usando codificação por software, que consome CPU."
@@ -354,6 +374,19 @@ impl Pipeline {
             device_resets: 0,
             last_frame: None,
             last_submit: Instant::now(),
+            adapter: Adapter::new(
+                config.adaptation,
+                config.quality.bitrate_kbps,
+                config.quality.fps,
+                0,
+            ),
+            started: Instant::now(),
+            last_adapt: Instant::now(),
+            target_fps: config.quality.fps,
+            prev_network_dropped: 0,
+            prev_encoder_dropped: 0,
+            runtime_bitrate: None,
+            last_adapt_warning: None,
         })
     }
 
@@ -376,8 +409,7 @@ impl Pipeline {
             // Espera curta quando há saída pendente no encoder; senão aguarda o próximo quadro.
             // Com um quadro guardado, acorda a cada meio intervalo para poder repeti-lo.
             let idle = if self.last_frame.is_some() {
-                (Duration::from_secs(1) / self.config.quality.fps.max(1) / 2)
-                    .min(Duration::from_millis(50))
+                (Duration::from_secs(1) / self.target_fps.max(1) / 2).min(Duration::from_millis(50))
             } else {
                 Duration::from_millis(50)
             };
@@ -406,6 +438,74 @@ impl Pipeline {
             }
             self.flush_outputs(&mut out, shared, &mut window);
             window.maybe_publish(Instant::now(), &shared.stats, || self.side_stats());
+            if self.last_adapt.elapsed() >= ADAPT_INTERVAL {
+                self.adapt(shared, events);
+            }
+        }
+    }
+
+    /// Uma decisão da adaptação de qualidade por segundo (S-001/S-002).
+    fn adapt(&mut self, shared: &Shared, events: &Events) {
+        self.last_adapt = Instant::now();
+        let net = self.publisher.stats();
+        let live = shared.stats.snapshot();
+        let signals = Signals {
+            queue_bytes: net.queue_bytes,
+            network_dropped: net.video_dropped.saturating_sub(self.prev_network_dropped),
+            encoder_dropped: live
+                .frames_dropped
+                .saturating_sub(self.prev_encoder_dropped),
+            rtt_ms: (net.last_rtt_us > 0).then(|| net.last_rtt_us as f32 / 1000.0),
+            encode_ms: live.encode_ms_avg,
+        };
+        self.prev_network_dropped = net.video_dropped;
+        self.prev_encoder_dropped = live.frames_dropped;
+        let now_ms = self.started.elapsed().as_millis() as u64;
+        let Some(change) = self.adapter.update(now_ms, signals) else {
+            return;
+        };
+        tracing::info!(
+            bitrate_kbps = change.bitrate_kbps,
+            fps = change.fps,
+            reason = ?change.reason,
+            "adaptação de qualidade"
+        );
+        if self.runtime_bitrate != Some(false)
+            && change.bitrate_kbps != self.gpu.encoder.config().bitrate_kbps
+        {
+            let ok = self.gpu.encoder.set_bitrate(change.bitrate_kbps);
+            if !ok && self.runtime_bitrate.is_none() {
+                tracing::warn!(
+                    "o encoder não aceita mudar o bitrate em tempo real; só o FPS será ajustado"
+                );
+            }
+            self.runtime_bitrate = Some(ok);
+        }
+        self.target_fps = change.fps.min(self.config.quality.fps).max(1);
+        let applied_bitrate = self.gpu.encoder.config().bitrate_kbps;
+        shared.stats.set_targets(applied_bitrate, self.target_fps);
+
+        if change.reason.is_degradation()
+            && self
+                .last_adapt_warning
+                .is_none_or(|t| t.elapsed() >= ADAPT_WARNING_INTERVAL)
+        {
+            self.last_adapt_warning = Some(Instant::now());
+            let message = match change.reason {
+                Reason::NetworkCongestion => format!(
+                    "Rede lenta até o servidor: qualidade reduzida para {} kbps.",
+                    applied_bitrate
+                ),
+                Reason::EncoderOverload => format!(
+                    "Encoder sobrecarregado: transmitindo a {} FPS para preservar o jogo.",
+                    self.target_fps
+                ),
+                Reason::RecommendLowerResolution => {
+                    "O encoder continua sobrecarregado no FPS mínimo. Para preservar o jogo, transmita de novo com uma resolução menor (perfil Econômico).".to_string()
+                }
+                Reason::Recovery => String::new(),
+            };
+            events(SessionEvent::Warning { message });
         }
     }
 
@@ -420,12 +520,21 @@ impl Pipeline {
         let (frame, pts_hns) = match frame {
             Some(frame) => {
                 window.captured += 1;
+                // FPS reduzido pela adaptação: descarta quadros que chegam antes do
+                // próximo intervalo (o mais recente fica guardado para repetição).
+                if self.target_fps < self.config.quality.fps {
+                    let interval = Duration::from_secs(1) / self.target_fps.max(1);
+                    if self.last_submit.elapsed() < interval.mul_f32(0.85) {
+                        self.last_frame = Some(frame);
+                        return Ok(());
+                    }
+                }
                 let pts = (frame.time_hns - self.origin_hns).max(0);
                 (frame, pts)
             }
             None => {
                 // Fonte parada: repete o último quadro no ritmo do FPS-alvo.
-                let interval = Duration::from_secs(1) / self.config.quality.fps.max(1);
+                let interval = Duration::from_secs(1) / self.target_fps.max(1);
                 if self.last_submit.elapsed() < interval + interval / 2 {
                     return Ok(());
                 }
@@ -532,6 +641,12 @@ impl Pipeline {
         while shared.slot.take(Duration::ZERO).is_some() {}
         let fresh = open_gpu(&self.config, shared, self.out_w, self.out_h)?;
         drop(std::mem::replace(&mut self.gpu, fresh));
+        // O encoder novo nasce com o bitrate configurado; reaplica o alvo da adaptação.
+        if self.runtime_bitrate != Some(false)
+            && self.adapter.bitrate_kbps() != self.gpu.encoder.config().bitrate_kbps
+        {
+            self.gpu.encoder.set_bitrate(self.adapter.bitrate_kbps());
+        }
         self.inflight.clear();
         shared.keyframe.store(true, Ordering::Relaxed);
         Ok(())

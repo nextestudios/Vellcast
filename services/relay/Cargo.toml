@@ -10,6 +10,7 @@ publish = false
 
 [dependencies]
 vellcast-protocol.workspace = true
+vellcast-entitlement.workspace = true
 anyhow.workspace = true
 axum.workspace = true
 base64.workspace = true
@@ -25,8 +26,14 @@ tokio.workspace = true
 tower-http.workspace = true
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["json"] }
+# Cliente HTTP da troca OAuth2 com o Discord (rustls, síncrono em spawn_blocking).
+ureq = { version = "=3.4.2", default-features = false, features = ["rustls", "json"] }
+# Persistência opcional das salas (`VELLCAST_DB_PATH`); SQLite embutido, mesma versão da cloud-api.
+rusqlite = { version = "=0.40.2", features = ["bundled"] }
 
 [dev-dependencies]
+# `form`: API do Discord simulada nos testes (oauth2/token recebe formulário).
+axum = { workspace = true, features = ["form"] }
 vellcast-transport.workspace = true
 tokio-tungstenite.workspace = true
 

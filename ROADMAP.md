@@ -3,7 +3,7 @@
 Visão única de tudo o que será feito, da validação inicial ao lançamento, organizada pela metodologia **MoSCoW**.
 Critérios de aceite, dependências e notas de cada tarefa estão em [`docs/ROADMAP.md`](docs/ROADMAP.md) (fonte da verdade); a classificação completa dos requisitos está em [`docs/MOSCOW.md`](docs/MOSCOW.md).
 
-Atualizado em: **2026-10-08**
+Atualizado em: **2026-10-09**
 
 **Legenda:** ✅ concluído · 🧪 em teste · 🔨 em andamento · ⛔ bloqueado · ⏸️ adiado · ⬜ não iniciado
 **MoSCoW:** **M** = Must Have · **S** = Should Have · **C** = Could Have · **W** = Won't Have (fora do MVP)
@@ -32,16 +32,16 @@ flowchart LR
 
 | Etapa | Nome | Prioridade | Ambiente necessário | Situação |
 |---|---|---|---|---|
-| 0 | Validação Discord | M | macOS + Discord | 🧪 validação local concluída; teste no Discord ⏸️ adiado |
+| 0 | Validação Discord | M | macOS + Discord | ⛔ código pronto (OAuth, pareamento, Activity); falta criar a aplicação no Discord |
 | 1 | Desktop e controles | M | macOS (dev) + Windows (validação) | 🧪 implementada; falta Windows real e controle físico |
 | 2 | Captura e encoder | M | **Windows com GPU** | 🧪 executada no Windows (CI, sem GPU); falta GPU real |
-| 3 | Media relay | M | macOS/Linux | 🧪 implementada; falta Docker e VPS com TLS |
+| 3 | Media relay | M | macOS/Linux | ✅ em produção em `vellcast.nextestudios.com`; 60 min estável |
 | 4 | Áudio | M | **Windows** | 🧪 executada no Windows (CI); falta teste com jogo real |
 | 5 | Integração completa — **MVP** | M | Windows (+ Discord para a Activity) | 🧪 E2E Windows passando; servidor de testes no ar; pronto para teste |
-| OC | Abertura do código (Open Core) | S | — | ⬜ |
-| 6 | Otimização extrema | M | Windows com GPU + jogos | ⬜ |
-| 7 | Comercialização | S no MVP / M no Premium | Linux (servidor) | ⬜ |
-| 8 | Lançamento | M | Windows + produção | ⬜ |
+| OC | Abertura do código (Open Core) | S | — | 🧪 parte técnica pronta; decisões suas pendentes |
+| 6 | Otimização extrema | M | Windows com GPU + jogos | 🧪 software pronto e medido; otimização com GPU real bloqueada |
+| 7 | Comercialização | S no MVP / M no Premium | Linux (servidor) | 🧪 backend pronto; cobrança real depende de conta no provedor |
+| 8 | Lançamento | M | Windows + produção | 🧪 instalador e atualizador prontos; certificado e revisão jurídica pendentes |
 
 **Marcos:**
 1. **MVP** (fim da Etapa 5): um usuário transmite um jogo do Windows e outro assiste dentro do Discord, com controle no desktop.
@@ -64,7 +64,7 @@ Comprovar que H.264 + Opus via WebSocket e WebCodecs funcionam dentro de uma Dis
 - [ ] 🧪 E0-T07 — Reconexão automática
 - [ ] 🧪 E0-T08 — Verificação da Gamepad API
 - [ ] 🧪 E0-T09 — Teste em navegador local
-- [ ] ⏸️ E0-T10 — Teste em Activity real (Desktop, Web, Mobile) — adiado, pré-requisito da Etapa 5
+- [ ] ⛔ E0-T10 — Teste em Activity real (Desktop, Web, Mobile) — código pronto; falta criar a aplicação no Discord ([guia](docs/DISCORD_INTEGRATION.md))
 - [ ] 🔨 E0-T11 — Relatório de resultados
 
 ### Etapa 1 — Desktop e controles · M
@@ -86,7 +86,7 @@ Capturar e codificar 1080p60 nativamente, mantendo os quadros na GPU.
 
 - [ ] 🧪 E2-T01 — Captura de janela (Windows Graphics Capture)
 - [ ] 🧪 E2-T02 — Captura de monitor
-- [ ] ⬜ E2-T03 — Fallback DXGI Desktop Duplication (só se o WGC falhar nos testes)
+- [x] ✅ E2-T03 — Fallback DXGI: não necessário, o WGC funcionou no Windows real (ADR-057)
 - [ ] 🧪 E2-T04 — Detecção de encoders (hardware primeiro, software como fallback)
 - [ ] 🧪 E2-T05 — Pipeline Direct3D 11 → NV12 na GPU → H.264 sem cópia para a CPU
 - [ ] 🧪 E2-T06 — Configuração de resolução, FPS e bitrate
@@ -108,10 +108,10 @@ Servidor `vellcast-relay` que recebe uma transmissão e distribui para vários e
 - [x] ✅ E3-T08 — Métricas e health check
 - [x] ✅ E3-T09 — Benchmark com 20 espectadores (local: 60 fps, p95 2,2 ms, 4,8% CPU, 9,7 MB)
 - [x] ✅ E3-T10 — Deploy em VPS com TLS via Dokploy: `https://vellcast.nextestudios.com` (servidor na Europa limita a vazão para o Brasil)
-- [ ] ⬜ E3-T11 — Salas persistentes em SQLite (S)
-- [ ] ⬜ E3-T12 — Revogação e rotação de tokens
-- [ ] ⬜ E3-T13 — Sessão de 60 min e teste com 50 espectadores
-- [ ] ⬜ E3-T14 — Inventário de licenças (`cargo deny`) e unificação de dependências duplicadas
+- [ ] 🔨 E3-T11 — Salas persistentes em SQLite (S)
+- [ ] 🔨 E3-T12 — Revogação e rotação de tokens
+- [ ] 🔨 E3-T13 — Sessão de 60 min com 50 espectadores (em execução)
+- [x] ✅ E3-T14 — Inventário de licenças e duplicatas (`cargo deny` na CI)
 
 ### Etapa 4 — Áudio · M
 Transmitir o áudio do jogo, sincronizado com o vídeo.
@@ -125,61 +125,61 @@ Transmitir o áudio do jogo, sincronizado com o vídeo.
 ### Etapa 5 — Integração completa (MVP) · M
 Desktop, relay e Discord Activity funcionando juntos de ponta a ponta.
 
-- [ ] ⏸️ E5-T01 — Autenticação OAuth2 do Discord — adiado; no MVP o acesso é por link de convite
-- [ ] ⏸️ E5-T02 — Pareamento desktop ↔ Activity — adiado; o link de convite substitui no MVP
+- [ ] 🧪 E5-T01 — Autenticação OAuth2 do Discord no relay (testada com Discord simulado)
+- [ ] 🧪 E5-T02 — Pareamento desktop ↔ Activity por código de uso único
 - [ ] 🧪 E5-T03 — Fluxo de salas na interface (criar, convidar, encerrar)
 - [ ] 🧪 E5-T04 — Fluxo de iniciar e encerrar transmissão (mouse, teclado e controle)
-- [ ] 🧪 E5-T05 — Player (web em `/watch`; Activity depende do E0-T10)
+- [ ] 🧪 E5-T05 — Player final: web em `/watch` e Activity (login, salas da instância, player)
 - [ ] 🧪 E5-T06 — Perfis de qualidade e atalhos (S)
 - [ ] 🧪 E5-T07 — Tratamento de erros de ponta a ponta
 - [ ] 🧪 E5-T08 — Pacote de teste Windows (`Vellcast-MVP-windows-x64.zip`) e guia [`docs/TESTING_WINDOWS.md`](docs/TESTING_WINDOWS.md)
 - [ ] 🧪 E5-T09 — Player web servido pelo relay (S-011)
-- [ ] ⏸️ Para a Activity: E0-T10 (teste em Activity real)
+- [ ] ⛔ Validação dentro do Discord: E0-T10
 
 ### Marco OC — Abertura do código (Open Core) · S
 Repositório continua **privado** até concluir este marco (alvo: fim da Etapa 5).
 
-- [ ] ⬜ OC-T01 — Confirmar a licença do código próprio (Apache-2.0) e criar `NOTICE`
-- [ ] ⬜ OC-T02 — Inventário de licenças de terceiros (`cargo deny` + npm na CI)
-- [ ] ⬜ OC-T03 — Separar a parte comercial em repositório privado
-- [ ] ⬜ OC-T04 — Verificação da marca "Vellcast" (INPI, domínios) e política de marca
-- [ ] ⬜ OC-T05 — Revisão de segurança do relay e do protocolo
-- [ ] ⬜ OC-T06 — Política de reporte de vulnerabilidades
-- [ ] ⬜ OC-T07 — Varredura de segredos no histórico
-- [ ] ⬜ OC-T08 — Preparação para contribuidores externos
-- [ ] ⬜ OC-T09 — Tornar o repositório público (com aprovação do responsável)
+- [ ] ⛔ OC-T01 — Confirmar a licença do código próprio (Apache-2.0) — decisão sua
+- [x] ✅ OC-T02 — Inventário de licenças de terceiros (`cargo deny` + npm na CI)
+- [ ] ⛔ OC-T03 — Separar a parte comercial em repositório privado — decisão sua
+- [ ] ⛔ OC-T04 — Verificação da marca "Vellcast" (INPI) — ação sua
+- [x] ✅ OC-T05 — Revisão de segurança (sem achados altos ou críticos)
+- [x] ✅ OC-T06 — `SECURITY.md` (falta habilitar Private Vulnerability Reporting no GitHub)
+- [x] ✅ OC-T07 — Varredura de segredos no histórico e na CI (gitleaks)
+- [x] ✅ OC-T08 — Código de conduta e modelos de issue/PR
+- [ ] ⛔ OC-T09 — Tornar o repositório público — aprovação sua
 
 ### Etapa 6 — Otimização extrema · M
 Reduzir ao mínimo o impacto da transmissão nos jogos, com números reproduzíveis.
 
-- [ ] ⬜ E6-T01 — Benchmarks reproduzíveis
-- [ ] ⬜ E6-T02 — Redução de alocações e otimização de buffers
-- [ ] ⬜ E6-T03 — Otimização de captura e encoder
-- [ ] ⬜ E6-T04 — Ajuste automático de bitrate (S)
-- [ ] ⬜ E6-T05 — Avaliação QUIC (Quinn) vs WebSocket (S)
-- [ ] ⬜ E6-T06 — Modo competitivo (S)
-- [ ] ⬜ E6-T07 — Métricas avançadas na interface (S)
-- [ ] ⬜ E6-T08 — Testes prolongados (≥ 60 min) e de falha
+- [x] ✅ E6-T01 — Benchmarks reproduzíveis (`crates/perf`, `tests/benchmarks`, E2E Windows)
+- [x] ✅ E6-T02 — Escrita em lote no relay e no transmissor (p99 2,3–3,0 ms → 1,7 ms)
+- [ ] ⛔ E6-T03 — Otimização de captura e encoder — requer Windows com GPU real
+- [ ] 🧪 E6-T04 — Ajuste automático de bitrate (S)
+- [x] ✅ E6-T05 — Avaliação QUIC (Quinn) vs WebSocket: medida; QUIC adiado (ADR-037)
+- [ ] 🧪 E6-T06 — Modo competitivo (S)
+- [ ] 🧪 E6-T07 — Métricas avançadas na interface (S)
+- [ ] 🧪 E6-T08 — Testes prolongados: relay 60 min ok; 60 min no Windows real na CI
 
 ### Etapa 7 — Comercialização · S no MVP / M no Premium
 Planos Free, Pro e Community sem prejudicar o núcleo gratuito (1080p60 continua grátis).
 
-- [ ] ⬜ E7-T01 — Pesquisa das políticas do Discord (Premium Apps, elegibilidade no Brasil)
-- [ ] ⬜ E7-T02 — `services/cloud-api`: contas, planos, entitlements e cotas
-- [ ] ⬜ E7-T03 — Integração com provedor de pagamento elegível
-- [ ] ⬜ E7-T04 — Limites aplicados só no relay hospedado (self-hosted sem restrição)
-- [ ] ⬜ E7-T05 — Painel administrativo mínimo
+- [x] ✅ E7-T01 — Políticas do Discord: Premium Apps indisponível no Brasil (venda fora do Discord)
+- [x] ✅ E7-T02 — `services/cloud-api`: contas, planos, assinaturas, entitlements e cotas
+- [ ] 🧪 E7-T03 — Pagamentos (webhook compatível com Stripe, modo de teste) — produção depende da sua conta no provedor
+- [x] ✅ E7-T04 — Limites aplicados só no relay hospedado (self-hosted sem restrição)
+- [x] ✅ E7-T05 — Painel administrativo mínimo (`/admin`)
 
 ### Etapa 8 — Lançamento · M
 Primeira versão pública estável.
 
-- [ ] ⬜ E8-T01 — Instalador Windows (S)
-- [ ] ⬜ E8-T02 — Assinatura de código
-- [ ] ⬜ E8-T03 — Atualizações seguras (S)
-- [ ] ⬜ E8-T04 — Termos, privacidade e divulgação de licenças
-- [ ] ⬜ E8-T05 — Deploy de produção e monitoramento
-- [ ] ⬜ E8-T06 — Localização PT-BR e EN (S)
-- [ ] ⬜ E8-T07 — Testes finais
+- [ ] 🧪 E8-T01 — Instalador Windows (Inno Setup, teste de instalar/desinstalar na CI) (S)
+- [ ] ⛔ E8-T02 — Assinatura de código — falta o certificado
+- [ ] 🧪 E8-T03 — Atualizações seguras (manifesto assinado Ed25519 + SHA-256) (S)
+- [ ] 🧪 E8-T04 — Termos, privacidade e licenças — rascunhos; revisão jurídica pendente
+- [ ] 🧪 E8-T05 — Produção e monitoramento — alertas a ativar no Dokploy
+- [x] ✅ E8-T06 — Localização PT-BR e EN (S)
+- [ ] 🧪 E8-T07 — Testes finais — checklist pronto, execução em Windows real pendente
 
 ---
 

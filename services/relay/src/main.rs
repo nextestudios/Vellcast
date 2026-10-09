@@ -15,13 +15,15 @@ async fn main() -> Result<()> {
         max_publisher_kbps = config.max_publisher_kbps,
         create_room_key = config.create_room_key.is_some(),
         trust_proxy = config.trust_proxy,
+        persistent = config.db_path.is_some(),
+        secret_rotation = config.previous_secret.is_some(),
         player = config.static_dir.as_ref().map(|d| d.display().to_string()).unwrap_or_else(|| "desativado".into()),
         "vellcast-relay iniciando"
     );
     let listener = tokio::net::TcpListener::bind(bind)
         .await
         .with_context(|| format!("bind em {bind}"))?;
-    serve_with_shutdown(Relay::new(config), listener, shutdown_signal()).await?;
+    serve_with_shutdown(Relay::from_config(config)?, listener, shutdown_signal()).await?;
     tracing::info!("vellcast-relay encerrado");
     Ok(())
 }

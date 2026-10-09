@@ -9,16 +9,16 @@
 
 | Etapa | Nome | Prioridade | Depende de | Status |
 |---|---|---|---|---|
-| 0 | Validação Discord | Must | — | Testing — validação local concluída; E0-T10 adiada ([ADR-013](DECISIONS.md)) |
+| 0 | Validação Discord | Must | — | Blocked — Activity, OAuth e pareamento prontos; falta a aplicação no Discord (E0-T10) |
 | 1 | Desktop e controles | Must | 0 (local) | Testing — falta Windows real e controle físico |
-| 2 | Captura e encoder | Must | 0 (local) | Testing — compila no Windows; execução real pendente |
-| 3 | Media relay | Must | 0 (local) | Testing — falta Docker e VPS com TLS |
-| 4 | Áudio | Must | 2, 3 | Testing — compila no Windows; execução real pendente |
+| 2 | Captura e encoder | Must | 0 (local) | Testing — executada no Windows (CI, sem GPU); falta GPU real |
+| 3 | Media relay | Must | 0 (local) | Done — em produção em vellcast.nextestudios.com; 60 min estável |
+| 4 | Áudio | Must | 2, 3 | Testing — executada no Windows (CI); falta teste com jogo real |
 | 5 | Integração completa | Must | 1, 2, 3, 4 (E0-T10 para a Activity) | Testing — MVP Windows + player web pronto para teste |
-| OC | Marco: abertura do código (Open Core) | Should | 5 | Backlog |
-| 6 | Otimização extrema | Must | 5 | Backlog |
-| 7 | Comercialização | Should (MVP) / Must (Premium) | 5 | Backlog |
-| 8 | Lançamento | Must (lançamento) | 6, 7 | Backlog |
+| OC | Marco: abertura do código (Open Core) | Should | 5 | Testing — tarefas técnicas prontas; decisões do responsável pendentes |
+| 6 | Otimização extrema | Must | 5 | Testing — software pronto; otimização com GPU real bloqueada |
+| 7 | Comercialização | Should (MVP) / Must (Premium) | 5 | Testing — backend pronto; cobrança real depende de conta no provedor |
+| 8 | Lançamento | Must (lançamento) | 6, 7 | Testing — instalador e atualizador prontos; certificado e revisão jurídica pendentes |
 
 As Etapas 1, 2 e 3 podem avançar em paralelo. Por decisão de 2026-10-08 ([ADR-013](DECISIONS.md)), a validação dentro do Discord (E0-T10) foi adiada e as etapas seguintes avançam pela ordem MoSCoW; E0-T10 passa a ser pré-requisito da Etapa 5.
 
@@ -43,7 +43,7 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 | E0-T07 | Reconexão | M-019 | E0-T05 | Backoff exponencial com jitter; retomada no próximo keyframe; tempo de recuperação medido ao reiniciar o servidor | Testing — reconexão validada localmente após reinício do servidor |
 | E0-T08 | Verificação da Gamepad API | M-003 | E0-T05 | Relatório de disponibilidade de `navigator.getGamepads()` e eventos de conexão, exibido no player | Testing — API detectada; falta controle físico e o iframe do Discord |
 | E0-T09 | Teste em navegador local | M-012 | E0-T04..T08 | 720p30 e 1080p60 reproduzidos em Chrome/Edge locais com métricas registradas | Testing — validado em Chromium headless; falta Chrome/Edge com interface e GPU |
-| E0-T10 | Teste em Activity real | M-012 | E0-T09 | Activity executada no Discord Desktop e Web (mobile quando aplicável) via URL Mapping; métricas registradas | Backlog — adiada por decisão do responsável ([ADR-013](DECISIONS.md)) |
+| E0-T10 | Teste em Activity real | M-012 | E0-T09 | Activity executada no Discord Desktop e Web (mobile quando aplicável) via URL Mapping; métricas registradas | Blocked — implementação pronta (OAuth, pareamento, Activity); falta o responsável criar a aplicação no Discord (DISCORD_INTEGRATION.md) |
 | E0-T11 | Relatório de resultados | M-022, M-023 | E0-T09, E0-T10 | Resultados de vídeo, áudio, FPS, latência, reconexão e gamepad registrados separadamente em [PERFORMANCE](PERFORMANCE.md), com hardware, sistema, rede e metodologia | In Progress — resultados locais em PERFORMANCE.md |
 **Entregável:** protótipo reproduzível dentro do Discord.
 
@@ -84,7 +84,7 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 |---|---|---|---|---|---|
 | E2-T01 | Crate `capture` — WGC de janela | M-005 | Etapa 0 | Seleção explícita; resize; fechamento; perda de dispositivo | Testing — captura de janela executada no Windows (E2E na CI); falta GPU real e jogos |
 | E2-T02 | WGC de monitor | M-006 | E2-T01 | Multi-monitor; mudança de resolução | Testing — captura de monitor executada no Windows (E2E na CI); falta multi-monitor real |
-| E2-T03 | Fallback DXGI Desktop Duplication (se necessário) | M-006 | E2-T02 | Somente se justificado por teste | Backlog — só se o WGC falhar nos testes reais |
+| E2-T03 | Fallback DXGI Desktop Duplication (se necessário) | M-006 | E2-T02 | Somente se justificado por teste | Done — não necessário: WGC validado no Windows real (ADR-057) |
 | E2-T04 | Crate `encoder` — detecção de encoders (MF) | M-007, S-006 | E2-T01 | Lista NVENC/AMF/QSV disponíveis | Testing — enumeração executada no Windows da CI (H264 Encoder MFT encontrado); GPUs reais pendentes |
 | E2-T05 | Pipeline D3D11 → encoder H.264 sem cópia para CPU | M-007, M-018 | E2-T04 | Baixa latência; sem B-frames; keyframe sob demanda; fila limitada | Testing — encoder executado no Windows da CI (software + conversão na CPU, ADR-031): SPS+IDR e keyframe sob demanda OK; caminho de GPU pendente |
 | E2-T06 | Configuração de resolução/FPS/bitrate | M-016 | E2-T05 | Reconfiguração ou reinício controlado | Testing — definidos ao iniciar; mudar exige reiniciar a transmissão |
@@ -118,7 +118,7 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 | E3-T11 | `RoomStore` persistente em SQLite | S-015 | E3-T03 | Salas sobrevivem a reinício do relay | Backlog |
 | E3-T12 | Revogação e rotação de tokens | M-020 | E3-T03 | Revogar um token sem encerrar a sala; troca de segredo sem queda | Backlog |
 | E3-T13 | Sessão de 60 min e teste com 50 espectadores | M-025 | E3-T09 | Sem crescimento de memória; sem desconexões | Backlog |
-| E3-T14 | Inventário de licenças e unificação de dependências duplicadas | M-022 | — | `cargo deny` na CI; uma versão de tungstenite/base64 | Backlog |
+| E3-T14 | Inventário de licenças e unificação de dependências duplicadas | M-022 | — | `cargo deny` na CI; uma versão de tungstenite/base64 | Done — cargo-deny na CI (licenças, avisos, duplicatas) |
 
 **Entregável:** servidor funcional em Docker.
 **Critério de aceite:** transmitir vídeo codificado para múltiplos espectadores sem recodificação no servidor.
@@ -150,11 +150,11 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 
 | ID | Tarefa | MoSCoW | Depende de | Critérios de aceite | Status |
 |---|---|---|---|---|---|
-| E5-T01 | Autenticação (OAuth2 Discord no backend) | M-014 | Etapa 3 | Client secret apenas no servidor | Backlog — adiado (ADR-013); no MVP o acesso é por link de convite |
-| E5-T02 | Pareamento desktop ↔ Activity | M-015 | E5-T01 | Código de uso único com expiração | Backlog — adiado (ADR-013); o link de convite substitui no MVP |
+| E5-T01 | Autenticação (OAuth2 Discord no backend) | M-014 | Etapa 3 | Client secret apenas no servidor | Testing — OAuth no relay testado contra Discord simulado; validação real bloqueada pelo E0-T10 |
+| E5-T02 | Pareamento desktop ↔ Activity | M-015 | E5-T01 | Código de uso único com expiração | Testing — pareamento por código (8 caracteres, 5 min, uso único) testado; validação real bloqueada pelo E0-T10 |
 | E5-T03 | Fluxo de salas na UI | M-013 | E5-T01 | Criar/entrar/convidar/encerrar | Testing — validado no macOS contra relay real; Windows pendente |
 | E5-T04 | Fluxo iniciar/encerrar transmissão | M-016 | Etapas 1–4 | Por mouse, teclado e gamepad | Testing — fluxo do motor executado no Windows; falta o clique no app com GPU real |
-| E5-T05 | Player final na Activity | M-012 | Etapa 3 | Listagem de transmissões autorizadas; volume; tela cheia quando suportada | Testing — player web (/watch) validado a 60 fps; Activity no E0-T10 |
+| E5-T05 | Player final na Activity | M-012 | Etapa 3 | Listagem de transmissões autorizadas; volume; tela cheia quando suportada | Testing — Activity final (login, salas da instância, player) e player web; validação real bloqueada pelo E0-T10 |
 | E5-T06 | Perfis de qualidade e atalhos | S-004, S-008 | E5-T04 | Atalhos globais desativados por padrão | Testing — perfis e modo personalizado; atalhos globais desligados |
 | E5-T07 | Tratamento de erros fim a fim | M-019 | E5-T04 | Mensagens claras e recuperação | Testing — mensagens claras no app e no player; Windows pendente |
 | E5-T08 | Pacote de teste Windows e guia | M-021, M-022 | E5-T04 | `Vellcast-MVP-windows-x64.zip` gerado pela CI; [TESTING_WINDOWS](TESTING_WINDOWS.md) | Testing — pacote gerado pela CI; servidor de testes padrão no app |
@@ -174,15 +174,15 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 
 | ID | Tarefa | MoSCoW | Depende de | Critérios de aceite | Status |
 |---|---|---|---|---|---|
-| OC-T01 | Confirmar a licença do código próprio | M-022 | — | Apache-2.0 confirmada (ou substituída) pelo responsável; ADR-007 passa a Aceita; arquivo `NOTICE` criado | Backlog |
-| OC-T02 | Inventário de licenças de terceiros | M-022 | OC-T01 | `cargo deny check licenses` e verificação das dependências npm na CI; tabela de [LICENSING](LICENSING.md) completa, sem pendências; obrigações do Slint (ADR-006) cumpridas | Backlog |
-| OC-T03 | Separar o núcleo aberto da parte comercial | S-015 | — | `services/cloud-api`, planos, billing e documentos comerciais sensíveis movidos para um repositório privado; o núcleo compila e funciona sem eles (W-013) | Backlog |
-| OC-T04 | Verificação da marca "Vellcast" | — | — | Busca no INPI e em domínios registrada; política de uso da marca publicada (Apache-2.0 não licencia a marca, cláusula 6) | Backlog |
-| OC-T05 | Revisão de segurança do relay e do protocolo | M-020 | Etapa 3 | Auditoria (`/cso`) sem achados críticos ou altos abertos; resultados em [SECURITY](SECURITY.md) | Backlog |
-| OC-T06 | Política de reporte de vulnerabilidades | M-020 | — | `SECURITY.md` na raiz com contato privado e prazos de resposta; GitHub Private Vulnerability Reporting habilitado | Backlog |
-| OC-T07 | Varredura de segredos no histórico | M-024 | — | `gitleaks` (ou equivalente) em todo o histórico sem achados; verificação adicionada à CI | Backlog |
-| OC-T08 | Preparação para contribuidores externos | M-022 | OC-T01 | `CONTRIBUTING.md` revisado, código de conduta, templates de issue e PR, proteção da branch `main` | Backlog |
-| OC-T09 | Tornar o repositório público | — | OC-T01..OC-T08 | Visibilidade alterada pelo responsável; README público revisado; anúncio planejado | Backlog |
+| OC-T01 | Confirmar a licença do código próprio | M-022 | — | Apache-2.0 confirmada (ou substituída) pelo responsável; ADR-007 passa a Aceita; arquivo `NOTICE` criado | Blocked — confirmação da licença Apache-2.0 pelo responsável |
+| OC-T02 | Inventário de licenças de terceiros | M-022 | OC-T01 | `cargo deny check licenses` e verificação das dependências npm na CI; tabela de [LICENSING](LICENSING.md) completa, sem pendências; obrigações do Slint (ADR-006) cumpridas | Done — cargo-deny e licenças npm na CI |
+| OC-T03 | Separar o núcleo aberto da parte comercial | S-015 | — | `services/cloud-api`, planos, billing e documentos comerciais sensíveis movidos para um repositório privado; o núcleo compila e funciona sem eles (W-013) | Blocked — decisão do responsável sobre o repositório privado da cloud-api |
+| OC-T04 | Verificação da marca "Vellcast" | — | — | Busca no INPI e em domínios registrada; política de uso da marca publicada (Apache-2.0 não licencia a marca, cláusula 6) | Blocked — busca e registro da marca no INPI |
+| OC-T05 | Revisão de segurança do relay e do protocolo | M-020 | Etapa 3 | Auditoria (`/cso`) sem achados críticos ou altos abertos; resultados em [SECURITY](SECURITY.md) | Done — revisão sem achados altos/críticos (docs/security/REVIEW-2026-10.md) |
+| OC-T06 | Política de reporte de vulnerabilidades | M-020 | — | `SECURITY.md` na raiz com contato privado e prazos de resposta; GitHub Private Vulnerability Reporting habilitado | Done — SECURITY.md; falta habilitar Private Vulnerability Reporting nas configurações |
+| OC-T07 | Varredura de segredos no histórico | M-024 | — | `gitleaks` (ou equivalente) em todo o histórico sem achados; verificação adicionada à CI | Done — gitleaks no histórico (sem segredos) e na CI |
+| OC-T08 | Preparação para contribuidores externos | M-022 | OC-T01 | `CONTRIBUTING.md` revisado, código de conduta, templates de issue e PR, proteção da branch `main` | Done — código de conduta, modelos de issue e PR |
+| OC-T09 | Tornar o repositório público | — | OC-T01..OC-T08 | Visibilidade alterada pelo responsável; README público revisado; anúncio planejado | Blocked — aprovação do responsável |
 
 **Entregável:** repositório público do Vellcast Core.
 **Critério de aceite:** todas as tarefas OC-T01 a OC-T08 concluídas e a abertura (OC-T09) aprovada explicitamente pelo responsável.
@@ -196,14 +196,14 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 
 | ID | Tarefa | MoSCoW | Depende de | Critérios de aceite | Status |
 |---|---|---|---|---|---|
-| E6-T01 | Benchmarks reproduzíveis | M-023 | Etapa 5 | Metodologia em [PERFORMANCE](PERFORMANCE.md) | Backlog |
-| E6-T02 | Redução de alocações e otimização de buffers | M-018 | E6-T01 | Antes/depois medidos | Backlog |
-| E6-T03 | Otimização de captura e encoder | M-007 | E6-T01 | Antes/depois medidos | Backlog |
-| E6-T04 | Ajuste automático de bitrate | S-001 | E6-T01 | Histerese validada | Backlog |
-| E6-T05 | Avaliação QUIC (Quinn) vs WebSocket | S-005 | E6-T01 | Relatório e decisão registrados | Backlog |
-| E6-T06 | Modo competitivo | S-002 | E6-T04 | Benchmark com/sem | Backlog |
-| E6-T07 | Métricas avançadas na UI | S-007 | E6-T01 | Seção própria | Backlog |
-| E6-T08 | Testes prolongados e de falha | M-025 | E6-T02 | ≥ 60 min estáveis | Backlog |
+| E6-T01 | Benchmarks reproduzíveis | M-023 | Etapa 5 | Metodologia em [PERFORMANCE](PERFORMANCE.md) | Done — benchmarks reproduzíveis (crates/perf, tests/benchmarks, E2E Windows); números em PERFORMANCE |
+| E6-T02 | Redução de alocações e otimização de buffers | M-018 | E6-T01 | Antes/depois medidos | Done — escrita em lote no relay e no transmissor; p99 de 2,3–3,0 ms para 1,7 ms (medido) |
+| E6-T03 | Otimização de captura e encoder | M-007 | E6-T01 | Antes/depois medidos | Blocked — otimização de captura/encoder exige Windows com GPU real |
+| E6-T04 | Ajuste automático de bitrate | S-001 | E6-T01 | Histerese validada | Testing — controlador AIMD com histerese (testado); mudança de bitrate em tempo real depende do encoder real |
+| E6-T05 | Avaliação QUIC (Quinn) vs WebSocket | S-005 | E6-T01 | Relatório e decisão registrados | Done — avaliação Quinn × WebSocket medida; decisão: adiado (ADR-037) |
+| E6-T06 | Modo competitivo | S-002 | E6-T04 | Benchmark com/sem | Testing — política competitiva (bitrate → FPS) testada; efeito em jogo exige Windows com GPU |
+| E6-T07 | Métricas avançadas na UI | S-007 | E6-T01 | Seção própria | Testing — métricas avançadas (alvo adaptativo, CPU, RAM) na tela Ao vivo |
+| E6-T08 | Testes prolongados e de falha | M-025 | E6-T02 | ≥ 60 min estáveis | Testing — relay 60 min sem perdas (Mac); sessão de 60 min no Windows real em execução na CI |
 
 **Entregável:** versão otimizada com relatório de desempenho.
 **Critério de aceite:** resultados reproduzíveis em hardware de referência, documentando diferenças entre jogar com e sem o Vellcast transmitindo.
@@ -217,11 +217,11 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 
 | ID | Tarefa | MoSCoW | Depende de | Critérios de aceite | Status |
 |---|---|---|---|---|---|
-| E7-T01 | Pesquisa de políticas do Discord (Premium Apps, elegibilidade no Brasil, paridade) | S-015 | — | Conclusões registradas em [MONETIZATION](MONETIZATION.md) | Backlog |
-| E7-T02 | `services/cloud-api`: contas, planos, entitlements, cotas | S-015 | Etapa 5 | Entitlements validados no backend | Backlog |
-| E7-T03 | Integração com provedor de pagamento elegível | S-015 | E7-T01 | Webhooks testados em modo de teste; sem processamento direto de cartão | Backlog |
-| E7-T04 | Aplicação de limites no relay hospedado | S-015 | E7-T02 | Limites aplicados apenas no serviço oficial; self-hosted sem restrição de resolução | Backlog |
-| E7-T05 | Painel administrativo mínimo | S-015 | E7-T02 | — | Backlog |
+| E7-T01 | Pesquisa de políticas do Discord (Premium Apps, elegibilidade no Brasil, paridade) | S-015 | — | Conclusões registradas em [MONETIZATION](MONETIZATION.md) | Done — Premium Apps indisponível para desenvolvedores no Brasil (MONETIZATION §6, ADR-043) |
+| E7-T02 | `services/cloud-api`: contas, planos, entitlements, cotas | S-015 | Etapa 5 | Entitlements validados no backend | Done — services/cloud-api: contas, planos, assinaturas, entitlements, cotas |
+| E7-T03 | Integração com provedor de pagamento elegível | S-015 | E7-T01 | Webhooks testados em modo de teste; sem processamento direto de cartão | Testing — webhook compatível com Stripe em modo de teste; produção depende da conta do responsável |
+| E7-T04 | Aplicação de limites no relay hospedado | S-015 | E7-T02 | Limites aplicados apenas no serviço oficial; self-hosted sem restrição de resolução | Done — relay hospedado exige entitlement assinado; self-hosted sem restrição |
+| E7-T05 | Painel administrativo mínimo | S-015 | E7-T02 | — | Done — /admin com autenticação e CSRF |
 
 **Entregável:** backend comercial funcional e testado.
 **Critério de aceite:** planos reconhecidos e limites aplicados corretamente no serviço hospedado. Não ativar cobrança antes de verificar exigências legais e de plataforma.
@@ -235,13 +235,13 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 
 | ID | Tarefa | MoSCoW | Depende de | Critérios de aceite | Status |
 |---|---|---|---|---|---|
-| E8-T01 | Instalador Windows | S-016 | Etapa 6 | Instalação/desinstalação limpas | Backlog |
-| E8-T02 | Assinatura de código | S-016 | E8-T01 | Quando certificado disponível | Backlog |
-| E8-T03 | Atualizações seguras | S-012 | E8-T01 | Pacotes assinados e verificados | Backlog |
-| E8-T04 | Termos, privacidade e divulgação de licenças | M-022, M-024 | — | Inventário de licenças de terceiros publicado | Backlog |
-| E8-T05 | Deploy de produção e monitoramento | S-014 | Etapa 3 | Health checks e alertas | Backlog |
-| E8-T06 | Localização PT-BR/EN | S-013 | E1-T09 | Sem strings não traduzidas | Backlog |
-| E8-T07 | Testes finais | M-025 | Todas | Checklist de lançamento completo | Backlog |
+| E8-T01 | Instalador Windows | S-016 | Etapa 6 | Instalação/desinstalação limpas | Testing — instalador Inno Setup com teste de instalar/desinstalar na CI |
+| E8-T02 | Assinatura de código | S-016 | E8-T01 | Quando certificado disponível | Blocked — falta certificado de assinatura de código (segredos WINDOWS_CERT_*) |
+| E8-T03 | Atualizações seguras | S-012 | E8-T01 | Pacotes assinados e verificados | Testing — atualizador com manifesto Ed25519 + SHA-256; chave de assinatura no segredo do repositório |
+| E8-T04 | Termos, privacidade e divulgação de licenças | M-022, M-024 | — | Inventário de licenças de terceiros publicado | Testing — rascunhos de termos e privacidade (LGPD) e avisos de licenças automáticos; revisão jurídica pendente |
+| E8-T05 | Deploy de produção e monitoramento | S-014 | Etapa 3 | Health checks e alertas | Testing — relay em produção com health check; alertas a ativar no Dokploy (OPERATIONS.md) |
+| E8-T06 | Localização PT-BR/EN | S-013 | E1-T09 | Sem strings não traduzidas | Done — teste de i18n cobre todas as strings (pt-BR/en) |
+| E8-T07 | Testes finais | M-025 | Todas | Checklist de lançamento completo | Testing — RELEASE_CHECKLIST.md pronto; execução manual em Windows real pendente |
 
 **Entregável:** primeira versão pública estável do Vellcast.
 **Status:** Backlog.

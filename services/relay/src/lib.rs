@@ -6,10 +6,14 @@
 
 pub mod api;
 pub mod config;
+pub mod discord;
+pub mod entitlement;
 pub mod metrics;
+pub mod pairing;
 pub mod ratelimit;
 pub mod room;
 pub mod store;
+pub mod store_sqlite;
 pub mod token;
 pub mod web;
 pub mod ws;
@@ -30,7 +34,7 @@ use crate::metrics::Metrics;
 use crate::ratelimit::IpRateLimiter;
 use crate::room::LiveRoom;
 use crate::store::{MemoryStore, RoomStore};
-use crate::token::TokenSigner;
+use crate::token::{Claims, Role, TokenSigner};
 
 pub struct Relay {
     pub config: Config,
@@ -40,6 +44,8 @@ pub struct Relay {
     pub metrics: Metrics,
     pub api_limiter: IpRateLimiter,
     pub ws_limiter: IpRateLimiter,
+    /// Salas por conta no modo hospedado (limites de plano).
+    pub account_rooms: entitlement::AccountRooms,
     started: Instant,
 }
 
@@ -48,17 +54,67 @@ impl Relay {
         Self::with_store(config, Arc::new(MemoryStore::default()))
     }
 
+    /// Store conforme a configuração: SQLite em `db_path`, ou memória.
+    pub fn from_config(config: Config) -> anyhow::Result<Arc<Self>> {
+        let store: Arc<dyn RoomStore> = match &config.db_path {
+            Some(path) => Arc::new(
+                store_sqlite::SqliteStore::open(path)
+                    .map_err(|e| anyhow::anyhow!("banco {}: {e}", path.display()))?,
+            ),
+            None => Arc::new(MemoryStore::default()),
+        };
+        Ok(Self::with_store(config, store))
+    }
+
     pub fn with_store(config: Config, store: Arc<dyn RoomStore>) -> Arc<Self> {
-        Arc::new(Self {
-            signer: TokenSigner::new(&config.secret),
+        let relay = Arc::new(Self {
+            signer: TokenSigner::with_previous(&config.secret, config.previous_secret.as_deref()),
             api_limiter: IpRateLimiter::new(config.api_burst, config.api_per_sec),
             ws_limiter: IpRateLimiter::new(config.ws_burst, config.ws_per_sec),
             config,
             store,
             rooms: RwLock::new(HashMap::new()),
             metrics: Metrics::default(),
+            account_rooms: entitlement::AccountRooms::default(),
             started: Instant::now(),
-        })
+        });
+        relay.restore_rooms();
+        relay
+    }
+
+    /// Recria o estado ao vivo das salas persistidas (após reinício do relay).
+    fn restore_rooms(&self) {
+        let now = unix_now();
+        let mut restored = 0usize;
+        for record in self.store.list() {
+            if record.expires_at <= now {
+                self.store.remove(&record.id);
+                continue;
+            }
+            self.insert_room(Arc::new(self.new_live_room(&record.id, record.max_viewers)));
+            restored += 1;
+        }
+        if restored > 0 {
+            tracing::info!(restored, "salas restauradas do banco");
+        }
+    }
+
+    pub(crate) fn new_live_room(&self, id: &str, max_viewers: usize) -> LiveRoom {
+        let c = &self.config;
+        LiveRoom::new(
+            id.to_owned(),
+            max_viewers,
+            c.viewer_queue,
+            c.gop_cache_bytes,
+            c.keyframe_request_interval,
+        )
+    }
+
+    /// `true` se o token foi revogado (por nonce ou pela revogação em massa de espectadores).
+    pub fn is_revoked(&self, claims: &Claims) -> bool {
+        self.store
+            .get(&claims.room)
+            .is_some_and(|r| r.is_revoked(&claims.nonce, claims.role == Role::Viewer, claims.iat))
     }
 
     pub fn room(&self, id: &str) -> Option<Arc<LiveRoom>> {
@@ -139,6 +195,12 @@ impl Relay {
 }
 
 pub fn router(relay: Arc<Relay>) -> Router {
+    router_with_discord(relay, discord::DiscordConfig::from_env())
+}
+
+/// Router com a integração Discord explícita (testes usam uma API simulada).
+pub fn router_with_discord(relay: Arc<Relay>, discord: Option<discord::DiscordConfig>) -> Router {
+    let discord_routes = discord::router(Arc::clone(&relay), discord);
     let static_dir = relay.config.static_dir.clone();
     let api = Router::new()
         .route("/healthz", get(|| async { "ok" }))
@@ -155,7 +217,9 @@ pub fn router(relay: Arc<Relay>) -> Router {
             "/api/rooms/{id}/publisher-token",
             post(api::publisher_token),
         )
-        .with_state(relay);
+        .route("/api/rooms/{id}/revoke", post(api::revoke))
+        .with_state(relay)
+        .merge(discord_routes);
     match static_dir {
         Some(dir) => web::with_player(api, &dir),
         None => api,

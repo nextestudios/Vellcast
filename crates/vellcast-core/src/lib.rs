@@ -7,6 +7,10 @@
 
 use std::time::Duration;
 
+pub mod adapt;
+
+pub use adapt::Adaptation;
+
 /// Identificador opaco de uma fonte (HWND ou HMONITOR no Windows).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SourceId(pub u64);
@@ -153,6 +157,8 @@ pub struct SessionConfig {
     pub relay_ws_url: String,
     /// Token de transmissor emitido pelo relay para a sala.
     pub publisher_token: String,
+    /// Adaptação de bitrate/FPS durante a transmissão (S-001; competitivo = S-002).
+    pub adaptation: Adaptation,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -191,6 +197,10 @@ pub struct SessionStats {
     pub audio_active: bool,
     pub reconnects: u64,
     pub rtt_ms: Option<f32>,
+    /// Bitrate-alvo atual definido pela adaptação (kbps); 0 = ainda não iniciado.
+    pub target_bitrate_kbps: u32,
+    /// FPS-alvo atual definido pela adaptação; 0 = ainda não iniciado.
+    pub target_fps: u32,
 }
 
 #[derive(Debug, thiserror::Error)]

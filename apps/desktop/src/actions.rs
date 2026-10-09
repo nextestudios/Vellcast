@@ -146,6 +146,16 @@ fn wire(ui: &AppWindow) {
         }
     });
     let w = ui.as_weak();
+    ui.on_make_pairing(move |index| {
+        if let Some(ui) = w.upgrade() {
+            let id =
+                with_state(|st| st.rooms.rooms.get(index as usize).map(|r| r.id.clone())).flatten();
+            if let Some(id) = id {
+                make_pairing(&ui, id);
+            }
+        }
+    });
+    let w = ui.as_weak();
     ui.on_copy_invite(move || {
         if let Some(ui) = w.upgrade() {
             copy_invite(&ui);
@@ -432,6 +442,26 @@ fn show_stats(ui: &AppWindow, s: &SessionStats) {
         dash()
     });
     ui.set_live_rtt(s.rtt_ms.map_or_else(dash, |r| format!("{r:.0} ms").into()));
+    ui.set_live_target(if s.target_bitrate_kbps > 0 {
+        format!("{} kbps · {} FPS", s.target_bitrate_kbps, s.target_fps).into()
+    } else {
+        dash()
+    });
+    // CPU e memória do app: amostrados no mesmo ritmo, só com a tela Ao vivo visível.
+    let proc = PROCESS_SAMPLER.with(|p| p.borrow_mut().sample());
+    ui.set_live_app_cpu(
+        proc.cpu_percent
+            .map_or_else(dash, |c| format!("{c:.1}%").into()),
+    );
+    ui.set_live_app_ram(
+        proc.memory_mb
+            .map_or_else(dash, |m| format!("{m:.0} MB").into()),
+    );
+}
+
+thread_local! {
+    static PROCESS_SAMPLER: std::cell::RefCell<crate::procstats::ProcessSampler> =
+        std::cell::RefCell::new(crate::procstats::ProcessSampler::default());
 }
 
 // ---------------------------------------------------------------------------
@@ -517,6 +547,7 @@ fn start_stream(ui: &AppWindow) {
     set_live_message(ui, "", false);
 
     let quality = prefs.quality();
+    let adaptation = prefs.adaptation();
     let (relay, room_id, owner) = (
         room.relay.clone(),
         room.id.clone(),
@@ -539,6 +570,7 @@ fn start_stream(ui: &AppWindow) {
                     encoder,
                     relay_ws_url: ws_url,
                     publisher_token,
+                    adaptation,
                 };
                 with_state(|st| {
                     if let Some(e) = &st.engine {
@@ -854,6 +886,45 @@ fn make_invite(ui: &AppWindow, room_id: String) {
                     let msg = e.user_message(en());
                     set_rooms_message(ui, &msg, true);
                     set_live_message(ui, &msg, true);
+                }
+            }
+        },
+    );
+}
+
+/// Código para parear a sala com uma instância da Discord Activity (M-015).
+fn make_pairing(ui: &AppWindow, room_id: String) {
+    let Some(room) = with_state(|st| st.rooms.get(&room_id).cloned()).flatten() else {
+        return;
+    };
+    ui.set_rooms_busy(true);
+    let (relay, owner, id) = (
+        room.relay.clone(),
+        room.owner_token.clone(),
+        room.id.clone(),
+    );
+    background(
+        ui,
+        move || relay_api::pairing_code(&relay, &id, &owner),
+        move |ui, result| {
+            ui.set_rooms_busy(false);
+            match result {
+                Ok(code) => {
+                    ui.set_pairing_code(relay_api::format_pairing_code(&code.code).into());
+                    set_rooms_message(
+                        ui,
+                        &t(
+                            "Código criado. Na Activity do Vellcast no Discord, digite este código em até 5 minutos.",
+                            "Code created. In the Vellcast Activity on Discord, enter this code within 5 minutes.",
+                        ),
+                        false,
+                    );
+                }
+                Err(e) => {
+                    if e == ApiError::RoomGone {
+                        forget_room(ui, &room.id);
+                    }
+                    set_rooms_message(ui, &e.user_message(en()), true);
                 }
             }
         },

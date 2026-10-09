@@ -413,16 +413,29 @@ async fn session(shared: &Shared, config: &PublisherConfig, reconnect: bool) -> 
     let mut ping = tokio::time::interval(config.ping_interval);
     ping.tick().await;
     loop {
-        // Drena a fila; `notify_one` guarda a permissão se ninguém estiver esperando.
+        // Drena a fila em lote: `feed` enfileira no WebSocket e um único `flush`
+        // escreve tudo no socket. `notify_one` guarda a permissão se ninguém
+        // estiver esperando.
+        let (mut count, mut bytes) = (0u64, 0u64);
         loop {
+            // O lock da fila é liberado antes do `await` abaixo.
             let item = shared.queue().pop();
             let Some(item) = item else { break };
-            let len = item.data.len() as u64;
-            if let Err(e) = sink.send(Message::Binary(item.data)).await {
+            bytes += item.data.len() as u64;
+            count += 1;
+            if let Err(e) = sink.feed(Message::Binary(item.data)).await {
                 return retry(format!("falha no envio: {e}"), true);
             }
-            shared.stats.messages_sent.fetch_add(1, Ordering::Relaxed);
-            shared.stats.bytes_sent.fetch_add(len, Ordering::Relaxed);
+        }
+        if count > 0 {
+            if let Err(e) = sink.flush().await {
+                return retry(format!("falha no envio: {e}"), true);
+            }
+            shared
+                .stats
+                .messages_sent
+                .fetch_add(count, Ordering::Relaxed);
+            shared.stats.bytes_sent.fetch_add(bytes, Ordering::Relaxed);
         }
         if shared.finishing.load(Ordering::Acquire) {
             if let Ok(end) = encode(&shared.header(MessageType::StreamEnd, 0, 0), &[]) {

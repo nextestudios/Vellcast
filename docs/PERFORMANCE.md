@@ -31,6 +31,12 @@
 - Protocolo A/B: o mesmo trecho de jogo/benchmark interno (a) sem Vellcast, (b) com Vellcast aberto e ocioso e (c) transmitindo 1080p60 a 8 Mbps.
 - Coletar também o uso de CPU, GPU e do encoder (contadores da GPU no Gerenciador de Tarefas/PDH).
 
+### 2.2.1 Adaptação de qualidade (S-001/S-002)
+
+- A lógica é validada por testes unitários com sinais sintéticos (`cargo test -p vellcast-core adapt`).
+- No Windows real, registrar para cada GPU: se o encoder aceita mudar o bitrate em tempo real (log "o encoder não aceita mudar o bitrate em tempo real" indica que não), o tempo até a primeira redução após limitar a banda (ex.: `clumsy` ou limite no roteador) e o tempo de recuperação após liberar a banda.
+- Modo competitivo: comparar FPS médio e 1% lows do jogo com perfil Equilibrado vs Competitivo, no mesmo trecho do jogo.
+
 ### 2.3 Latência
 - **ETAPA 0 (parcial):** `t_frame_decodificado − sent_at_us`, convertidos para o relógio do servidor via offset Ping/Pong no estilo NTP, usando a amostra de menor RTT. Captura, encoder e renderização no transmissor ficam de fora (ADR-010).
 - **ETAPA 5+ (ponta a ponta):** Relógio de alta resolução renderizado na fonte e fotografado/gravado junto com a tela do espectador (glass-to-glass), ou timestamp embutido no frame e comparado na exibição com relógios sincronizados.
@@ -111,3 +117,52 @@ Detalhes do teste do `vellcast-relay`: 60,3 fps por espectador, maior intervalo 
 Detalhes do teste de 20 espectadores: 58,0 fps por espectador (os primeiros ~0,7 s aguardam o primeiro keyframe), maior intervalo entre quadros 71 ms, latência servidor → recebimento p50 1,2 ms / p95 3,9 ms / p99 17,8 ms, nenhum fechamento anormal, `laggedMessages = 0`, `staleFramesDropped = 0`. É um teste de loopback: não mede rede real, perda de pacotes nem proxy do Discord.
 
 Observação: quando a aba do navegador fica em segundo plano, o Chromium reduz o ritmo da página. Nesse estado foram observados pedidos de keyframe por fila cheia no decoder e A/V skew de ~265 ms. É o comportamento esperado do mecanismo de descarte, não uma medição de primeiro plano.
+
+### 3.5 Benchmarks reproduzíveis do relay (E6-T01/E6-T02)
+
+Ferramentas em `crates/perf` (ver `crates/perf/README.md`). Todas em `--release`, Apple M1 8 GB, macOS 27.0.1, loopback, com outros builds rodando na máquina (load average 3–14 durante as medições; a CPU varia por isso).
+
+**`fanout_bench`**: relay em processo, em runtime próprio com 2 threads; 1 transmissor sintético 1080p60 a 8 Mbps (keyframe a cada 2 s) e 20 espectadores WebSocket reais; 2 s de aquecimento e 20 s de medição. Um alocador contador soma só as alocações feitas nas threads do relay.
+
+```bash
+cargo run --release -p vellcast-perf --bin fanout_bench -- 20 20 60 8000 off   # uma escrita por mensagem (comportamento anterior)
+cargo run --release -p vellcast-perf --bin fanout_bench -- 20 20 60 8000 on    # escrita em lote (padrão)
+```
+
+| Versão | Alocações do relay por mensagem entregue | Bytes alocados por mensagem | Latência p50 / p95 / p99 | CPU do processo (relay + clientes) | FPS por espectador |
+|---|---|---|---|---|---|
+| Primeira versão do lote (`Vec` novo por mensagem) | 1,02–1,03 | 760–873 B | 0,36–0,52 / 1,1–3,8 / 2,4–8,7 ms | 7,6–12,3% | 60,0 |
+| Antes: escrita por mensagem (`batch=off`, 2 execuções) | **0,03** | 630–632 B | 0,46–0,51 / 1,3–1,7 / **2,3–3,0 ms** | 12,6–13,6% | 60,0 |
+| Depois: escrita em lote (`batch=on`, 2 execuções) | **0,03** | 712–746 B | 0,62–0,63 / 1,16–1,17 / **1,69–1,73 ms** | 14,1–14,8% | 60,0 |
+
+Leitura:
+- O caminho quente do relay já não copiava mídia (o mesmo `Bytes` vai a todos os espectadores). A medição confirma: **0,03 alocação por mensagem entregue**, que é o buffer de cada mensagem recebida do transmissor (uma por mensagem de entrada, dividida entre 20 espectadores). Não há alocação por espectador.
+- A medição pegou uma regressão na primeira versão do lote (um `Vec` alocado a cada mensagem, 1,02 alocação/mensagem); corrigida reaproveitando o vetor.
+- O lote (`feed` de todas as mensagens pendentes + um `flush`) reduziu o p99 de 2,3–3,0 ms para ~1,7 ms. A CPU ficou dentro do ruído da máquina carregada; o benefício maior é esperado quando um espectador acumula fila (rede lenta) e no envio do snapshot inicial (configuração + GOP em cache, até centenas de mensagens), que também passou a ser uma única escrita. O transmissor (`crates/transport`) passou a drenar sua fila da mesma forma.
+- 44 mil mensagens entregues em 20 s (~163 Mbps), sem `lagged` nem quadros velhos descartados.
+
+### 3.6 Avaliação QUIC × WebSocket/TCP (E6-T05, S-005)
+
+**`quic_eval`**: transmissor sintético 1080p60 a 8 Mbps → receptor, por um proxy de perturbação no mesmo processo, 10 s por cenário. QUIC com Quinn 0.11.12, um stream unidirecional por quadro com prioridade FIFO, com Cubic (padrão) e com BBR. O modelo de TCP preserva a ordem e transforma perdas em atraso de retransmissão, mas **não reduz a janela de congestionamento**: os números de TCP com perda são otimistas.
+
+```bash
+cargo run --release -p vellcast-perf --bin quic_eval -- 10
+```
+
+| Cenário (atraso de ida, jitter, perda) | Transporte | Quadros entregues | Latência p50 / p95 / p99 (ms) | Recuperação após apagão de 300 ms | CPU do processo |
+|---|---|---|---|---|---|
+| limpo (20 ms, 2 ms, 0%) | WebSocket/TCP | 600/600 | 23,5 / 24,9 / 25,7 | — | 1,8% |
+| | QUIC Cubic | 600/600 | 24,3 / 28,2 / 189,9 | — | 10,7% |
+| | QUIC BBR | 600/600 | 24,1 / 25,7 / 34,4 | — | 10,1% |
+| perda 1% (20 ms, 2 ms) | WebSocket/TCP (otimista) | 600/600 | 24,0 / 73,3 / 74,6 | — | 1,6% |
+| | QUIC Cubic | 315/600 | 1762 / 5471 / 5902 | — | 7,0% |
+| | QUIC BBR | 600/600 | 24,1 / 69,9 / 82,6 | — | 10,3% |
+| perda 3% (40 ms, 5 ms) | WebSocket/TCP (otimista) | 600/600 | 116 / 136 / 137 | — | 1,3% |
+| | QUIC Cubic | 81/600 | 4174 / 9547 / 10031 | — | 3,5% |
+| | QUIC BBR | 600/600 | 47,5 / 147 / 233 | — | 12,3% |
+| apagão de 300 ms em t = 4 s (20 ms, 2 ms) | WebSocket/TCP | 600/600 | 23,5 / 32,7 / 417 | 203 ms | 1,7% |
+| | QUIC Cubic | 600/600 | 24,6 / 435 / 720 | 781 ms | 11,0% |
+| | QUIC BBR | 600/600 | 24,3 / 26,6 / 293 | **27 ms** | 11,0% |
+
+RSS máximo do processo: 4–29 MB (cresce ao longo dos cenários; o processo é o mesmo). Leitura e decisão em `DECISIONS.md` (ADR-037).
+

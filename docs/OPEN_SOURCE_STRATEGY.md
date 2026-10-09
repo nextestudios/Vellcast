@@ -45,3 +45,15 @@ Regra de fronteira: o Core deve funcionar de ponta a ponta sozinho (desktop → 
 - **Slint sob GPLv3** tornaria o desktop distribuído sob GPLv3, o que conflita com a ideia de desktop Apache-2.0 (ver `LICENSING.md`).
 - Codecs: H.264 e AAC têm questões de patentes. Usar encoders de hardware do sistema (Media Foundation/drivers) e Opus (livre de royalties) reduz a exposição; não distribuir libx264/FFmpeg com GPL.
 - Concorrentes podem hospedar o Core comercialmente — aceito pelo modelo; diferencial do Cloud é operação, qualidade e integração oficial.
+
+
+## 7. Pendências do responsável para abrir o código (Marco OC)
+
+| Tarefa | O que é preciso decidir ou fazer |
+|---|---|
+| OC-T01 | Confirmar Apache-2.0 (ou outra licença) para o código próprio; com a confirmação, criar `NOTICE` e marcar ADR-007 como Aceita |
+| OC-T03 | Decidir se `services/cloud-api`, planos e documentos comerciais vão para um repositório privado separado (recomendado) ou ficam abertos |
+| OC-T04 | Buscar a marca "Vellcast" no INPI (classes 9 e 42) e registrar, se disponível; publicar política de uso da marca |
+| OC-T09 | Aprovar a mudança de visibilidade do repositório para público (Settings → General → Danger Zone) e habilitar **Private vulnerability reporting** (Settings → Security) |
+
+Já prontos: varredura de segredos (gitleaks, 1 falso positivo ignorado), `cargo deny`, `SECURITY.md`, código de conduta, modelos de issue e PR, revisão de segurança (`docs/security/REVIEW-2026-10.md`).

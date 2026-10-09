@@ -15,6 +15,10 @@ pub struct Config {
     pub bind: SocketAddr,
     /// Segredo HMAC-SHA256 dos tokens. Nunca é registrado em log.
     pub secret: Vec<u8>,
+    /// Segredo anterior, aceito só para verificar tokens durante a rotação.
+    pub previous_secret: Option<Vec<u8>>,
+    /// Banco SQLite das salas (`VELLCAST_DB_PATH`). `None` = memória.
+    pub db_path: Option<PathBuf>,
     /// Quando definido, `POST /api/rooms` exige `Authorization: Bearer <chave>`.
     pub create_room_key: Option<String>,
     /// Usa o último endereço de `X-Forwarded-For` (inserido pelo proxy reverso) como IP do cliente.
@@ -48,6 +52,12 @@ pub struct Config {
     pub ws_per_sec: f64,
     /// Diretório do player web (S-011) servido em `/` e `/watch`. `None` desativa.
     pub static_dir: Option<PathBuf>,
+    /// Agrupa as mensagens pendentes de cada espectador em uma única escrita
+    /// (`VELLCAST_BATCH_WRITES=0` desliga; usado para comparar no benchmark).
+    pub batch_writes: bool,
+    /// Modo hospedado (Vellcast Cloud): chave dos tokens de entitlement. `None`
+    /// no self-hosting, em que nenhum limite de plano é aplicado (W-013).
+    pub cloud_entitlement_key: Option<Vec<u8>>,
 }
 
 impl Config {
@@ -56,6 +66,8 @@ impl Config {
         Self {
             bind: SocketAddr::from(([127, 0, 0, 1], 8788)),
             secret,
+            previous_secret: None,
+            db_path: None,
             create_room_key: None,
             trust_proxy: false,
             max_rooms: 1000,
@@ -79,6 +91,8 @@ impl Config {
             ws_burst: 20.0,
             ws_per_sec: 2.0,
             static_dir: None,
+            batch_writes: true,
+            cloud_entitlement_key: None,
         }
     }
 
@@ -97,11 +111,24 @@ impl Config {
             ),
         };
         let mut c = Self::with_secret(secret);
+        c.previous_secret = match std::env::var("VELLCAST_RELAY_SECRET_PREVIOUS") {
+            Ok(s) if s.is_empty() => None,
+            Ok(s) if s.len() < MIN_SECRET_LEN => bail!(
+                "VELLCAST_RELAY_SECRET_PREVIOUS precisa ter pelo menos {MIN_SECRET_LEN} bytes"
+            ),
+            Ok(s) => Some(s.into_bytes()),
+            Err(_) => None,
+        };
+        c.db_path = std::env::var("VELLCAST_DB_PATH")
+            .ok()
+            .filter(|p| !p.is_empty())
+            .map(PathBuf::from);
         c.bind = env_or("VELLCAST_BIND", c.bind)?;
         c.create_room_key = std::env::var("VELLCAST_CREATE_ROOM_KEY")
             .ok()
             .filter(|k| !k.is_empty());
         c.trust_proxy = env_flag("VELLCAST_TRUST_PROXY");
+        c.batch_writes = std::env::var("VELLCAST_BATCH_WRITES").map_or(true, |v| v != "0");
         c.max_rooms = env_or("VELLCAST_MAX_ROOMS", c.max_rooms)?;
         c.max_viewers_per_room = env_or("VELLCAST_MAX_VIEWERS_PER_ROOM", c.max_viewers_per_room)?;
         c.max_publisher_kbps = env_or("VELLCAST_MAX_PUBLISHER_KBPS", c.max_publisher_kbps)?;
@@ -110,6 +137,15 @@ impl Config {
         c.room_idle_ttl = secs("VELLCAST_ROOM_IDLE_TTL_SECS", c.room_idle_ttl)?;
         c.viewer_token_ttl = secs("VELLCAST_VIEWER_TOKEN_TTL_SECS", c.viewer_token_ttl)?;
         c.static_dir = static_dir_from_env();
+        c.cloud_entitlement_key = match std::env::var("VELLCAST_CLOUD_ENTITLEMENT_KEY") {
+            Ok(k) if k.is_empty() => None,
+            Ok(k) if k.len() < vellcast_entitlement::MIN_KEY_LEN => bail!(
+                "VELLCAST_CLOUD_ENTITLEMENT_KEY precisa ter pelo menos {} bytes",
+                vellcast_entitlement::MIN_KEY_LEN
+            ),
+            Ok(k) => Some(k.into_bytes()),
+            Err(_) => None,
+        };
         Ok(c)
     }
 }

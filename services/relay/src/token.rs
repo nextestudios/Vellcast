@@ -33,8 +33,13 @@ pub struct Claims {
     pub role: Role,
     /// Expiração (Unix, segundos).
     pub exp: u64,
-    /// Identificador único do token (identifica a sessão do transmissor em reconexões).
+    /// Identificador único do token (identifica a sessão do transmissor em reconexões
+    /// e é a chave de revogação individual).
     pub nonce: String,
+    /// Emissão (Unix, segundos). Tokens anteriores a este campo leem 0 e são
+    /// tratados como emitidos antes de qualquer revogação em massa.
+    #[serde(default)]
+    pub iat: u64,
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -49,18 +54,34 @@ pub enum TokenError {
 
 pub struct TokenSigner {
     key: Vec<u8>,
+    /// Segredo anterior, aceito só na verificação durante a rotação
+    /// (`VELLCAST_RELAY_SECRET_PREVIOUS`). Tokens novos usam sempre `key`.
+    previous: Option<Vec<u8>>,
 }
 
 impl TokenSigner {
     pub fn new(secret: &[u8]) -> Self {
         Self {
             key: secret.to_vec(),
+            previous: None,
+        }
+    }
+
+    /// Assina com `secret` e aceita também tokens assinados com `previous`.
+    pub fn with_previous(secret: &[u8], previous: Option<&[u8]>) -> Self {
+        Self {
+            key: secret.to_vec(),
+            previous: previous.map(<[u8]>::to_vec),
         }
     }
 
     fn mac(&self) -> HmacSha256 {
+        Self::mac_with(&self.key)
+    }
+
+    fn mac_with(key: &[u8]) -> HmacSha256 {
         // HMAC aceita chaves de qualquer tamanho; o erro é inalcançável.
-        <HmacSha256 as KeyInit>::new_from_slice(&self.key).unwrap_or_else(|_| unreachable!())
+        <HmacSha256 as KeyInit>::new_from_slice(key).unwrap_or_else(|_| unreachable!())
     }
 
     pub fn issue(&self, room: &str, role: Role, ttl: Duration, now: u64) -> (String, Claims) {
@@ -69,6 +90,7 @@ impl TokenSigner {
             role,
             exp: now + ttl.as_secs(),
             nonce: crate::random_id(12),
+            iat: now,
         };
         (self.sign(&claims), claims)
     }
@@ -94,10 +116,14 @@ impl TokenSigner {
         let sig = URL_SAFE_NO_PAD
             .decode(sig)
             .map_err(|_| TokenError::Malformed)?;
-        let mut mac = self.mac();
-        mac.update(body.as_bytes());
-        mac.verify_slice(&sig)
-            .map_err(|_| TokenError::BadSignature)?;
+        let valid_with = |key: &[u8]| {
+            let mut mac = Self::mac_with(key);
+            mac.update(body.as_bytes());
+            mac.verify_slice(&sig).is_ok()
+        };
+        if !valid_with(&self.key) && !self.previous.as_deref().is_some_and(valid_with) {
+            return Err(TokenError::BadSignature);
+        }
         // Só interpreta o payload depois de autenticado.
         let json = URL_SAFE_NO_PAD
             .decode(payload)
@@ -164,6 +190,40 @@ mod tests {
             s.verify(&"a".repeat(MAX_TOKEN_LEN + 1), NOW),
             Err(TokenError::Malformed)
         );
+    }
+
+    #[test]
+    fn previous_secret_is_accepted_only_for_verification() {
+        let old = TokenSigner::new(b"segredo-antigo-segredo-antigo-xxxx");
+        let (old_token, claims) = old.issue("r", Role::Viewer, Duration::from_secs(60), NOW);
+        let rotated = TokenSigner::with_previous(
+            b"segredo-novo-segredo-novo-segredo-x",
+            Some(b"segredo-antigo-segredo-antigo-xxxx"),
+        );
+        assert_eq!(rotated.verify(&old_token, NOW), Ok(claims));
+        // Tokens novos usam o segredo atual: o signer antigo não os aceita.
+        let (new_token, _) = rotated.issue("r", Role::Viewer, Duration::from_secs(60), NOW);
+        assert_eq!(old.verify(&new_token, NOW), Err(TokenError::BadSignature));
+        // Sem o anterior configurado, o token antigo é recusado.
+        let current_only = TokenSigner::new(b"segredo-novo-segredo-novo-segredo-x");
+        assert_eq!(
+            current_only.verify(&old_token, NOW),
+            Err(TokenError::BadSignature)
+        );
+    }
+
+    #[test]
+    fn old_tokens_without_iat_still_verify() {
+        let s = signer();
+        let json = br#"{"room":"r","role":"viewer","exp":1800000100,"nonce":"n"}"#;
+        let body = format!("v1.{}", URL_SAFE_NO_PAD.encode(json));
+        let mut mac = s.mac();
+        mac.update(body.as_bytes());
+        let token = format!(
+            "{body}.{}",
+            URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes())
+        );
+        assert_eq!(s.verify(&token, NOW).map(|c| c.iat), Ok(0));
     }
 
     #[test]

@@ -1,0 +1,40 @@
+name: Relatar problema
+description: Algo não funciona como deveria
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por ajudar! **Não** use issues para vulnerabilidades: veja SECURITY.md.
+  - type: textarea
+    id: what
+    attributes:
+      label: O que aconteceu
+      description: O que você fez, o que esperava e o que aconteceu.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Como reproduzir
+      placeholder: "1. Abrir o app\n2. ..."
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Versão do Vellcast
+      description: Tela Sobre ou VERSAO.txt do pacote.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Ambiente
+      description: Versão do Windows, GPU, controle, navegador de quem assiste, servidor (próprio ou de testes).
+  - type: textarea
+    id: logs
+    attributes:
+      label: Métricas e logs
+      description: Tela "Ao vivo", saída do relay, /metrics. Remova tokens e links de convite antes de colar.
+      render: text

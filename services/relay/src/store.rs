@@ -1,10 +1,9 @@
 //! Metadados das salas e convites.
 //!
-//! [`RoomStore`] é a fronteira de persistência: hoje só existe
-//! [`MemoryStore`] (estado perdido ao reiniciar, o que é aceitável para salas
-//! temporárias). Uma implementação SQLite para self-hosting ou PostgreSQL
-//! para a Cloud implementa o mesmo trait sem tocar no caminho de mídia,
-//! que fica sempre em memória (`room::LiveRoom`).
+//! [`RoomStore`] é a fronteira de persistência: [`MemoryStore`] (padrão; estado
+//! perdido ao reiniciar) e [`crate::store_sqlite::SqliteStore`]
+//! (`VELLCAST_DB_PATH`; salas, convites e revogações sobrevivem a reinícios).
+//! O caminho de mídia fica sempre em memória (`room::LiveRoom`).
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -38,6 +37,17 @@ pub struct RoomRecord {
     pub expires_at: u64,
     pub max_viewers: usize,
     pub invites: HashMap<InviteHash, Invite>,
+    /// Tokens revogados individualmente: nonce → expiração do token (limpeza).
+    pub revoked: HashMap<String, u64>,
+    /// Tokens de espectador emitidos antes deste instante (Unix, s) são inválidos.
+    pub viewers_revoked_before: u64,
+}
+
+impl RoomRecord {
+    /// `true` se o token (nonce, papel de espectador e emissão) foi revogado.
+    pub fn is_revoked(&self, nonce: &str, is_viewer: bool, iat: u64) -> bool {
+        self.revoked.contains_key(nonce) || (is_viewer && iat < self.viewers_revoked_before)
+    }
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -48,6 +58,8 @@ pub enum StoreError {
     Duplicate,
     #[error("limite de convites da sala atingido")]
     TooManyInvites,
+    #[error("falha no armazenamento: {0}")]
+    Storage(String),
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -65,7 +77,13 @@ pub trait RoomStore: Send + Sync {
     fn add_invite(&self, room: &str, hash: InviteHash, invite: Invite) -> Result<(), StoreError>;
     /// Consome um uso do convite de forma atômica (convites esgotados deixam de existir).
     fn consume_invite(&self, room: &str, hash: &InviteHash, now: u64) -> Result<(), InviteError>;
-    /// Remove convites vencidos e devolve as salas cujo TTL acabou.
+    /// Revoga um token pelo nonce até sua expiração.
+    fn revoke_token(&self, room: &str, nonce: &str, token_exp: u64) -> Result<(), StoreError>;
+    /// Revoga todos os tokens de espectador emitidos antes de `before`.
+    fn revoke_viewers_before(&self, room: &str, before: u64) -> Result<(), StoreError>;
+    /// Todas as salas (usado para reconstruir o estado ao vivo após reinício).
+    fn list(&self) -> Vec<RoomRecord>;
+    /// Remove convites e revogações vencidos e devolve as salas cujo TTL acabou.
     fn sweep(&self, now: u64) -> Vec<String>;
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool {
@@ -128,11 +146,30 @@ impl RoomStore for MemoryStore {
         Ok(())
     }
 
+    fn revoke_token(&self, room: &str, nonce: &str, token_exp: u64) -> Result<(), StoreError> {
+        let mut rooms = self.rooms();
+        let r = rooms.get_mut(room).ok_or(StoreError::NotFound)?;
+        r.revoked.insert(nonce.to_owned(), token_exp);
+        Ok(())
+    }
+
+    fn revoke_viewers_before(&self, room: &str, before: u64) -> Result<(), StoreError> {
+        let mut rooms = self.rooms();
+        let r = rooms.get_mut(room).ok_or(StoreError::NotFound)?;
+        r.viewers_revoked_before = r.viewers_revoked_before.max(before);
+        Ok(())
+    }
+
+    fn list(&self) -> Vec<RoomRecord> {
+        self.rooms().values().cloned().collect()
+    }
+
     fn sweep(&self, now: u64) -> Vec<String> {
         let mut rooms = self.rooms();
         let mut expired = Vec::new();
         for (id, r) in rooms.iter_mut() {
             r.invites.retain(|_, i| i.expires_at > now);
+            r.revoked.retain(|_, exp| *exp > now);
             if r.expires_at <= now {
                 expired.push(id.clone());
             }
@@ -158,7 +195,29 @@ mod tests {
             expires_at: 1000,
             max_viewers: 10,
             invites: HashMap::new(),
+            revoked: HashMap::new(),
+            viewers_revoked_before: 0,
         }
+    }
+
+    #[test]
+    fn revocation_by_nonce_and_viewers_before() {
+        let s = MemoryStore::default();
+        s.insert(record("r")).expect("insert");
+        s.revoke_token("r", "n1", 500).expect("revogar");
+        s.revoke_viewers_before("r", 100)
+            .expect("revogar espectadores");
+        let r = s.get("r").expect("sala");
+        assert!(r.is_revoked("n1", false, 999));
+        assert!(r.is_revoked("n2", true, 99));
+        assert!(!r.is_revoked("n2", true, 100));
+        assert!(
+            !r.is_revoked("n2", false, 0),
+            "dono/transmissor não é afetado"
+        );
+        assert_eq!(s.revoke_token("x", "n", 1), Err(StoreError::NotFound));
+        s.sweep(600);
+        assert!(!s.get("r").expect("sala").revoked.contains_key("n1"));
     }
 
     #[test]

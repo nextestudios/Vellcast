@@ -428,6 +428,28 @@ impl H264Encoder {
         &self.config
     }
 
+    /// Muda o bitrate médio durante a transmissão (adaptação de qualidade).
+    ///
+    /// Melhor esforço: nem todo encoder aceita a mudança em tempo real. Retorna
+    /// `true` se o encoder aceitou o novo valor.
+    pub fn set_bitrate(&mut self, kbps: u32) -> bool {
+        let Some(api) = &self.codec_api else {
+            return false;
+        };
+        // SAFETY: GUID e VARIANT válidos durante a chamada.
+        let ok = unsafe {
+            api.SetValue(
+                &CODECAPI_AVEncCommonMeanBitRate,
+                &variant_u32(bitrate_bps(kbps)),
+            )
+        }
+        .is_ok();
+        if ok {
+            self.config.bitrate_kbps = kbps;
+        }
+        ok
+    }
+
     /// Codec string WebCodecs, disponível após o primeiro SPS.
     pub fn codec_string(&self) -> Option<String> {
         self.params.codec_string()
@@ -460,11 +482,9 @@ impl H264Encoder {
         if !self.ready_for_input() {
             return Ok(SubmitOutcome::Busy);
         }
-        if force_keyframe {
-            if let Some(api) = &self.codec_api {
-                // SAFETY: GUID e VARIANT válidos durante a chamada.
-                let _ = unsafe { api.SetValue(&CODECAPI_AVEncVideoForceKeyFrame, &variant_u32(1)) };
-            }
+        if force_keyframe && let Some(api) = &self.codec_api {
+            // SAFETY: GUID e VARIANT válidos durante a chamada.
+            let _ = unsafe { api.SetValue(&CODECAPI_AVEncVideoForceKeyFrame, &variant_u32(1)) };
         }
         let prepared = match &mut self.conversion {
             Conversion::Gpu(converter) => {
@@ -566,10 +586,10 @@ impl H264Encoder {
             }
             Err(e) => return Err(EncoderError::win("ProcessOutput", e)),
         }
-        if let Some(sample) = sample {
-            if let Some(frame) = self.read_sample(&sample)? {
-                out.push(frame);
-            }
+        if let Some(sample) = sample
+            && let Some(frame) = self.read_sample(&sample)?
+        {
+            out.push(frame);
         }
         Ok(true)
     }
@@ -632,10 +652,10 @@ impl H264Encoder {
                 (InputPath::Gpu { .. }, Prepared::Texture(nv12)) => {
                     let buffer = MFCreateDXGISurfaceBuffer(&ID3D11Texture2D::IID, &nv12, 0, false)
                         .map_err(win("MFCreateDXGISurfaceBuffer"))?;
-                    if let Ok(two_d) = buffer.cast::<IMF2DBuffer>() {
-                        if let Ok(len) = two_d.GetContiguousLength() {
-                            let _ = buffer.SetCurrentLength(len);
-                        }
+                    if let Ok(two_d) = buffer.cast::<IMF2DBuffer>()
+                        && let Ok(len) = two_d.GetContiguousLength()
+                    {
+                        let _ = buffer.SetCurrentLength(len);
                     }
                     sample.AddBuffer(&buffer).map_err(win("AddBuffer"))?;
                 }

@@ -103,6 +103,10 @@ export component AppWindow inherits Window {
     in property <int> nav-focus-token;
     in property <[string]> gamepads;
     in property <string> version;
+    in property <string> update-status;
+    in property <bool> update-error;
+    in property <bool> update-available;
+    in property <bool> update-busy;
     in property <[string]> licenses;
     in property <bool> tray-available;
     in property <bool> rooms-collapsed: false;
@@ -149,6 +153,7 @@ export component AppWindow inherits Window {
     in property <string> rooms-message;
     in property <bool> rooms-message-error;
     in property <string> invite-link;
+    in property <string> pairing-code;
 
     // Ao vivo
     in property <bool> live;
@@ -164,6 +169,9 @@ export component AppWindow inherits Window {
     in property <string> live-dropped;
     in property <string> live-encode-ms;
     in property <string> live-rtt;
+    in property <string> live-target;
+    in property <string> live-app-cpu;
+    in property <string> live-app-ram;
     in property <string> live-message;
     in property <bool> live-message-error;
 
@@ -179,6 +187,8 @@ export component AppWindow inherits Window {
     callback language-selected(int);
     callback minimize-to-tray;
     callback quit-app;
+    callback check-updates;
+    callback install-update;
     callback test-relay;
     callback refresh-sources;
     callback stream-prefs-changed;
@@ -186,6 +196,7 @@ export component AppWindow inherits Window {
     callback stop-stream;
     callback create-room(string);
     callback make-invite(int);
+    callback make-pairing(int);
     callback make-live-invite;
     callback copy-invite;
     callback close-room(int);
@@ -415,8 +426,10 @@ export component AppWindow inherits Window {
                             message: root.rooms-message;
                             message-error: root.rooms-message-error;
                             invite-link: root.invite-link;
+                            pairing-code: root.pairing-code;
                             create-room(name) => { root.create-room(name); }
                             make-invite(i) => { root.make-invite(i); }
+                            make-pairing(i) => { root.make-pairing(i); }
                             copy-invite => { root.copy-invite(); }
                             close-room(i) => { root.close-room(i); }
                             request-virtual-keyboard(t) => { root.open-keyboard-for(3, t); }
@@ -435,6 +448,9 @@ export component AppWindow inherits Window {
                             dropped: root.live-dropped;
                             encode-ms: root.live-encode-ms;
                             rtt: root.live-rtt;
+                            target: root.live-target;
+                            app-cpu: root.live-app-cpu;
+                            app-ram: root.live-app-ram;
                             message: root.live-message;
                             message-error: root.live-message-error;
                             invite-link: root.invite-link;
@@ -469,6 +485,12 @@ export component AppWindow inherits Window {
                         if root.current-page == 7: AboutPage {
                             version: root.version;
                             licenses: root.licenses;
+                            update-status: root.update-status;
+                            update-error: root.update-error;
+                            update-available: root.update-available;
+                            update-busy: root.update-busy;
+                            check-updates => { root.check-updates(); }
+                            install-update => { root.install-update(); }
                         }
                     }
                 }

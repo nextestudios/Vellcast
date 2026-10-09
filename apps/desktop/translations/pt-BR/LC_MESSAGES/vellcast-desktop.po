@@ -500,3 +500,39 @@ msgstr "Endereço público para os links de convite (opcional)"
 
 msgid "Viewers' browsers need HTTPS to play video. If the server runs on this PC, expose it with an HTTPS tunnel or proxy and enter that address here."
 msgstr "O navegador de quem assiste precisa de HTTPS para tocar o vídeo. Se o servidor roda neste PC, exponha-o com um túnel ou proxy HTTPS e informe esse endereço aqui."
+
+msgid "Advanced metrics"
+msgstr "Métricas avançadas"
+
+msgid "Adaptive target"
+msgstr "Alvo adaptativo"
+
+msgid "App CPU"
+msgstr "CPU do app"
+
+msgid "App memory"
+msgstr "Memória do app"
+
+msgid "Bitrate and FPS adjust automatically to the network and to the encoder load, never above the chosen quality."
+msgstr "O bitrate e o FPS se ajustam sozinhos à rede e à carga do encoder, sem nunca passar da qualidade escolhida."
+
+msgid "Updates"
+msgstr "Atualizações"
+
+msgid "Updates are signed by Next Estúdios and verified before installing. Nothing is downloaded or installed without your confirmation."
+msgstr "As atualizações são assinadas pela Next Estúdios e verificadas antes da instalação. Nada é baixado ou instalado sem a sua confirmação."
+
+msgid "Check for updates"
+msgstr "Verificar atualizações"
+
+msgid "Download and install"
+msgstr "Baixar e instalar"
+
+msgid "Pair with Discord"
+msgstr "Parear com o Discord"
+
+msgid "Discord pairing code"
+msgstr "Código de pareamento do Discord"
+
+msgid "Open the Vellcast Activity in a Discord voice channel and enter this code. It works once and expires in 5 minutes."
+msgstr "Abra a Activity do Vellcast em um canal de voz do Discord e digite este código. Ele vale uma vez e expira em 5 minutos."

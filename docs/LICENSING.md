@@ -123,6 +123,37 @@ Licenças conferidas no crates.io em 2026-10-08. Dependências de Windows ficam 
 | opusic-sys (via `opus`) | 0.7.5 | BSD-3-Clause | Compila e vincula a **libopus** estaticamente (cmake) | A libopus é BSD-3-Clause (Xiph.Org e outros): manter o aviso de copyright e o texto da licença na distribuição |
 | windows / windows-core | 0.62.2 | MIT OR Apache-2.0 | WASAPI, COM, Toolhelp, QPC | — |
 
+### Rust (atualizações e lançamento, Etapa 8)
+
+| Crate | Versão | Licença | Uso |
+|---|---|---|---|
+| ed25519-dalek | 3.0.0 | BSD-3-Clause | Verificação (app) e assinatura (`tools/release-sign`) dos manifestos de atualização |
+
+Ferramentas de build (não distribuídas): Inno Setup 6.6.1 (licença própria, gratuita, permite uso comercial), cargo-about 0.9.1 (MIT/Apache-2.0), cargo-deny (MIT/Apache-2.0), license-checker-rseidelsohn 5.0.1 (BSD-3-Clause), gitleaks 8.30.1 (MIT).
+
+O inventário completo é gerado automaticamente na CI (`cargo-about` + `license-checker`, ADR-048) e verificado por `cargo deny` (`deny.toml`).
+
+### Rust (`services/cloud-api` e `crates/entitlement`, Etapa 7)
+
+Serviço comercial opcional, não distribuído no app desktop. Licenças conferidas no crates.io em 2026-10-08.
+
+| Crate | Versão | Licença | Uso | Observação |
+|---|---|---|---|---|
+| rusqlite | 0.40.2 | MIT | Banco SQLite | Feature `bundled` compila o SQLite (domínio público) via `libsqlite3-sys` (MIT) |
+| argon2 | 0.6.0 | MIT OR Apache-2.0 | Hash de senhas (Argon2id) | — |
+| axum (feature `form`) | 0.8 | MIT | Formulários do painel | Já no inventário |
+| hmac / sha2 / base64 / getrandom | — | MIT OR Apache-2.0 | Sessões, CSRF, entitlements, webhooks | Já no inventário |
+| ureq (dev) | 3.4.2 | MIT OR Apache-2.0 | Testes de integração | Não distribuído |
+
+### Rust (`crates/perf`, ferramentas de medição — não distribuídas)
+
+| Crate | Versão | Licença | Uso |
+|---|---|---|---|
+| quinn | 0.11.12 | MIT OR Apache-2.0 | Avaliação QUIC (S-005); não usado em produção |
+| rcgen | 0.14.10 | MIT OR Apache-2.0 | Certificado autoassinado da avaliação QUIC |
+| libc | 0.2 | MIT OR Apache-2.0 | `getrusage` para CPU e RSS nos benchmarks |
+| rustls (via quinn) | 0.23 | Apache-2.0 OR ISC OR MIT | TLS 1.3 do QUIC na avaliação |
+
 ### Ativos embutidos (Etapa 1)
 
 | Ativo | Licença | Uso | Observação |

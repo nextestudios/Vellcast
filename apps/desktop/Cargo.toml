@@ -14,11 +14,16 @@ vellcast-core = { path = "../../crates/vellcast-core" }
 anyhow.workspace = true
 # Área de transferência para o link de convite (sem suporte a imagens).
 arboard = { version = "=3.6.1", default-features = false }
+base64.workspace = true
 directories = "=6.0.0"
+# Verificação das atualizações assinadas (S-012).
+ed25519-dalek = { version = "=3.0.0", default-features = false, features = ["fast", "zeroize"] }
 getrandom.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-software", "accessibility", "unstable-winit-030"] }
+thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 tray-icon = { version = "=0.24.0", default-features = false }
@@ -29,6 +34,14 @@ ureq = { version = "=3.4.2", default-features = false, features = ["rustls", "js
 # Testes de integração do cliente HTTP contra um relay real em porta efêmera.
 vellcast-relay.workspace = true
 tokio.workspace = true
+
+# CPU e memória do próprio processo nas métricas avançadas (S-007).
+[target.'cfg(windows)'.dependencies]
+windows = { version = "=0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Threading",
+] }
 
 [build-dependencies]
 slint-build = "=1.18.1"

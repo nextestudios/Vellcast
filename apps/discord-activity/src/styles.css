@@ -244,3 +244,32 @@ kbd {
 .watch-stats dd { margin: 0 0 var(--space-2); font-variant-numeric: tabular-nums; }
 .watch .statusbar { flex: none; }
 .badge.live { color: var(--on-accent); background: var(--accent); font-weight: 600; }
+
+/* Discord Activity: lista de transmissões e pareamento por código. */
+.activity-panel {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-4);
+}
+.activity-streams { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.pair-form { display: flex; gap: var(--space-2); margin: var(--space-2) 0; }
+.pair-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-0);
+  border: 1px solid var(--bg-3);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+  font-size: 20px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+button.primary { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.code-keys {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: var(--space-1);
+}
+.code-keys button { padding: var(--space-2) 0; }
