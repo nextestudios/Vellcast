@@ -91,7 +91,7 @@ function viewer(token) {
   return new Promise((resolve) => {
     const ws = new WebSocket(wsUrl);
     ws.binaryType = 'arraybuffer';
-    const r = { video: 0, keyframes: 0, audio: 0, bytes: 0, firstFrameMs: null, maxGapMs: 0, errors: [], codec: null };
+    const r = { video: 0, keyframes: 0, audio: 0, bytes: 0, firstFrameMs: null, maxGapMs: 0, errors: [], codec: null, vOff: [], aOff: [] };
     const opened = performance.now();
     let last = 0;
     let ping;
@@ -104,8 +104,14 @@ function viewer(token) {
       const type = v.getUint8(1);
       if (type === 0x32) r.errors.push(new TextDecoder().decode(new Uint8Array(ev.data, 28)));
       if (type === 0x01) r.codec = JSON.parse(new TextDecoder().decode(new Uint8Array(ev.data, 28))).codec;
-      if (type === 0x04) r.audio++;
+      // Atraso de chegada em relação ao PTS (mesma origem de relógio para áudio e vídeo).
+      const ptsMs = (v.getUint32(12, true) + v.getUint32(16, true) * 2 ** 32) / 1000;
+      if (type === 0x04) {
+        r.audio++;
+        r.aOff.push(performance.now() - ptsMs);
+      }
       if (type !== 0x02) return;
+      r.vOff.push(performance.now() - ptsMs);
       const now = performance.now();
       if (r.firstFrameMs === null) r.firstFrameMs = now - opened;
       if (last) r.maxGapMs = Math.max(r.maxGapMs, now - last);
@@ -132,6 +138,15 @@ await Promise.race([publisherExit, new Promise((r) => setTimeout(r, 5000))]);
 
 const log = publisherLog.join('');
 const videoFps = results.map((r) => r.video / secs);
+const median = (a) => {
+  const s = [...a].sort((x, y) => x - y);
+  return s.length ? s[Math.floor(s.length / 2)] : null;
+};
+// Skew de transporte: diferença entre o atraso mediano do áudio e o do vídeo.
+// Positivo = áudio chega atrasado em relação ao vídeo com o mesmo PTS.
+const skews = results
+  .map((r) => (r.aOff.length && r.vOff.length ? median(r.aOff) - median(r.vOff) : null))
+  .filter((v) => v !== null);
 const growth = (series) => (series.length >= 3 ? series[series.length - 1] - series[1] : null);
 const summary = {
   seconds: secs,
@@ -144,6 +159,7 @@ const summary = {
   videoFpsPerViewer: { min: Math.min(...videoFps).toFixed(1), max: Math.max(...videoFps).toFixed(1) },
   keyframesPerViewer: Math.min(...results.map((r) => r.keyframes)),
   audioPacketsPerViewer: Math.min(...results.map((r) => r.audio)),
+  avTransportSkewMs: skews.length ? Number(median(skews).toFixed(1)) : null,
   mbpsPerViewer: ((results.reduce((a, r) => a + r.bytes, 0) * 8) / 1e6 / secs / viewers).toFixed(2),
   firstFrameMs: Math.max(...results.map((r) => r.firstFrameMs ?? Infinity)).toFixed(0),
   maxGapMs: Math.max(...results.map((r) => r.maxGapMs)).toFixed(0),
@@ -165,6 +181,8 @@ console.log('\nRESULTADO ' + JSON.stringify(summary, null, 2));
 const failures = [];
 if (Math.min(...videoFps) < fps * 0.5) failures.push(`FPS por espectador abaixo de 50% do alvo (${summary.videoFpsPerViewer.min} < ${fps * 0.5})`);
 if (summary.keyframesPerViewer < 1) failures.push('nenhum keyframe recebido');
+if (summary.avTransportSkewMs !== null && Math.abs(summary.avTransportSkewMs) > 250)
+  failures.push(`áudio e vídeo desalinhados no transporte (${summary.avTransportSkewMs} ms)`);
 if (summary.errors.length) failures.push(`erros de protocolo: ${summary.errors.join('; ')}`);
 // Crescimento contínuo de memória (> 100 MB após o aquecimento) indica vazamento.
 if (summary.memoryMb.publisherGrowthAfterWarmup !== null && summary.memoryMb.publisherGrowthAfterWarmup > 100)
