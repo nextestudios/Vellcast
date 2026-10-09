@@ -98,15 +98,12 @@ jobs:
             if ($LASTEXITCODE -ne 0) { $failed = $true }
           } else { Write-Output "sem janela do Bloco de Notas; transmissão de janela pulada" }
 
-          # S-001: console rolando texto gera tráfego real; a subida passa por um proxy limitado a 300 kbps.
-          $console = Start-Process pwsh -ArgumentList '-NoProfile','-Command','$host.UI.RawUI.WindowTitle = "vellcast-abr"; while ($true) { 1..400 | Get-Random -Count 40 | Out-String -Width 400; Start-Sleep -Milliseconds 15 }' -PassThru
+          # S-001: console rolando texto (janela própria via conhost) gera tráfego real no
+          # monitor; a subida passa por um proxy limitado a 300 kbps.
+          $console = Start-Process conhost.exe -ArgumentList 'pwsh -NoProfile -Command "while ($true) { 1..400 | Get-Random -Count 40 | Out-String -Width 400; Start-Sleep -Milliseconds 15 }"' -PassThru
           Start-Sleep -Seconds 4
-          $abrList = & target\release\examples\capture_to_file.exe list
-          $abrSrc = ($abrList | Select-String '^\s*\[(\d+)\].*vellcast-abr' | Select-Object -First 1)
-          if ($abrSrc) {
-            node tests/e2e/abr-check.mjs target\release\examples\stream_to_relay.exe $abrSrc.Matches[0].Groups[1].Value 300 45
-            if ($LASTEXITCODE -ne 0) { $failed = $true }
-          } else { Write-Output "janela do console de tráfego não encontrada"; $failed = $true }
+          node tests/e2e/abr-check.mjs target\release\examples\stream_to_relay.exe monitor 300 45
+          if ($LASTEXITCODE -ne 0) { $failed = $true }
           Stop-Process -Id $console.Id -ErrorAction SilentlyContinue
 
           Stop-Process -Id $relay.Id -ErrorAction SilentlyContinue
