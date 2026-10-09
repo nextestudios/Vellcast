@@ -34,9 +34,9 @@ flowchart LR
 |---|---|---|---|---|
 | 0 | Validação Discord | M | macOS + Discord | ⛔ código pronto (OAuth, pareamento, Activity); falta criar a aplicação no Discord |
 | 1 | Desktop e controles | M | macOS (dev) + Windows (validação) | 🧪 executada no Windows (metas de CPU/RAM atingidas); falta controle físico e teste manual da bandeja |
-| 2 | Captura e encoder | M | **Windows com GPU** | 🧪 executada no Windows (CI, sem GPU); falta GPU real |
+| 2 | Captura e encoder | M | **Windows com GPU** | 🧪 executada no Windows real (caminho CPU); caminho GPU e jogos exigem GPU real |
 | 3 | Media relay | M | macOS/Linux | ✅ em produção em `vellcast.nextestudios.com`; 60 min estável |
-| 4 | Áudio | M | **Windows** | 🧪 executada no Windows (CI); falta teste com jogo real |
+| 4 | Áudio | M | **Windows** | ✅ executada no Windows real; sincronia A/V de 9,2 ms |
 | 5 | Integração completa — **MVP** | M | Windows (+ Discord para a Activity) | ✅ MVP Windows: app transmitiu do Windows ao servidor de produção; Activity aguarda E0-T10 |
 | OC | Abertura do código (Open Core) | S | — | 🧪 parte técnica pronta; decisões suas pendentes |
 | 6 | Otimização extrema | M | Windows com GPU + jogos | 🧪 software pronto e medido; otimização com GPU real bloqueada |
@@ -84,15 +84,15 @@ Aplicativo Windows leve em Rust + Slint, 100% navegável por controle.
 ### Etapa 2 — Captura e encoder · M
 Capturar e codificar 1080p60 nativamente, mantendo os quadros na GPU.
 
-- [ ] 🧪 E2-T01 — Captura de janela (Windows Graphics Capture)
-- [ ] 🧪 E2-T02 — Captura de monitor
+- [x] ✅ E2-T01 — Captura de janela (Windows Graphics Capture), executada no Windows
+- [x] ✅ E2-T02 — Captura de monitor, executada no Windows
 - [x] ✅ E2-T03 — Fallback DXGI: não necessário, o WGC funcionou no Windows real (ADR-057)
-- [ ] 🧪 E2-T04 — Detecção de encoders (hardware primeiro, software como fallback)
-- [ ] 🧪 E2-T05 — Pipeline Direct3D 11 → NV12 na GPU → H.264 sem cópia para a CPU
-- [ ] 🧪 E2-T06 — Configuração de resolução, FPS e bitrate
-- [ ] 🧪 E2-T07 — Detecção automática de jogos (S)
+- [x] ✅ E2-T04 — Detecção de encoders (hardware primeiro, software como fallback)
+- [ ] ⛔ E2-T05 — Caminho GPU (D3D11 → NV12 → H.264 por hardware) — requer Windows com GPU; caminho CPU validado
+- [x] ✅ E2-T06 — Configuração de resolução, FPS e bitrate
+- [ ] ⛔ E2-T07 — Detecção automática de jogos — validar com jogos reais (S)
 - [ ] ⛔ E2-T08 — Medição 1080p60 por GPU — requer máquina Windows
-- [ ] 🧪 E2-T09 — Pipeline do `vellcast-core` (captura → encoder → relay)
+- [x] ✅ E2-T09 — Pipeline do `vellcast-core` executado no Windows (captura → encoder → relay)
 - [x] ✅ E2-T10 — Ferramentas de validação manual (`capture_to_file`)
 
 ### Etapa 3 — Media relay · M
@@ -116,11 +116,11 @@ Servidor `vellcast-relay` que recebe uma transmissão e distribui para vários e
 ### Etapa 4 — Áudio · M
 Transmitir o áudio do jogo, sincronizado com o vídeo.
 
-- [ ] 🧪 E4-T01 — Captura WASAPI por processo (Application Loopback)
-- [ ] 🧪 E4-T02 — Fallback: áudio do sistema excluindo o Discord, com aviso ao usuário
-- [ ] 🧪 E4-T03 — Codificação Opus (48 kHz, 20 ms)
-- [ ] 🧪 E4-T04 — Transporte e reprodução
-- [ ] 🔨 E4-T05 — Sincronização A/V (relógio comum pronto; medir no Windows)
+- [x] ✅ E4-T01 — Captura WASAPI por processo (Application Loopback)
+- [x] ✅ E4-T02 — Áudio do sistema excluindo o Discord, com aviso ao usuário
+- [x] ✅ E4-T03 — Codificação Opus (48 kHz, 20 ms)
+- [x] ✅ E4-T04 — Transporte e reprodução
+- [x] ✅ E4-T05 — Sincronização A/V: 9,2 ms de diferença no transporte (Windows)
 
 ### Etapa 5 — Integração completa (MVP) · M
 Desktop, relay e Discord Activity funcionando juntos de ponta a ponta.
@@ -155,10 +155,10 @@ Reduzir ao mínimo o impacto da transmissão nos jogos, com números reproduzív
 - [x] ✅ E6-T01 — Benchmarks reproduzíveis (`crates/perf`, `tests/benchmarks`, E2E Windows)
 - [x] ✅ E6-T02 — Escrita em lote no relay e no transmissor (p99 2,3–3,0 ms → 1,7 ms)
 - [ ] ⛔ E6-T03 — Otimização de captura e encoder — requer Windows com GPU real
-- [ ] 🧪 E6-T04 — Ajuste automático de bitrate (S)
+- [x] ✅ E6-T04 — Ajuste automático de bitrate: validado no Windows com banda limitada (S)
 - [x] ✅ E6-T05 — Avaliação QUIC (Quinn) vs WebSocket: medida; QUIC adiado (ADR-037)
 - [ ] 🧪 E6-T06 — Modo competitivo (S)
-- [ ] 🧪 E6-T07 — Métricas avançadas na interface (S)
+- [x] ✅ E6-T07 — Métricas avançadas na interface, exibidas no Windows (S)
 - [x] ✅ E6-T08 — Testes prolongados: 60 min no Windows real e relay 60 min com 20 espectadores (50 espectadores em execução)
 
 ### Etapa 7 — Comercialização · S no MVP / M no Premium

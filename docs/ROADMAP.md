@@ -13,7 +13,7 @@
 | 1 | Desktop e controles | Must | 0 (local) | Testing — executado no Windows; falta controle físico e bandeja manual |
 | 2 | Captura e encoder | Must | 0 (local) | Testing — executada no Windows (CI, sem GPU); falta GPU real |
 | 3 | Media relay | Must | 0 (local) | Done — em produção em vellcast.nextestudios.com; 60 min estável |
-| 4 | Áudio | Must | 2, 3 | Testing — executada no Windows (CI); falta teste com jogo real |
+| 4 | Áudio | Must | 2, 3 | Done — executada no Windows real; sincronia A/V de 9,2 ms no transporte |
 | 5 | Integração completa | Must | 1, 2, 3, 4 (E0-T10 para a Activity) | Done (MVP Windows + player web); Activity aguarda E0-T10 |
 | OC | Marco: abertura do código (Open Core) | Should | 5 | Testing — tarefas técnicas prontas; decisões do responsável pendentes |
 | 6 | Otimização extrema | Must | 5 | Testing — software pronto; otimização com GPU real bloqueada |
@@ -82,15 +82,15 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 
 | ID | Tarefa | MoSCoW | Depende de | Critérios de aceite | Status |
 |---|---|---|---|---|---|
-| E2-T01 | Crate `capture` — WGC de janela | M-005 | Etapa 0 | Seleção explícita; resize; fechamento; perda de dispositivo | Testing — captura de janela executada no Windows (E2E na CI); falta GPU real e jogos |
-| E2-T02 | WGC de monitor | M-006 | E2-T01 | Multi-monitor; mudança de resolução | Testing — captura de monitor executada no Windows (E2E na CI); falta multi-monitor real |
+| E2-T01 | Crate `capture` — WGC de janela | M-005 | Etapa 0 | Seleção explícita; resize; fechamento; perda de dispositivo | Done — captura de janela executada no Windows real (E2E); jogos com GPU em E2-T08 |
+| E2-T02 | WGC de monitor | M-006 | E2-T01 | Multi-monitor; mudança de resolução | Done — captura de monitor executada no Windows real (E2E e transmissão pelo app) |
 | E2-T03 | Fallback DXGI Desktop Duplication (se necessário) | M-006 | E2-T02 | Somente se justificado por teste | Done — não necessário: WGC validado no Windows real (ADR-057) |
-| E2-T04 | Crate `encoder` — detecção de encoders (MF) | M-007, S-006 | E2-T01 | Lista NVENC/AMF/QSV disponíveis | Testing — enumeração executada no Windows da CI (H264 Encoder MFT encontrado); GPUs reais pendentes |
-| E2-T05 | Pipeline D3D11 → encoder H.264 sem cópia para CPU | M-007, M-018 | E2-T04 | Baixa latência; sem B-frames; keyframe sob demanda; fila limitada | Testing — encoder executado no Windows da CI (software + conversão na CPU, ADR-031): SPS+IDR e keyframe sob demanda OK; caminho de GPU pendente |
-| E2-T06 | Configuração de resolução/FPS/bitrate | M-016 | E2-T05 | Reconfiguração ou reinício controlado | Testing — definidos ao iniciar; mudar exige reiniciar a transmissão |
-| E2-T07 | Detecção de jogos | S-003 | E2-T01 | Heurística não invasiva | Testing — heurística testada; enumeração real pendente |
+| E2-T04 | Crate `encoder` — detecção de encoders (MF) | M-007, S-006 | E2-T01 | Lista NVENC/AMF/QSV disponíveis | Done — detecção executada no Windows (H264 Encoder MFT); hardware NVENC/AMF/QSV em E2-T08 |
+| E2-T05 | Pipeline D3D11 → encoder H.264 sem cópia para CPU | M-007, M-018 | E2-T04 | Baixa latência; sem B-frames; keyframe sob demanda; fila limitada | Blocked — caminho de GPU (VideoProcessor + MFT de hardware) exige Windows com GPU; caminho de CPU validado |
+| E2-T06 | Configuração de resolução/FPS/bitrate | M-016 | E2-T05 | Reconfiguração ou reinício controlado | Done — resolução/FPS/bitrate aplicados no Windows (1024×768, 30/60 fps, 2–8 Mbps) |
+| E2-T07 | Detecção de jogos | S-003 | E2-T01 | Heurística não invasiva | Blocked — heurística testada; validar com jogos reais em Windows com GPU |
 | E2-T08 | Medição 1080p60 | M-008, M-023 | E2-T05 | Consumo e limitações registrados por GPU | Blocked — requer máquina Windows com GPU |
-| E2-T09 | Pipeline do `vellcast-core` (captura → encoder → relay, eventos, métricas, recuperação de dispositivo) | M-007, M-018 | E2-T05, E3-T02 | Sessão inicia, transmite e encerra pelo app | Testing — pipeline executado no Windows (E2E: monitor e janela → relay → espectadores); falta GPU real |
+| E2-T09 | Pipeline do `vellcast-core` (captura → encoder → relay, eventos, métricas, recuperação de dispositivo) | M-007, M-018 | E2-T05, E3-T02 | Sessão inicia, transmite e encerra pelo app | Done — pipeline executado no Windows: monitor/janela → encoder → relay → espectadores; app transmitiu ao servidor de produção |
 | E2-T10 | Ferramentas de validação manual (`capture_to_file`, teste de encoder `#[ignore]`) | M-023 | E2-T09 | Executáveis gerados | Done — execução pendente no Windows |
 
 **Entregável:** pipeline de captura e codificação funcional.
@@ -132,11 +132,11 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 
 | ID | Tarefa | MoSCoW | Depende de | Critérios de aceite | Status |
 |---|---|---|---|---|---|
-| E4-T01 | Crate `audio` — WASAPI Application Loopback | M-009 | Etapa 2 | Captura por processo quando suportada | Testing — loopback por processo executado no Windows (diag-audio); corrupção de heap encontrada e corrigida |
-| E4-T02 | Fallback loopback do sistema | M-009 | E4-T01 | Aviso claro ao usuário | Testing — áudio do sistema excluindo o Discord executado no Windows |
-| E4-T03 | Codificação Opus | M-009 | E4-T01 | 48 kHz, 20 ms | Testing — Opus 20 ms executado no Windows (intervalos exatos) |
-| E4-T04 | Transporte e reprodução | M-009 | E4-T03, Etapa 3 | Áudio reproduzido na Activity (ou fallback documentado) | Testing — áudio chegou aos espectadores pelo relay no E2E Windows (3000 pacotes/min) |
-| E4-T05 | Sincronização A/V | M-009 | E4-T04 | Skew medido e dentro de limite documentado | In Progress — PTS no relógio QPC comum; skew a medir no Windows |
+| E4-T01 | Crate `audio` — WASAPI Application Loopback | M-009 | Etapa 2 | Captura por processo quando suportada | Done — loopback por processo executado no Windows (149 pacotes/3 s, sem alertas do page heap) |
+| E4-T02 | Fallback loopback do sistema | M-009 | E4-T01 | Aviso claro ao usuário | Done — áudio do sistema excluindo o Discord executado no Windows |
+| E4-T03 | Codificação Opus | M-009 | E4-T01 | 48 kHz, 20 ms | Done — Opus 20 ms executado no Windows (180.000 pacotes em 60 min, intervalos exatos) |
+| E4-T04 | Transporte e reprodução | M-009 | E4-T03, Etapa 3 | Áudio reproduzido na Activity (ou fallback documentado) | Done — áudio entregue aos espectadores pelo relay no Windows |
+| E4-T05 | Sincronização A/V | M-009 | E4-T04 | Skew medido e dentro de limite documentado | Done — skew A/V no transporte de 9,2 ms no Windows (limite do teste: 250 ms) |
 
 **Entregável:** transmissão audiovisual funcional.
 **Critério de aceite:** áudio e vídeo reproduzidos com sincronização aceitável nos ambientes suportados e testados.
@@ -199,10 +199,10 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 | E6-T01 | Benchmarks reproduzíveis | M-023 | Etapa 5 | Metodologia em [PERFORMANCE](PERFORMANCE.md) | Done — benchmarks reproduzíveis (crates/perf, tests/benchmarks, E2E Windows); números em PERFORMANCE |
 | E6-T02 | Redução de alocações e otimização de buffers | M-018 | E6-T01 | Antes/depois medidos | Done — escrita em lote no relay e no transmissor; p99 de 2,3–3,0 ms para 1,7 ms (medido) |
 | E6-T03 | Otimização de captura e encoder | M-007 | E6-T01 | Antes/depois medidos | Blocked — otimização de captura/encoder exige Windows com GPU real |
-| E6-T04 | Ajuste automático de bitrate | S-001 | E6-T01 | Histerese validada | Testing — controlador AIMD com histerese (testado); mudança de bitrate em tempo real depende do encoder real |
+| E6-T04 | Ajuste automático de bitrate | S-001 | E6-T01 | Histerese validada | Done — no Windows real, subida limitada a 300 kbps: alvo 3000 → 500 kbps e encoder acompanhou ao vivo (2075 → ~400 kbps); hardware a verificar com GPU |
 | E6-T05 | Avaliação QUIC (Quinn) vs WebSocket | S-005 | E6-T01 | Relatório e decisão registrados | Done — avaliação Quinn × WebSocket medida; decisão: adiado (ADR-037) |
 | E6-T06 | Modo competitivo | S-002 | E6-T04 | Benchmark com/sem | Testing — política competitiva (bitrate → FPS) testada; efeito em jogo exige Windows com GPU |
-| E6-T07 | Métricas avançadas na UI | S-007 | E6-T01 | Seção própria | Testing — métricas avançadas (alvo adaptativo, CPU, RAM) na tela Ao vivo |
+| E6-T07 | Métricas avançadas na UI | S-007 | E6-T01 | Seção própria | Done — métricas avançadas exibidas no Windows durante transmissão real (captura do E2E) |
 | E6-T08 | Testes prolongados e de falha | M-025 | E6-T02 | ≥ 60 min estáveis | Done — 60 min no Windows real (transmissor sem vazamento, áudio contínuo) e relay 60 min com 20 espectadores (50 espectadores em execução) |
 
 **Entregável:** versão otimizada com relatório de desempenho.
