@@ -82,13 +82,39 @@ pub(crate) fn with_state<R>(f: impl FnOnce(&mut UiState) -> R) -> Option<R> {
     STATE.with(|s| s.borrow_mut().as_mut().map(f))
 }
 
+/// Arquivo de log do app. No Windows o app não tem console (subsistema GUI),
+/// então o log em arquivo é o que o usuário envia ao reportar problemas.
+/// A sessão anterior fica em `.old`; nenhum conteúdo transmitido é registrado.
+pub fn log_path() -> Option<std::path::PathBuf> {
+    directories::ProjectDirs::from("com", "Next Estudios", "Vellcast")
+        .map(|d| d.data_local_dir().join("logs").join("vellcast-desktop.log"))
+}
+
+fn open_log_file() -> Option<std::fs::File> {
+    let path = log_path()?;
+    std::fs::create_dir_all(path.parent()?).ok()?;
+    if path.exists() {
+        let _ = std::fs::rename(&path, path.with_extension("log.old"));
+    }
+    std::fs::File::create(&path).ok()
+}
+
 fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info,vellcast_desktop=debug".into()),
-        )
-        .init();
+    use tracing_subscriber::fmt::writer::MakeWriterExt;
+
+    let filter = || {
+        tracing_subscriber::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| "info,vellcast_desktop=debug".into())
+    };
+    match open_log_file() {
+        Some(file) => tracing_subscriber::fmt()
+            .with_env_filter(filter())
+            .with_ansi(false)
+            .with_writer(std::io::stdout.and(std::sync::Mutex::new(file)))
+            .init(),
+        None => tracing_subscriber::fmt().with_env_filter(filter()).init(),
+    }
+    tracing::info!(version = env!("CARGO_PKG_VERSION"), "Vellcast iniciado");
 
     let settings_path = settings::default_path();
     let settings = match &settings_path {

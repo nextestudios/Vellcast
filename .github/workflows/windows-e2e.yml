@@ -176,7 +176,7 @@ jobs:
           $backup = if (Test-Path $cfg) { Get-Content $cfg -Raw } else { $null }
           '{ "start_minimized": true, "close_to_tray": true, "config_version": 2 }' | Set-Content -Encoding utf8 $cfg
           $env:RUST_LOG = "info"
-          $p = Start-Process target\release\vellcast-desktop.exe -PassThru -RedirectStandardError tray.log
+          $p = Start-Process target\release\vellcast-desktop.exe -PassThru
           Start-Sleep -Seconds 10
           $p.Refresh()
           if ($p.HasExited) { throw "o app encerrou ao iniciar minimizado" }
@@ -189,7 +189,10 @@ jobs:
           $msg = "processo ativo sem janela visível: $(-not $visible) | CPU na bandeja: $cpuPct% de 1 núcleo | working set: $ws MB"
           Write-Output $msg
           "### App na bandeja (início minimizado)`n`n$msg" | Out-File -Append $env:GITHUB_STEP_SUMMARY
-          Get-Content tray.log -ErrorAction SilentlyContinue | Select-String -Pattern "bandeja|tray|configura" | Select-Object -First 10
+          $log = Join-Path $env:LOCALAPPDATA "Next Estudios\Vellcast\data\logs\vellcast-desktop.log"
+          if (-not (Test-Path $log)) { $log = (Get-ChildItem (Join-Path $env:LOCALAPPDATA "Next Estudios") -Recurse -Filter vellcast-desktop.log -ErrorAction SilentlyContinue | Select-Object -First 1).FullName }
+          Write-Output "log do app: $log"
+          if ($log) { Copy-Item $log tray.log; Get-Content $log | Select-String -Pattern "bandeja|estado inicial|configura" | Select-Object -First 10 }
           if ($visible) {
             $noTray = Select-String -Path tray.log -Pattern "bandeja indisponível" -Quiet -ErrorAction SilentlyContinue
             if ($noTray) {

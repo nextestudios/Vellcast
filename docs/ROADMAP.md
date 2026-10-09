@@ -201,7 +201,7 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 | E6-T03 | Otimização de captura e encoder | M-007 | E6-T01 | Antes/depois medidos | Blocked — otimização de captura/encoder exige Windows com GPU real |
 | E6-T04 | Ajuste automático de bitrate | S-001 | E6-T01 | Histerese validada | Done — no Windows real, subida limitada a 300 kbps: alvo 3000 → 500 kbps e encoder acompanhou ao vivo (2075 → ~400 kbps); hardware a verificar com GPU |
 | E6-T05 | Avaliação QUIC (Quinn) vs WebSocket | S-005 | E6-T01 | Relatório e decisão registrados | Done — avaliação Quinn × WebSocket medida; decisão: adiado (ADR-037) |
-| E6-T06 | Modo competitivo | S-002 | E6-T04 | Benchmark com/sem | Testing — política competitiva (bitrate → FPS) testada; efeito em jogo exige Windows com GPU |
+| E6-T06 | Modo competitivo | S-002 | E6-T04 | Benchmark com/sem | Done — Windows real com CPU sobrecarregada: FPS-alvo 60 → 45 → 24 e bitrate 8000 → 4096 kbps; efeito em jogos reais a medir com GPU |
 | E6-T07 | Métricas avançadas na UI | S-007 | E6-T01 | Seção própria | Done — métricas avançadas exibidas no Windows durante transmissão real (captura do E2E) |
 | E6-T08 | Testes prolongados e de falha | M-025 | E6-T02 | ≥ 60 min estáveis | Done — 60 min no Windows real (transmissor sem vazamento) e relay 60 min com 20 e 50 espectadores sem perdas |
 

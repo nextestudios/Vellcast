@@ -157,7 +157,7 @@ Reduzir ao mínimo o impacto da transmissão nos jogos, com números reproduzív
 - [ ] ⛔ E6-T03 — Otimização de captura e encoder — requer Windows com GPU real
 - [x] ✅ E6-T04 — Ajuste automático de bitrate: validado no Windows com banda limitada (S)
 - [x] ✅ E6-T05 — Avaliação QUIC (Quinn) vs WebSocket: medida; QUIC adiado (ADR-037)
-- [ ] 🧪 E6-T06 — Modo competitivo (S)
+- [x] ✅ E6-T06 — Modo competitivo: FPS 60 → 24 com o encoder sobrecarregado no Windows (S)
 - [x] ✅ E6-T07 — Métricas avançadas na interface, exibidas no Windows (S)
 - [x] ✅ E6-T08 — Testes prolongados: 60 min no Windows real e relay 60 min com 20 e 50 espectadores
 

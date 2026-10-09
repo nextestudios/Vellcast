@@ -113,3 +113,7 @@ Abra uma issue (repositório privado) com:
 - saída do `iniciar-relay.bat` e, se possível, os logs do desktop com `RUST_LOG=debug`.
 
 Nunca inclua o conteúdo de `relay.env`, `rooms.json` ou links de convite válidos.
+
+## Logs para reportar problemas
+
+O app desktop não tem console no Windows; o log fica em `%LOCALAPPDATA%\Next Estudios\Vellcast\data\logs\vellcast-desktop.log` (sessão anterior em `.log.old`). Envie esse arquivo, a captura da tela **Ao vivo** e os passos realizados. O log não contém mídia nem tokens.

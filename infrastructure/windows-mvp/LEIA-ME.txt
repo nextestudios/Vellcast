@@ -38,6 +38,14 @@ HTTPS: use um túnel (cloudflared tunnel --url http://localhost:8788) e cole o
 endereço https://....trycloudflare.com em Configurações > Servidor >
 "Endereço público para os links de convite".
 
+Se algo der errado
+-----------------
+O app grava um log em:
+  %LOCALAPPDATA%\Next Estudios\Vellcast\data\logs\vellcast-desktop.log
+(a sessão anterior fica em vellcast-desktop.log.old). Envie esse arquivo junto
+com uma captura da tela "Ao vivo" ao reportar o problema. O log não contém o
+conteúdo transmitido nem tokens.
+
 Requisitos
 ----------
  - Windows 10 versão 2004 (maio de 2020) ou superior; Windows 11 recomendado.
