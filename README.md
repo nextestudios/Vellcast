@@ -1,74 +1,147 @@
+<div align="center">
+
 # Vellcast
 
-Compartilhamento de tela otimizado para jogos: um aplicativo Windows leve, em Rust, que captura e codifica por hardware, e um player no navegador (e, em breve, uma Discord Activity) para assistir sem instalar nada. Desenvolvido pela [Next Estúdios](https://nextestudios.com).
+**Compartilhamento de tela para jogos — leve, em 1080p60 grátis, com áudio e controle.**
 
-> **Status: MVP para Windows em teste.** O app desktop captura, codifica e transmite para o `vellcast-relay`; quem recebe um link de convite assiste no navegador. A integração com o Discord foi adiada (ADR-013). Ver o [roadmap completo](ROADMAP.md) e o [guia de teste no Windows](docs/TESTING_WINDOWS.md).
+Transmita seu jogo do Windows em segundos e assista no navegador ou dentro do Discord, sem instalar nada do lado de quem assiste.
 
-## Componentes
+[![CI](https://github.com/nextestudios/Vellcast/actions/workflows/ci.yml/badge.svg)](https://github.com/nextestudios/Vellcast/actions/workflows/ci.yml)
+[![Windows E2E](https://github.com/nextestudios/Vellcast/actions/workflows/windows-e2e.yml/badge.svg)](https://github.com/nextestudios/Vellcast/actions/workflows/windows-e2e.yml)
+[![Release](https://img.shields.io/github/v/release/nextestudios/Vellcast?label=release&color=2EC4B6)](https://github.com/nextestudios/Vellcast/releases/latest)
+![Plataforma](https://img.shields.io/badge/plataforma-Windows%2010%2F11-0E1014)
+![Rust](https://img.shields.io/badge/Rust-1.88%2B-orange?logo=rust)
+![Licença](https://img.shields.io/badge/licen%C3%A7a-propriet%C3%A1ria-lightgrey)
 
-| Componente | Caminho | Função |
-|---|---|---|
-| App desktop (Rust + Slint) | `apps/desktop` | Salas, convites, escolha da fonte, qualidade, áudio, tela Ao vivo, bandeja, controle e teclado virtual |
-| Motor de transmissão | `crates/vellcast-core`, `crates/capture`, `crates/encoder`, `crates/audio` | Windows Graphics Capture → H.264 por hardware (Media Foundation) + áudio WASAPI → Opus |
-| Transporte do transmissor | `crates/transport` | WebSocket/TLS com fila limitada e reconexão |
-| Relay de mídia | `services/relay` | Salas privadas, convites, tokens, distribuição sem recodificação e player web |
-| Player web / Discord Activity | `apps/discord-activity` | Player WebCodecs: `/watch` (links de convite) e modo Activity (adiado) |
-| Protocolo | `crates/protocol` | Formato binário v1 (`docs/STREAMING_PROTOCOL.md`) |
-| Validação da Etapa 0 | `services/stage0-server` | Servidor de mídia sintética usado para validar o player |
+[**Baixar para Windows**](https://github.com/nextestudios/Vellcast/releases/latest) ·
+[Guia de testes](docs/TESTING_WINDOWS.md) ·
+[Roadmap](ROADMAP.md) ·
+[Arquitetura](docs/ARCHITECTURE.md)
 
-## Testar no Windows (sem compilar)
+<img src="docs/assets/screenshots/ao-vivo.png" alt="Tela Ao vivo do Vellcast transmitindo no Windows" width="820">
 
-Baixe o artefato **Vellcast-MVP-windows-x64** em **Actions → Windows MVP**, execute `iniciar-relay.bat` e depois `vellcast-desktop.exe`. Passo a passo e checklist em [`docs/TESTING_WINDOWS.md`](docs/TESTING_WINDOWS.md).
+</div>
 
-## Desenvolvimento
+---
 
-Requisitos: Rust estável, Node 22+. A captura e o encoder só funcionam no Windows; no macOS/Linux a interface roda e mostra que a captura está indisponível.
+## ✨ Recursos
 
-```bash
-# Player web
-(cd apps/discord-activity && npm ci && npm run build)
+- 🎮 **Feito para jogos** — captura nativa via Windows Graphics Capture, sem injeção em processos e sem interferir no anti-cheat.
+- ⚡ **Leve de verdade** — app nativo em Rust + Slint, sem Electron: **0,5% de CPU e 36 MB** parado, medido no Windows.
+- 🖥️ **1080p60 grátis** — encoder por hardware (NVIDIA NVENC, AMD, Intel Quick Sync) com fallback por software.
+- 🔊 **Áudio do jogo** — captura só o áudio do jogo escolhido (WASAPI por processo), sem pegar a voz do Discord.
+- 🕹️ **Controle em primeiro lugar** — todo o app navegável por gamepad, com teclado virtual.
+- 📉 **Bitrate adaptativo** — a qualidade se ajusta sozinha à rede; o **modo competitivo** reduz o FPS para preservar o jogo.
+- 👀 **Quem assiste não instala nada** — player no navegador por link de convite, ou dentro de uma Discord Activity.
+- 🔒 **Privado por padrão** — salas privadas, convites temporários, tokens assinados; nada é gravado.
+- 🏠 **Servidor próprio** — o relay roda em qualquer VPS com Docker; transmita sem depender da nossa nuvem.
 
-# Relay servindo o player (segredo aleatório; só para desenvolvimento)
-VELLCAST_RELAY_INSECURE_DEV=1 VELLCAST_STATIC_DIR=apps/discord-activity/dist \
-  cargo run --release -p vellcast-relay
+## 📸 Capturas
 
-# App desktop (Configurações → Servidor: http://127.0.0.1:8788)
-cargo run --release -p vellcast-desktop
-```
-
-Sem Windows, dá para simular um transmissor com a mídia sintética da Etapa 0 (`./scripts/generate-test-media.sh` exige ffmpeg):
-
-```bash
-curl -s -X POST localhost:8788/api/rooms -H 'content-type: application/json' -d '{"name":"teste"}'
-VELLCAST_PUBLISHER_TOKEN=<publisherToken> cargo run --release -p vellcast-transport \
-  --example publish_fixture -- ws://127.0.0.1:8788/ws 1080p60
-```
-
-Etapa 0 (validação do player com mídia sintética): `cargo run --release -p vellcast-stage0-server` e `http://127.0.0.1:8787`. Discord: [`docs/DISCORD_INTEGRATION.md`](docs/DISCORD_INTEGRATION.md). Docker e Dokploy: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
-
-## Verificações
-
-```bash
-cargo fmt --all -- --check
-cargo clippy --all-targets -- -D warnings
-cargo test
-(cd apps/discord-activity && npm run build)
-```
-
-A CI roda o mesmo em Linux e Windows (`.github/workflows/ci.yml`). Testes de captura, GPU, áudio e FPS exigem uma máquina Windows real.
-
-## Documentação
-
-| Tema | Documento |
+| Transmitir | Salas e convites |
 |---|---|
-| Produto e requisitos | [PRD](docs/PRD.md), [MOSCOW](docs/MOSCOW.md), [ROADMAP](docs/ROADMAP.md), [RISKS](docs/RISKS.md) |
-| Arquitetura | [ARCHITECTURE](docs/ARCHITECTURE.md), [TECH_STACK](docs/TECH_STACK.md), [DECISIONS](docs/DECISIONS.md), [STREAMING_PROTOCOL](docs/STREAMING_PROTOCOL.md) |
-| Discord | [DISCORD_INTEGRATION](docs/DISCORD_INTEGRATION.md) |
-| Qualidade | [PERFORMANCE](docs/PERFORMANCE.md), [SECURITY](docs/SECURITY.md) |
-| Experiência | [UX_GUIDELINES](docs/UX_GUIDELINES.md), [CONTROLLER_SUPPORT](docs/CONTROLLER_SUPPORT.md) |
-| Negócio e licenças | [MONETIZATION](docs/MONETIZATION.md), [OPEN_SOURCE_STRATEGY](docs/OPEN_SOURCE_STRATEGY.md), [LICENSING](docs/LICENSING.md) |
-| Operação | [DEPLOYMENT](docs/DEPLOYMENT.md) |
+| <img src="docs/assets/screenshots/transmitir.png" alt="Tela Transmitir" width="400"> | <img src="docs/assets/screenshots/salas.png" alt="Tela Salas" width="400"> |
+| **Teclado virtual (controle)** | **Player no navegador** |
+| <img src="docs/assets/screenshots/teclado-virtual.png" alt="Teclado virtual" width="400"> | <img src="docs/assets/screenshots/player-web.png" alt="Player web" width="400"> |
 
-## Licença
+## 🚀 Começando
 
-Software proprietário da Next Estúdios — todos os direitos reservados (ver [LICENSE](LICENSE) e [`docs/LICENSING.md`](docs/LICENSING.md)). Dependências de terceiros mantêm suas próprias licenças.
+### Instalar
+
+1. Baixe o **`Vellcast-Setup-x64.exe`** na [página de releases](https://github.com/nextestudios/Vellcast/releases/latest).
+2. Execute o instalador. O Windows SmartScreen pode avisar (o executável ainda não é assinado): **Mais informações → Executar assim mesmo**.
+3. Abra o **Vellcast** pelo menu Iniciar.
+
+> Requisitos: Windows 10 2004+ ou Windows 11. Recomendado: GPU com encoder de vídeo (NVIDIA, AMD ou Intel).
+
+### Transmitir
+
+1. **Salas → Criar sala → Gerar link de convite → Copiar**.
+2. **Transmitir**: escolha o jogo, janela ou monitor, a qualidade e a sala → **Iniciar transmissão**.
+3. Envie o link: quem recebe abre no Chrome ou Edge, em qualquer aparelho, e clica em **Ativar áudio**.
+
+O app já vem configurado com o servidor de testes `https://vellcast.nextestudios.com`. Para usar o seu próprio servidor, veja [Self-hosting](#-self-hosting).
+
+## 🏗️ Arquitetura
+
+```mermaid
+flowchart LR
+    G[Jogo no Windows] --> C[Windows Graphics Capture]
+    C --> E[Encoder H.264<br/>por hardware]
+    A[Áudio WASAPI<br/>por processo] --> O[Opus]
+    E --> T[WebSocket TLS]
+    O --> T
+    T --> R[vellcast-relay<br/>sem recodificação]
+    R --> W[Player web /watch]
+    R --> D[Discord Activity]
+```
+
+Uma única transmissão codificada sobe para o relay, que distribui os mesmos bytes a todos os espectadores autorizados — sem recodificar e sem custo extra de CPU por espectador. Detalhes em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) e [`docs/STREAMING_PROTOCOL.md`](docs/STREAMING_PROTOCOL.md).
+
+| Componente | Caminho | Tecnologia |
+|---|---|---|
+| App desktop | [`apps/desktop`](apps/desktop) | Rust, Slint |
+| Captura · Encoder · Áudio | [`crates/capture`](crates/capture) · [`crates/encoder`](crates/encoder) · [`crates/audio`](crates/audio) | Windows Graphics Capture, Media Foundation, WASAPI, Opus |
+| Motor de transmissão | [`crates/vellcast-core`](crates/vellcast-core) | Pipeline, bitrate adaptativo |
+| Controle | [`crates/controller`](crates/controller) | GilRs |
+| Protocolo · Transporte | [`crates/protocol`](crates/protocol) · [`crates/transport`](crates/transport) | WebSocket binário, TLS (rustls) |
+| Relay | [`services/relay`](services/relay) | Tokio, Axum, SQLite opcional |
+| Player web e Discord Activity | [`apps/discord-activity`](apps/discord-activity) | React, TypeScript, WebCodecs |
+
+## 📊 Desempenho
+
+Medições reais (metodologia completa em [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)):
+
+| Cenário | Resultado |
+|---|---|
+| App desktop parado (Windows) | 0,16–0,47% de CPU · 36 MB |
+| Relay: 50 espectadores 1080p60 por 60 min | 187 GB entregues · 0 descartes · ≤ 14 MB de RAM |
+| Sincronia áudio/vídeo no transporte | 9–12 ms |
+| Bitrate adaptativo com banda limitada a 300 kbps | 3000 → 500 kbps, sem perder quadros |
+| Sessão de 60 min no Windows | sem vazamento de memória |
+
+## 🏠 Self-hosting
+
+O relay é um único binário/container, sem dependências externas:
+
+```bash
+docker build -f infrastructure/docker/relay.Dockerfile -t vellcast-relay .
+docker run -d -p 8788:8788 \
+  -e VELLCAST_RELAY_SECRET=$(openssl rand -hex 32) \
+  -e VELLCAST_DB_PATH=/data/relay.db -v vellcast-relay:/data \
+  vellcast-relay
+```
+
+Coloque-o atrás de um proxy com HTTPS (o navegador exige HTTPS para tocar o vídeo) e use o endereço em **Configurações → Servidor** no app. Guia completo, incluindo Dokploy: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
+## 🛠️ Compilando do código-fonte
+
+Requisitos: Rust estável (1.88+), Node 22+, e no Windows o MSVC Build Tools e o CMake.
+
+```bash
+# Testes e verificações
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+
+# App desktop (Windows)
+cargo run --release -p vellcast-desktop
+
+# Relay + player web
+(cd apps/discord-activity && npm ci && npm run build)
+VELLCAST_RELAY_INSECURE_DEV=1 cargo run --release -p vellcast-relay
+```
+
+A CI compila e testa em Linux e Windows, roda um teste de ponta a ponta no Windows (captura → encoder → relay → espectadores) e gera o instalador a cada push.
+
+## 🗺️ Roadmap
+
+O MVP para Windows está completo e validado. Próximos passos: validação dentro do Discord, testes com GPUs e jogos reais, servidor no Brasil e planos pagos. Veja o [roadmap completo](ROADMAP.md).
+
+## 🤝 Contribuindo
+
+Leia o [`CONTRIBUTING.md`](CONTRIBUTING.md) e o [código de conduta](CODE_OF_CONDUCT.md). Para reportar vulnerabilidades, siga a [política de segurança](SECURITY.md).
+
+## 📄 Licença
+
+Software proprietário © 2026 [Next Estúdios](https://nextestudios.com) — todos os direitos reservados. Veja [`LICENSE`](LICENSE). Componentes de terceiros mantêm suas próprias licenças ([`docs/LICENSING.md`](docs/LICENSING.md)).
