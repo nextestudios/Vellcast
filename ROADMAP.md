@@ -64,7 +64,7 @@ Comprovar que H.264 + Opus via WebSocket e WebCodecs funcionam dentro de uma Dis
 - [x] ✅ E0-T07 — Reconexão automática
 - [x] ✅ E0-T08 — Verificação da Gamepad API (no navegador; no Discord junto com E0-T10)
 - [x] ✅ E0-T09 — Teste em navegador (local e produção)
-- [ ] ⛔ E0-T10 — Teste em Activity real (Desktop, Web, Mobile) — código pronto; falta criar a aplicação no Discord ([guia](docs/DISCORD_INTEGRATION.md))
+- [ ] ⏸️ E0-T10 — Teste em Activity real — aguardando o Client ID/Secret que o responsável vai criar ([guia](docs/DISCORD_INTEGRATION.md))
 - [x] ✅ E0-T11 — Relatório de resultados (PERFORMANCE.md)
 
 ### Etapa 1 — Desktop e controles · M
@@ -125,16 +125,16 @@ Transmitir o áudio do jogo, sincronizado com o vídeo.
 ### Etapa 5 — Integração completa (MVP) · M
 Desktop, relay e Discord Activity funcionando juntos de ponta a ponta.
 
-- [ ] 🧪 E5-T01 — Autenticação OAuth2 do Discord no relay (testada com Discord simulado)
-- [ ] 🧪 E5-T02 — Pareamento desktop ↔ Activity por código de uso único
+- [ ] ⏸️ E5-T01 — OAuth2 do Discord no relay — pronto e testado com Discord simulado; validação real aguarda o app do Discord
+- [ ] ⏸️ E5-T02 — Pareamento desktop ↔ Activity — pronto; validação real aguarda o app do Discord
 - [x] ✅ E5-T03 — Fluxo de salas na interface (criar, convidar, encerrar)
 - [x] ✅ E5-T04 — Iniciar/encerrar transmissão: o app transmitiu do Windows ao servidor de produção
-- [ ] 🧪 E5-T05 — Player final: web em `/watch` e Activity (login, salas da instância, player)
+- [ ] ⏸️ E5-T05 — Player final — web em `/watch` validado; Activity aguarda o app do Discord
 - [x] ✅ E5-T06 — Perfis de qualidade e atalhos (S)
 - [x] ✅ E5-T07 — Tratamento de erros de ponta a ponta
 - [x] ✅ E5-T08 — Pacote de teste e instalador Windows, guia [`docs/TESTING_WINDOWS.md`](docs/TESTING_WINDOWS.md)
 - [x] ✅ E5-T09 — Player web servido pelo relay (S-011)
-- [ ] ⛔ Validação dentro do Discord: E0-T10
+- [ ] ⏸️ Validação dentro do Discord (E0-T10) — aguardando o responsável
 
 ### Marco OC — Abertura do código (Open Core) · S
 Suspenso por decisão (ADR-058): o Vellcast é proprietário e o repositório continua privado. As práticas de higiene (licenças de terceiros, segredos, segurança) continuam valendo.
@@ -166,7 +166,7 @@ Planos Free, Pro e Community sem prejudicar o núcleo gratuito (1080p60 continua
 
 - [x] ✅ E7-T01 — Políticas do Discord: Premium Apps indisponível no Brasil (venda fora do Discord)
 - [x] ✅ E7-T02 — cloud-api (repositório privado `vellcast-cloud`): contas, planos, assinaturas, entitlements e cotas
-- [ ] 🧪 E7-T03 — Pagamentos (webhook compatível com Stripe, modo de teste) — produção depende da sua conta no provedor
+- [ ] ⏸️ E7-T03 — Pagamentos — pronto em modo de teste; adiado pelo responsável até criar a conta no provedor
 - [x] ✅ E7-T04 — Limites aplicados só no relay hospedado (self-hosted sem restrição)
 - [x] ✅ E7-T05 — Painel administrativo mínimo (`/admin`)
 
@@ -176,10 +176,10 @@ Primeira versão pública estável.
 - [x] ✅ E8-T01 — Instalador Windows (Inno Setup), testado na CI; release `v0.1.0` em rascunho (S)
 - [ ] ⛔ E8-T02 — Assinatura de código — falta o certificado
 - [x] ✅ E8-T03 — Atualizações seguras: manifesto assinado na CI e verificado (adulteração rejeitada) (S)
-- [ ] 🧪 E8-T04 — Termos, privacidade e licenças — rascunhos; revisão jurídica pendente
-- [ ] 🧪 E8-T05 — Produção e monitoramento — alertas a ativar no Dokploy
+- [ ] ⏸️ E8-T04 — Termos e privacidade — rascunhos prontos; revisão jurídica adiada pelo responsável
+- [ ] ⏸️ E8-T05 — Monitoramento — produção com health check; alertas adiados pelo responsável (webhook do Discord depois)
 - [x] ✅ E8-T06 — Localização PT-BR e EN (S)
-- [ ] 🧪 E8-T07 — Testes finais — checklist pronto, execução em Windows real pendente
+- [ ] ⏸️ E8-T07 — Testes finais — checklist pronto; execução no PC com GPU adiada pelo responsável
 
 ---
 
@@ -218,7 +218,7 @@ Electron (W-001) · navegador completo embutido no transmissor (W-002) · chat d
 
 ## 5. Pendências que dependem do responsável
 
-Tudo o que podia ser feito e validado sem estas ações está concluído. Cada item abaixo destrava as tarefas indicadas.
+Tudo o que podia ser feito e validado sem estas ações está concluído. Em 2026-10-09 o responsável decidiu tratar estes itens depois (⏸️); cada um destrava as tarefas indicadas.
 
 | Pendência | Como fazer | Destrava |
 |---|---|---|
