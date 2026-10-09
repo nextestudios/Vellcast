@@ -179,7 +179,20 @@ fn main() -> anyhow::Result<()> {
         let tray_ok = create_tray(&ui);
         ui.set_tray_available(tray_ok);
         tracing::info!(start_hidden, tray_ok, "estado inicial da janela");
-        if !(start_hidden && tray_ok) {
+        if start_hidden && tray_ok {
+            // No Windows a janela nativa pode ser criada visível mesmo sem `show()`
+            // (o E2E mostrou a janela aberta com início minimizado). Oculta
+            // explicitamente agora e de novo após a criação tardia da janela.
+            ensure_hidden(&ui);
+            let weak = ui.as_weak();
+            slint::Timer::single_shot(std::time::Duration::from_millis(500), move || {
+                if let Some(ui) = weak.upgrade()
+                    && !with_state(|st| st.window_visible).unwrap_or(false)
+                {
+                    ensure_hidden(&ui);
+                }
+            });
+        } else {
             show_window(&ui);
         }
         #[cfg(feature = "dev-snapshot")]
@@ -386,6 +399,13 @@ fn show_window(ui: &AppWindow) {
     });
     with_state(|st| st.window_visible = true);
     actions::update_live_timer(ui);
+}
+
+/// Garante a janela oculta na inicialização minimizada (sem tocar no estado da bandeja).
+fn ensure_hidden(ui: &AppWindow) {
+    let _ = ui.hide();
+    ui.window().with_winit_window(|w| w.set_visible(false));
+    with_state(|st| st.window_visible = false);
 }
 
 fn hide_window(ui: &AppWindow) {

@@ -304,8 +304,11 @@ async fn rejects_unauthorized_connections() {
     // Token adulterado.
     let mut ws = connect(addr).await;
     let mut forged = room.publisher.clone();
-    forged.pop();
-    forged.push('A');
+    // Troca o último caractere por outro diferente: com base64 sem padding, o
+    // último caractere da assinatura pode já ser 'A' (~1/16), o que deixaria o
+    // token intacto e o teste instável.
+    let last = forged.pop().unwrap_or('A');
+    forged.push(if last == 'A' { 'B' } else { 'A' });
     send(&mut ws, auth_msg(&forged, ConnectRole::Publisher)).await;
     expect_error(&mut ws, ErrorCode::Unauthorized).await;
 
