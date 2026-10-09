@@ -175,7 +175,8 @@ jobs:
           $cfg = Join-Path $dir "settings.json"
           $backup = if (Test-Path $cfg) { Get-Content $cfg -Raw } else { $null }
           '{ "start_minimized": true, "close_to_tray": true, "config_version": 2 }' | Set-Content -Encoding utf8 $cfg
-          $p = Start-Process target\release\vellcast-desktop.exe -PassThru
+          $env:RUST_LOG = "info"
+          $p = Start-Process target\release\vellcast-desktop.exe -PassThru -RedirectStandardError tray.log
           Start-Sleep -Seconds 10
           $p.Refresh()
           if ($p.HasExited) { throw "o app encerrou ao iniciar minimizado" }
@@ -188,7 +189,13 @@ jobs:
           $msg = "processo ativo sem janela visível: $(-not $visible) | CPU na bandeja: $cpuPct% de 1 núcleo | working set: $ws MB"
           Write-Output $msg
           "### App na bandeja (início minimizado)`n`n$msg" | Out-File -Append $env:GITHUB_STEP_SUMMARY
-          if ($visible) { throw "a janela ficou visível com início minimizado" }
+          Get-Content tray.log -ErrorAction SilentlyContinue | Select-String -Pattern "bandeja|tray|configura" | Select-Object -First 10
+          if ($visible) {
+            $noTray = Select-String -Path tray.log -Pattern "bandeja indisponível" -Quiet -ErrorAction SilentlyContinue
+            if ($noTray) {
+              "Sem área de notificação nesta sessão: o app mostrou a janela (fallback esperado)." | Tee-Object -Append -FilePath $env:GITHUB_STEP_SUMMARY
+            } else { throw "a janela ficou visível com início minimizado e a bandeja disponível" }
+          }
 
       - name: Logs do relay
         if: always()
@@ -205,4 +212,5 @@ jobs:
             sources.txt
             relay.*.log
             desktop-stream.log
+            tray.log
           retention-days: 14

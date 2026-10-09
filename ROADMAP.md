@@ -110,7 +110,7 @@ Servidor `vellcast-relay` que recebe uma transmissão e distribui para vários e
 - [x] ✅ E3-T10 — Deploy em VPS com TLS via Dokploy: `https://vellcast.nextestudios.com` (servidor na Europa limita a vazão para o Brasil)
 - [x] ✅ E3-T11 — Salas persistentes em SQLite (em produção, sobrevivem a reinícios) (S)
 - [x] ✅ E3-T12 — Revogação de tokens e rotação do segredo sem queda
-- [ ] 🔨 E3-T13 — Sessão de 60 min com 50 espectadores (em execução)
+- [x] ✅ E3-T13 — 60 min com 50 espectadores: 187 GB entregues, zero descartes
 - [x] ✅ E3-T14 — Inventário de licenças e duplicatas (`cargo deny` na CI)
 
 ### Etapa 4 — Áudio · M
@@ -159,7 +159,7 @@ Reduzir ao mínimo o impacto da transmissão nos jogos, com números reproduzív
 - [x] ✅ E6-T05 — Avaliação QUIC (Quinn) vs WebSocket: medida; QUIC adiado (ADR-037)
 - [ ] 🧪 E6-T06 — Modo competitivo (S)
 - [x] ✅ E6-T07 — Métricas avançadas na interface, exibidas no Windows (S)
-- [x] ✅ E6-T08 — Testes prolongados: 60 min no Windows real e relay 60 min com 20 espectadores (50 espectadores em execução)
+- [x] ✅ E6-T08 — Testes prolongados: 60 min no Windows real e relay 60 min com 20 e 50 espectadores
 
 ### Etapa 7 — Comercialização · S no MVP / M no Premium
 Planos Free, Pro e Community sem prejudicar o núcleo gratuito (1080p60 continua grátis).

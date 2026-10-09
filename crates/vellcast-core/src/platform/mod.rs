@@ -497,8 +497,8 @@ impl Pipeline {
                     applied_bitrate
                 ),
                 Reason::EncoderOverload => format!(
-                    "Encoder sobrecarregado: transmitindo a {} FPS para preservar o jogo.",
-                    self.target_fps
+                    "Encoder sobrecarregado: qualidade reduzida para {} kbps e {} FPS para preservar o jogo.",
+                    applied_bitrate, self.target_fps
                 ),
                 Reason::RecommendLowerResolution => {
                     "O encoder continua sobrecarregado no FPS mínimo. Para preservar o jogo, transmita de novo com uma resolução menor (perfil Econômico).".to_string()

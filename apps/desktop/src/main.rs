@@ -152,6 +152,7 @@ fn main() -> anyhow::Result<()> {
         let Some(ui) = weak.upgrade() else { return };
         let tray_ok = create_tray(&ui);
         ui.set_tray_available(tray_ok);
+        tracing::info!(start_hidden, tray_ok, "estado inicial da janela");
         if !(start_hidden && tray_ok) {
             show_window(&ui);
         }
@@ -338,6 +339,7 @@ fn create_tray(ui: &AppWindow) -> bool {
     }) {
         Ok(tray) => {
             with_state(|st| st.tray = Some(tray));
+            tracing::info!("ícone da bandeja criado");
             true
         }
         Err(e) => {

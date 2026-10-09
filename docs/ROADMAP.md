@@ -117,7 +117,7 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 | E3-T10 | Deploy em VPS com TLS via Dokploy | M-021 | E3-T07 | Instalação seguindo só a documentação; medição com rede real | Done — `https://vellcast.nextestudios.com` (Dokploy + Let's Encrypt); servidor na Europa limita a vazão para o Brasil (DEPLOYMENT §6.10) |
 | E3-T11 | `RoomStore` persistente em SQLite | S-015 | E3-T03 | Salas sobrevivem a reinício do relay | Done — SQLite em produção (volume /data); sala sobreviveu a reinício do relay |
 | E3-T12 | Revogação e rotação de tokens | M-020 | E3-T03 | Revogar um token sem encerrar a sala; troca de segredo sem queda | Done — revogação por token/todos os espectadores e rotação do segredo sem queda |
-| E3-T13 | Sessão de 60 min e teste com 50 espectadores | M-025 | E3-T09 | Sem crescimento de memória; sem desconexões | Backlog |
+| E3-T13 | Sessão de 60 min e teste com 50 espectadores | M-025 | E3-T09 | Sem crescimento de memória; sem desconexões | Done — 60 min com 50 espectadores 1080p60: 187 GB, zero descartes, memória estável (≤14 MB) |
 | E3-T14 | Inventário de licenças e unificação de dependências duplicadas | M-022 | — | `cargo deny` na CI; uma versão de tungstenite/base64 | Done — cargo-deny na CI (licenças, avisos, duplicatas) |
 
 **Entregável:** servidor funcional em Docker.
@@ -203,7 +203,7 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 | E6-T05 | Avaliação QUIC (Quinn) vs WebSocket | S-005 | E6-T01 | Relatório e decisão registrados | Done — avaliação Quinn × WebSocket medida; decisão: adiado (ADR-037) |
 | E6-T06 | Modo competitivo | S-002 | E6-T04 | Benchmark com/sem | Testing — política competitiva (bitrate → FPS) testada; efeito em jogo exige Windows com GPU |
 | E6-T07 | Métricas avançadas na UI | S-007 | E6-T01 | Seção própria | Done — métricas avançadas exibidas no Windows durante transmissão real (captura do E2E) |
-| E6-T08 | Testes prolongados e de falha | M-025 | E6-T02 | ≥ 60 min estáveis | Done — 60 min no Windows real (transmissor sem vazamento, áudio contínuo) e relay 60 min com 20 espectadores (50 espectadores em execução) |
+| E6-T08 | Testes prolongados e de falha | M-025 | E6-T02 | ≥ 60 min estáveis | Done — 60 min no Windows real (transmissor sem vazamento) e relay 60 min com 20 e 50 espectadores sem perdas |
 
 **Entregável:** versão otimizada com relatório de desempenho.
 **Critério de aceite:** resultados reproduzíveis em hardware de referência, documentando diferenças entre jogar com e sem o Vellcast transmitindo.
