@@ -89,12 +89,14 @@ jobs:
           Start-Sleep -Seconds 2
           (Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8788/healthz).Content
 
-          node tests/e2e/windows-e2e.mjs target\release\examples\stream_to_relay.exe ${{ inputs.seconds || '60' }} 3 30 3000 system monitor
+          # 20 FPS: o runner (2 vCPUs, sem GPU) codifica por software; o teste verifica o
+          # pipeline, não a capacidade da máquina.
+          node tests/e2e/windows-e2e.mjs target\release\examples\stream_to_relay.exe ${{ inputs.seconds || '60' }} 3 20 3000 system monitor
           if ($LASTEXITCODE -ne 0) { $failed = $true }
 
           $win = (Get-Content sources.txt | Select-String '^\s*\[(\d+)\].*(?i)notepad' | Select-Object -First 1)
           if ($win) {
-            node tests/e2e/windows-e2e.mjs target\release\examples\stream_to_relay.exe 20 2 30 2000 off $win.Matches[0].Groups[1].Value
+            node tests/e2e/windows-e2e.mjs target\release\examples\stream_to_relay.exe 20 2 20 2000 off $win.Matches[0].Groups[1].Value
             if ($LASTEXITCODE -ne 0) { $failed = $true }
           } else { Write-Output "sem janela do Bloco de Notas; transmissão de janela pulada" }
 
