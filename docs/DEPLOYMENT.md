@@ -240,7 +240,7 @@ O ajuste automático de bitrate (S-001, Etapa 6) reduzirá o impacto de rotas ru
 
 ### 6.11 Vellcast Cloud API (Etapa 7, serviço comercial opcional)
 
-`services/cloud-api` só é necessário no serviço oficial com planos pagos. Um relay self-hosted não precisa dele.
+A cloud-api (repositório privado `nextestudios/vellcast-cloud`) só é necessária no serviço oficial com planos pagos. Um relay self-hosted não precisa dele.
 
 | Variável | Obrigatória | Descrição |
 |---|---|---|
@@ -253,7 +253,7 @@ O ajuste automático de bitrate (S-001, Etapa 6) reduzirá o impacto de rotas ru
 | `VELLCAST_TRUST_PROXY` | Atrás do Traefik | IP real do cliente para o rate limit de login |
 | `VELLCAST_CLOUD_INSECURE_COOKIES=1` | Só local sem HTTPS | Remove `Secure` dos cookies |
 
-Dokploy: aplicação com `infrastructure/docker/cloud-api.Dockerfile`, volume persistente em `/data`, domínio com HTTPS (ex.: `cloud.seudominio.com`) e health check em `/healthz`. No relay hospedado, defina a mesma `VELLCAST_CLOUD_ENTITLEMENT_KEY`; a partir daí, `POST /api/rooms` exige o cabeçalho `X-Vellcast-Entitlement` com um token de `POST /api/entitlements/token`.
+Dokploy: aplicação a partir do repositório privado `nextestudios/vellcast-cloud` (`Dockerfile` na raiz), volume persistente em `/data`, domínio com HTTPS (ex.: `cloud.seudominio.com`) e health check em `/healthz`. No relay hospedado, defina a mesma `VELLCAST_CLOUD_ENTITLEMENT_KEY`; a partir daí, `POST /api/rooms` exige o cabeçalho `X-Vellcast-Entitlement` com um token de `POST /api/entitlements/token`.
 
 Endpoints: `POST /api/auth/signup|login|logout`, `GET /api/me`, `GET /api/plans`, `POST /api/entitlements/token`, `POST /api/usage`, `POST /api/billing/webhooks/stripe`, `GET /admin` (painel) e `GET /healthz`.
 

@@ -38,7 +38,7 @@ flowchart LR
 | 3 | Media relay | M | macOS/Linux | ✅ em produção em `vellcast.nextestudios.com`; 60 min estável |
 | 4 | Áudio | M | **Windows** | ✅ executada no Windows real; sincronia A/V de 9,2 ms |
 | 5 | Integração completa — **MVP** | M | Windows (+ Discord para a Activity) | ✅ MVP Windows: app transmitiu do Windows ao servidor de produção; Activity aguarda E0-T10 |
-| OC | Abertura do código (Open Core) | S | — | 🧪 parte técnica pronta; decisões suas pendentes |
+| OC | Abertura do código (Open Core) | S | — | ⏸️ suspenso: código proprietário e repositório privado (ADR-058) |
 | 6 | Otimização extrema | M | Windows com GPU + jogos | 🧪 software pronto e medido; otimização com GPU real bloqueada |
 | 7 | Comercialização | S no MVP / M no Premium | Linux (servidor) | 🧪 backend pronto; cobrança real depende de conta no provedor |
 | 8 | Lançamento | M | Windows + produção | 🧪 instalador e atualizador prontos; certificado e revisão jurídica pendentes |
@@ -137,17 +137,17 @@ Desktop, relay e Discord Activity funcionando juntos de ponta a ponta.
 - [ ] ⛔ Validação dentro do Discord: E0-T10
 
 ### Marco OC — Abertura do código (Open Core) · S
-Repositório continua **privado** até concluir este marco (alvo: fim da Etapa 5).
+Suspenso por decisão (ADR-058): o Vellcast é proprietário e o repositório continua privado. As práticas de higiene (licenças de terceiros, segredos, segurança) continuam valendo.
 
-- [ ] ⛔ OC-T01 — Confirmar a licença do código próprio (Apache-2.0) — decisão sua
+- [x] ✅ OC-T01 — Licença decidida: software proprietário (ADR-058)
 - [x] ✅ OC-T02 — Inventário de licenças de terceiros (`cargo deny` + npm na CI)
-- [ ] ⛔ OC-T03 — Separar a parte comercial em repositório privado — decisão sua
+- [x] ✅ OC-T03 — Parte comercial separada no repositório privado `nextestudios/vellcast-cloud`, com histórico
 - [ ] ⛔ OC-T04 — Verificação da marca "Vellcast" (INPI) — ação sua
 - [x] ✅ OC-T05 — Revisão de segurança (sem achados altos ou críticos)
 - [x] ✅ OC-T06 — `SECURITY.md` (falta habilitar Private Vulnerability Reporting no GitHub)
 - [x] ✅ OC-T07 — Varredura de segredos no histórico e na CI (gitleaks)
 - [x] ✅ OC-T08 — Código de conduta e modelos de issue/PR
-- [ ] ⛔ OC-T09 — Tornar o repositório público — aprovação sua
+- [x] ✅ OC-T09 — Decisão: repositório permanece privado (ADR-058)
 
 ### Etapa 6 — Otimização extrema · M
 Reduzir ao mínimo o impacto da transmissão nos jogos, com números reproduzíveis.
@@ -165,7 +165,7 @@ Reduzir ao mínimo o impacto da transmissão nos jogos, com números reproduzív
 Planos Free, Pro e Community sem prejudicar o núcleo gratuito (1080p60 continua grátis).
 
 - [x] ✅ E7-T01 — Políticas do Discord: Premium Apps indisponível no Brasil (venda fora do Discord)
-- [x] ✅ E7-T02 — `services/cloud-api`: contas, planos, assinaturas, entitlements e cotas
+- [x] ✅ E7-T02 — cloud-api (repositório privado `vellcast-cloud`): contas, planos, assinaturas, entitlements e cotas
 - [ ] 🧪 E7-T03 — Pagamentos (webhook compatível com Stripe, modo de teste) — produção depende da sua conta no provedor
 - [x] ✅ E7-T04 — Limites aplicados só no relay hospedado (self-hosted sem restrição)
 - [x] ✅ E7-T05 — Painel administrativo mínimo (`/admin`)
@@ -230,7 +230,7 @@ Tudo o que podia ser feito e validado sem estas ações está concluído. Cada i
 | Revisão jurídica | Revisar `docs/legal/TERMOS.md` e `docs/legal/PRIVACIDADE.md` com os dados da empresa | E8-T04 |
 | Alertas de produção | Ativar notificações no Dokploy e um monitor externo ([`docs/OPERATIONS.md`](docs/OPERATIONS.md) §2) | E8-T05 |
 | Execução final do checklist | Seguir [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md) no PC com GPU | E8-T07 |
-| Licença, marca e abertura do código | Confirmar Apache-2.0, decidir o repositório da cloud-api, registrar a marca no INPI, aprovar tornar público e habilitar Private Vulnerability Reporting | OC-T01, OC-T03, OC-T04, OC-T09 |
+| Marca "Vellcast" | Busca e registro no INPI | OC-T04 |
 | Servidor no Brasil (recomendado) | Contratar VPS em São Paulo e ligar ao Dokploy; ou ativar BBR no VPS atual (DEPLOYMENT §6.10) | Qualidade 1080p60 para espectadores no Brasil |
 
 ## 6. Regras do processo

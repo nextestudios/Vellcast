@@ -1,7 +1,7 @@
 AVISOS DE TERCEIROS — Vellcast MVP para Windows
 ================================================
 
-O código próprio do Vellcast é distribuído sob Apache-2.0 (ver LICENSE.txt).
+O Vellcast é software proprietário da Next Estúdios (ver LICENSE.txt).
 Este pacote também inclui componentes de terceiros, sob as licenças abaixo.
 O inventário completo e atualizado está em docs/LICENSING.md no repositório.
 

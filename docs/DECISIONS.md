@@ -42,7 +42,7 @@ Formato: contexto → decisão → consequências. Status possíveis: **Proposta
 **Consequências:** Sem custo e compatível com o código próprio Apache-2.0 e com recursos pagos. Embarcados ficam fora. O app não pode expor APIs do Slint (vale para plugins futuros).
 
 ## ADR-007 — Apache-2.0 para o código próprio aberto
-**Status:** Proposta (o arquivo LICENSE foi adicionado; **falta confirmação do proprietário**)
+**Status:** Rejeitada (2026-10-09) — substituída pela ADR-058 (software proprietário)
 **Contexto:** O modelo é Open Core. A licença precisa ser permissiva e ter concessão explícita de patentes.
 **Decisão:** Apache-2.0 para os crates, o relay básico e a Activity. Em relação ao MIT, ela acrescenta concessão de patentes e cláusula de retaliação.
 **Consequências:** Fica compatível com uso comercial pela Vellcast Cloud. A compatibilidade com componentes GPL precisa de atenção (ver ADR-006).
@@ -305,3 +305,8 @@ Formato: contexto → decisão → consequências. Status possíveis: **Proposta
 **Decisão:** (a) O dono revoga um token específico (o relay verifica o token informado e guarda o `nonce` até a expiração) ou todos os tokens de espectador emitidos antes de um instante (novo campo `iat` nos tokens; tokens antigos sem `iat` contam como emitidos no início). A revogação é checada na API e no `Auth` do WebSocket, e um sinal por sala faz as conexões ativas reavaliarem seus tokens. (b) `VELLCAST_RELAY_SECRET_PREVIOUS` é aceito só na verificação, permitindo rotação sem queda.
 **Consequências:** Vazamentos são contidos sem encerrar a sala. Cada verificação consulta o store (leitura curta). A revogação em massa usa granularidade de segundos: tokens emitidos no mesmo segundo da revogação também ficam inválidos.
 
+## ADR-058 — Vellcast como software proprietário; repositório privado; parte comercial separada
+**Status:** Aceita (2026-10-09, decisão do responsável)
+**Contexto:** O Marco OC (Open Core) previa abrir o núcleo sob Apache-2.0 (ADR-007, proposta). O responsável decidiu não abrir o código.
+**Decisão:** Todo o código do Vellcast é proprietário (todos os direitos reservados); o repositório `nextestudios/Vellcast` permanece privado; a parte comercial (`cloud-api`) vai para o repositório privado `nextestudios/vellcast-cloud`. O formato do token de entitlement continua no núcleo (`crates/entitlement`), usado pelo relay.
+**Consequências:** OC-T01 e OC-T09 resolvidos por decisão (licença proprietária; repositório privado). O inventário de licenças de terceiros, a varredura de segredos e a política de segurança continuam valendo. A licença Royalty-free do Slint permite o app proprietário com atribuição.

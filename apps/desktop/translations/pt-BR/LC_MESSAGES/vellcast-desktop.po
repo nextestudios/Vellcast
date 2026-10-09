@@ -268,8 +268,8 @@ msgstr "Feito com Slint"
 msgid "Open source and third-party licenses"
 msgstr "Código aberto e licenças de terceiros"
 
-msgid "Vellcast's own code is licensed under Apache-2.0. Source: github.com/nextestudios/Vellcast"
-msgstr "O código próprio do Vellcast é licenciado sob Apache-2.0. Código-fonte: github.com/nextestudios/Vellcast"
+msgid "Vellcast is proprietary software. © 2026 Next Estúdios. All rights reserved."
+msgstr "O Vellcast é um software proprietário. © 2026 Next Estúdios. Todos os direitos reservados."
 
 msgid "{n} controller connected"
 msgid_plural "{n} controllers connected"

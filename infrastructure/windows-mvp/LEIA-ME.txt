@@ -7,7 +7,7 @@ Conteúdo do pacote
   vellcast-relay.exe     Servidor de salas e mídia (pode rodar neste PC)
   iniciar-relay.bat      Inicia o servidor com um segredo gerado automaticamente
   player\                Player web servido pelo relay (quem assiste usa o navegador)
-  LICENSE.txt            Licença do código do Vellcast (Apache-2.0, proposta)
+  LICENSE.txt            Licença do Vellcast (proprietária)
   THIRD-PARTY-NOTICES.txt Licenças de terceiros
 
 Teste rápido (servidor de testes, sem instalar nada)

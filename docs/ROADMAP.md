@@ -15,7 +15,7 @@
 | 3 | Media relay | Must | 0 (local) | Done — em produção em vellcast.nextestudios.com; 60 min estável |
 | 4 | Áudio | Must | 2, 3 | Done — executada no Windows real; sincronia A/V de 9,2 ms no transporte |
 | 5 | Integração completa | Must | 1, 2, 3, 4 (E0-T10 para a Activity) | Done (MVP Windows + player web); Activity aguarda E0-T10 |
-| OC | Marco: abertura do código (Open Core) | Should | 5 | Testing — tarefas técnicas prontas; decisões do responsável pendentes |
+| OC | Marco: abertura do código (Open Core) | Should | 5 | Suspenso — código proprietário e repositório privado (ADR-058) |
 | 6 | Otimização extrema | Must | 5 | Testing — software pronto; otimização com GPU real bloqueada |
 | 7 | Comercialização | Should (MVP) / Must (Premium) | 5 | Testing — backend pronto; cobrança real depende de conta no provedor |
 | 8 | Lançamento | Must (lançamento) | 6, 7 | Testing — instalador e atualizador prontos; certificado e revisão jurídica pendentes |
@@ -174,15 +174,15 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 
 | ID | Tarefa | MoSCoW | Depende de | Critérios de aceite | Status |
 |---|---|---|---|---|---|
-| OC-T01 | Confirmar a licença do código próprio | M-022 | — | Apache-2.0 confirmada (ou substituída) pelo responsável; ADR-007 passa a Aceita; arquivo `NOTICE` criado | Blocked — confirmação da licença Apache-2.0 pelo responsável |
+| OC-T01 | Confirmar a licença do código próprio | M-022 | — | Apache-2.0 confirmada (ou substituída) pelo responsável; ADR-007 passa a Aceita; arquivo `NOTICE` criado | Done — decisão: software proprietário (ADR-058) |
 | OC-T02 | Inventário de licenças de terceiros | M-022 | OC-T01 | `cargo deny check licenses` e verificação das dependências npm na CI; tabela de [LICENSING](LICENSING.md) completa, sem pendências; obrigações do Slint (ADR-006) cumpridas | Done — cargo-deny e licenças npm na CI |
-| OC-T03 | Separar o núcleo aberto da parte comercial | S-015 | — | `services/cloud-api`, planos, billing e documentos comerciais sensíveis movidos para um repositório privado; o núcleo compila e funciona sem eles (W-013) | Blocked — decisão do responsável sobre o repositório privado da cloud-api |
+| OC-T03 | Separar o núcleo aberto da parte comercial | S-015 | — | `services/cloud-api`, planos, billing e documentos comerciais sensíveis movidos para um repositório privado; o núcleo compila e funciona sem eles (W-013) | Done — cloud-api movida com histórico para o repositório privado nextestudios/vellcast-cloud; núcleo compila sem ela |
 | OC-T04 | Verificação da marca "Vellcast" | — | — | Busca no INPI e em domínios registrada; política de uso da marca publicada (Apache-2.0 não licencia a marca, cláusula 6) | Blocked — busca e registro da marca no INPI |
 | OC-T05 | Revisão de segurança do relay e do protocolo | M-020 | Etapa 3 | Auditoria (`/cso`) sem achados críticos ou altos abertos; resultados em [SECURITY](SECURITY.md) | Done — revisão sem achados altos/críticos (docs/security/REVIEW-2026-10.md) |
 | OC-T06 | Política de reporte de vulnerabilidades | M-020 | — | `SECURITY.md` na raiz com contato privado e prazos de resposta; GitHub Private Vulnerability Reporting habilitado | Done — SECURITY.md; falta habilitar Private Vulnerability Reporting nas configurações |
 | OC-T07 | Varredura de segredos no histórico | M-024 | — | `gitleaks` (ou equivalente) em todo o histórico sem achados; verificação adicionada à CI | Done — gitleaks no histórico (sem segredos) e na CI |
 | OC-T08 | Preparação para contribuidores externos | M-022 | OC-T01 | `CONTRIBUTING.md` revisado, código de conduta, templates de issue e PR, proteção da branch `main` | Done — código de conduta, modelos de issue e PR |
-| OC-T09 | Tornar o repositório público | — | OC-T01..OC-T08 | Visibilidade alterada pelo responsável; README público revisado; anúncio planejado | Blocked — aprovação do responsável |
+| OC-T09 | Tornar o repositório público | — | OC-T01..OC-T08 | Visibilidade alterada pelo responsável; README público revisado; anúncio planejado | Done — decisão: repositório permanece privado (ADR-058) |
 
 **Entregável:** repositório público do Vellcast Core.
 **Critério de aceite:** todas as tarefas OC-T01 a OC-T08 concluídas e a abertura (OC-T09) aprovada explicitamente pelo responsável.
@@ -218,7 +218,7 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 | ID | Tarefa | MoSCoW | Depende de | Critérios de aceite | Status |
 |---|---|---|---|---|---|
 | E7-T01 | Pesquisa de políticas do Discord (Premium Apps, elegibilidade no Brasil, paridade) | S-015 | — | Conclusões registradas em [MONETIZATION](MONETIZATION.md) | Done — Premium Apps indisponível para desenvolvedores no Brasil (MONETIZATION §6, ADR-043) |
-| E7-T02 | `services/cloud-api`: contas, planos, entitlements, cotas | S-015 | Etapa 5 | Entitlements validados no backend | Done — services/cloud-api: contas, planos, assinaturas, entitlements, cotas |
+| E7-T02 | `services/cloud-api`: contas, planos, entitlements, cotas | S-015 | Etapa 5 | Entitlements validados no backend | Done — cloud-api no repositório privado nextestudios/vellcast-cloud (ADR-058) |
 | E7-T03 | Integração com provedor de pagamento elegível | S-015 | E7-T01 | Webhooks testados em modo de teste; sem processamento direto de cartão | Testing — webhook compatível com Stripe em modo de teste; produção depende da conta do responsável |
 | E7-T04 | Aplicação de limites no relay hospedado | S-015 | E7-T02 | Limites aplicados apenas no serviço oficial; self-hosted sem restrição de resolução | Done — relay hospedado exige entitlement assinado; self-hosted sem restrição |
 | E7-T05 | Painel administrativo mínimo | S-015 | E7-T02 | — | Done — /admin com autenticação e CSRF |

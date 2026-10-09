@@ -1,6 +1,6 @@
 # Estratégia Open Core — Vellcast
 
-> Status: **Proposta**. A publicação de qualquer componente depende da validação de licenças (`LICENSING.md`).
+> Status: **Suspensa (2026-10-09, ADR-058).** O responsável decidiu manter o Vellcast como software proprietário e o repositório privado. A estratégia abaixo fica como referência caso a abertura seja reavaliada. A parte comercial foi separada no repositório privado `nextestudios/vellcast-cloud`.
 
 ## 1. Divisão
 

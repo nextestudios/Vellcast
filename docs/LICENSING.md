@@ -4,22 +4,12 @@
 
 ## 1. Código próprio
 
-**Proposta:** Apache-2.0 para o código aberto próprio (arquivo `LICENSE` adicionado na raiz). **Status: pendente de confirmação do proprietário.**
+**Decisão (2026-10-09, ADR-058):** o Vellcast é **software proprietário** da Next Estúdios — todos os direitos reservados (arquivo `LICENSE` na raiz). Nenhum crate é publicável (`publish = false`) e o pacote npm do player é `UNLICENSED`. A proposta anterior de Apache-2.0 (ADR-007) foi rejeitada.
 
-### Apache-2.0 × MIT
-
-| Aspecto | Apache-2.0 | MIT |
-|---|---|---|
-| Permissiva (uso comercial, modificação, sublicença) | Sim | Sim |
-| **Concessão explícita de patentes** | Sim — cada contribuidor concede licença de patentes sobre sua contribuição | Não explícita |
-| **Retaliação de patentes** | Quem processar alegando violação de patente perde a licença | Não há |
-| Arquivo **NOTICE** | Deve ser preservado em redistribuições, se existir | Não existe |
-| Aviso de modificações | Arquivos modificados devem indicar a alteração | Não exige |
-| Marca registrada | Explicitamente **não** concedida (cláusula 6) | Silenciosa |
-| Compatibilidade com GPL | Compatível com GPLv3, **incompatível com GPLv2-only** | Compatível com ambas |
-| Tamanho/simplicidade | Texto longo | Muito curto |
-
-Motivo da proposta: o projeto lida com codecs, streaming e captura — áreas com histórico de patentes. A concessão explícita e a cláusula de marca protegem contribuidores, usuários e o nome "Vellcast". Alternativa comum no ecossistema Rust: dupla licença `MIT OR Apache-2.0`, que maximiza compatibilidade (inclusive GPLv2). Pode ser adotada se a compatibilidade com GPLv2 for desejada.
+Consequências:
+- O código-fonte não é distribuído; os binários são distribuídos sob os Termos de Uso (`docs/legal/TERMOS.md`).
+- As obrigações das dependências de terceiros continuam valendo: avisos e licenças em `THIRD-PARTY-NOTICES` (gerados pelo `cargo-about`) e atribuição do Slint na tela Sobre.
+- Dependências GPL/LGPL não podem ser incluídas no binário distribuído sem análise; o `cargo deny` da CI barra licenças fora da lista permitida.
 
 ## 2. Slint — decidido: Royalty-free 2.0 (ADR-006)
 
@@ -43,7 +33,7 @@ Condições vigentes e como o Vellcast as cumpre:
 | Não expor as APIs do Slint pelo aplicativo | O app não expõe APIs de UI (o sistema de plugins, C-018, precisa respeitar isso). |
 | Manter avisos de licença e copyright | Inventário de licenças de terceiros na tela "Sobre" e no instalador. |
 
-O código próprio continua sob Apache-2.0; o binário distribuído combina esse código com o Slint sob a licença acima. Forks do código aberto que distribuírem o desktop precisam cumprir a mesma atribuição ou escolher outra licença do Slint.
+O código próprio é proprietário; o binário distribuído combina esse código com o Slint sob a licença Royalty-free acima, que permite aplicativos proprietários desde que a atribuição seja cumprida.
 
 Não presumir que vincular Slint sob GPLv3 permite distribuir o produto final inteiro como proprietário ou "só Apache-2.0".
 
@@ -139,7 +129,7 @@ Ferramentas de build (não distribuídas): Inno Setup 6.6.1 (licença própria, 
 
 O inventário completo é gerado automaticamente na CI (`cargo-about` + `license-checker`, ADR-048) e verificado por `cargo deny` (`deny.toml`).
 
-### Rust (`services/cloud-api` e `crates/entitlement`, Etapa 7)
+### Rust (cloud-api — hoje no repositório privado `nextestudios/vellcast-cloud` — e `crates/entitlement`, Etapa 7)
 
 Serviço comercial opcional, não distribuído no app desktop. Licenças conferidas no crates.io em 2026-10-08.
 

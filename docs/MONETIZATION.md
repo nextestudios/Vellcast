@@ -70,7 +70,7 @@ Implicação: a cota gratuita deve ser expressa em **espectador-horas** ou **GB/
 
 ## 5. Billing e entitlements (implementado na Etapa 7, modo de teste)
 
-Serviço: `services/cloud-api` (`vellcast-cloud-api`, Axum + SQLite). Opcional: o relay self-hosted funciona sem ele (W-013).
+Serviço: `vellcast-cloud-api` (Axum + SQLite), no repositório privado `nextestudios/vellcast-cloud` (ADR-058). Opcional: o relay self-hosted funciona sem ele (W-013).
 
 | Peça | Como funciona |
 |---|---|

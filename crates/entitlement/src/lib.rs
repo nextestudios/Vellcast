@@ -99,6 +99,29 @@ pub fn verify(key: &[u8], token: &str, now: u64) -> Result<Claims, EntitlementEr
 
 #[cfg(test)]
 mod tests {
+
+    /// Vetor fixo compartilhado com nextestudios/vellcast-cloud (cópia deste
+    /// crate): se o formato mudar em um repositório só, este teste quebra.
+    #[test]
+    fn token_format_matches_relay() {
+        let claims = Claims {
+            sub: "conta-1".into(),
+            plan: "pro".into(),
+            max_viewers: 50,
+            max_rooms: 5,
+            max_height: 1440,
+            max_fps: 60,
+            exp: 2_000_000_000,
+        };
+        let key = b"chave-de-teste-com-32-bytes-ok!!";
+        let expected = "ve1.eyJzdWIiOiJjb250YS0xIiwicGxhbiI6InBybyIsIm1heF92aWV3ZXJzIjo1MCwibWF4X3Jvb21zIjo1LCJtYXhfaGVpZ2h0IjoxNDQwLCJtYXhfZnBzIjo2MCwiZXhwIjoyMDAwMDAwMDAwfQ.L35AewiTfoAS9ZcbnJZ0ItZ0Y2zKgT_Jof8LOnAuhTY";
+        assert_eq!(sign(key, &claims).expect("assinar"), expected);
+        assert_eq!(
+            verify(key, expected, 1_900_000_000).expect("verificar"),
+            claims
+        );
+    }
+
     use super::*;
 
     const KEY: &[u8] = b"0123456789abcdef0123456789abcdef";

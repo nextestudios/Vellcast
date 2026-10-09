@@ -71,4 +71,4 @@ A CI roda o mesmo em Linux e Windows (`.github/workflows/ci.yml`). Testes de cap
 
 ## Licença
 
-Código próprio sob [Apache-2.0](LICENSE) (**proposta, pendente de confirmação** — ver [`docs/LICENSING.md`](docs/LICENSING.md)). Dependências de terceiros mantêm suas próprias licenças.
+Software proprietário da Next Estúdios — todos os direitos reservados (ver [LICENSE](LICENSE) e [`docs/LICENSING.md`](docs/LICENSING.md)). Dependências de terceiros mantêm suas próprias licenças.

@@ -50,7 +50,7 @@ A arquitetura é cliente-servidor, no modelo de um servidor dedicado como no Tea
 | Desktop | `apps/desktop` | UI Slint, bandeja, teclado virtual | vellcast-core, controller |
 | Activity | `apps/discord-activity` | Player WebCodecs dentro do Discord | protocolo (espelhado em TS) |
 | Relay | `services/relay` | Salas, autorização, fan-out, limites, métricas | protocol, auth |
-| Cloud API | `services/cloud-api` | Contas, planos e entitlements. Começa só com contratos. | — |
+| Cloud API | repositório privado `nextestudios/vellcast-cloud` | Contas, planos, assinaturas e entitlements (separado pela ADR-058). | — |
 | Servidor ETAPA 0 | `services/stage0-server` | **Descartável.** Serve mídia sintética pré-codificada para validar a Activity. | protocol |
 
 Estado atual do workspace Cargo: somente `crates/protocol` e `services/stage0-server` são membros. Os demais diretórios têm apenas um README de escopo. Nenhum crate vazio é compilado.

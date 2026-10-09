@@ -1,12 +1,13 @@
 [workspace]
 resolver = "3"
-members = ["crates/media-fixtures", "crates/transport", "services/relay", "crates/protocol", "services/stage0-server", "crates/controller", "apps/desktop", "crates/vellcast-core", "crates/capture", "crates/encoder", "crates/audio", "crates/entitlement", "services/cloud-api", "crates/perf", "tools/release-sign"]
+members = ["crates/media-fixtures", "crates/transport", "services/relay", "crates/protocol", "services/stage0-server", "crates/controller", "apps/desktop", "crates/vellcast-core", "crates/capture", "crates/encoder", "crates/audio", "crates/entitlement", "crates/perf", "tools/release-sign"]
 
 [workspace.package]
 version = "0.0.1"
 edition = "2024"
 rust-version = "1.88"
-license = "Apache-2.0"
+license-file = "LICENSE"
+publish = false
 repository = "https://github.com/nextestudios/Vellcast"
 
 [workspace.dependencies]
