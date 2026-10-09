@@ -108,8 +108,8 @@ Servidor `vellcast-relay` que recebe uma transmissão e distribui para vários e
 - [x] ✅ E3-T08 — Métricas e health check
 - [x] ✅ E3-T09 — Benchmark com 20 espectadores (local: 60 fps, p95 2,2 ms, 4,8% CPU, 9,7 MB)
 - [x] ✅ E3-T10 — Deploy em VPS com TLS via Dokploy: `https://vellcast.nextestudios.com` (servidor na Europa limita a vazão para o Brasil)
-- [ ] 🔨 E3-T11 — Salas persistentes em SQLite (S)
-- [ ] 🔨 E3-T12 — Revogação e rotação de tokens
+- [x] ✅ E3-T11 — Salas persistentes em SQLite (em produção, sobrevivem a reinícios) (S)
+- [x] ✅ E3-T12 — Revogação de tokens e rotação do segredo sem queda
 - [ ] 🔨 E3-T13 — Sessão de 60 min com 50 espectadores (em execução)
 - [x] ✅ E3-T14 — Inventário de licenças e duplicatas (`cargo deny` na CI)
 

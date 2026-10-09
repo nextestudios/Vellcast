@@ -115,8 +115,8 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 | E3-T08 | Métricas e health check | S-014 | E3-T01 | Endpoint de métricas; logs estruturados | Done — `/metrics`, `/healthz`, logs JSON, SIGTERM |
 | E3-T09 | Benchmark com 20 espectadores autenticados | M-011, M-023 | E3-T04 | CPU/RAM/latência registrados | Done (local) — ver PERFORMANCE §3.4 |
 | E3-T10 | Deploy em VPS com TLS via Dokploy | M-021 | E3-T07 | Instalação seguindo só a documentação; medição com rede real | Done — `https://vellcast.nextestudios.com` (Dokploy + Let's Encrypt); servidor na Europa limita a vazão para o Brasil (DEPLOYMENT §6.10) |
-| E3-T11 | `RoomStore` persistente em SQLite | S-015 | E3-T03 | Salas sobrevivem a reinício do relay | Backlog |
-| E3-T12 | Revogação e rotação de tokens | M-020 | E3-T03 | Revogar um token sem encerrar a sala; troca de segredo sem queda | Backlog |
+| E3-T11 | `RoomStore` persistente em SQLite | S-015 | E3-T03 | Salas sobrevivem a reinício do relay | Done — SQLite em produção (volume /data); sala sobreviveu a reinício do relay |
+| E3-T12 | Revogação e rotação de tokens | M-020 | E3-T03 | Revogar um token sem encerrar a sala; troca de segredo sem queda | Done — revogação por token/todos os espectadores e rotação do segredo sem queda |
 | E3-T13 | Sessão de 60 min e teste com 50 espectadores | M-025 | E3-T09 | Sem crescimento de memória; sem desconexões | Backlog |
 | E3-T14 | Inventário de licenças e unificação de dependências duplicadas | M-022 | — | `cargo deny` na CI; uma versão de tungstenite/base64 | Done — cargo-deny na CI (licenças, avisos, duplicatas) |
 

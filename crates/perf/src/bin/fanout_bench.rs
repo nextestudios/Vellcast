@@ -83,6 +83,7 @@ static GLOBAL: Counting = Counting;
 // ---------------------------------------------------------------------------
 
 /// Tempo de CPU (usuário + sistema) do processo inteiro, em segundos.
+#[cfg(unix)]
 fn process_cpu_secs() -> f64 {
     // SAFETY: `getrusage` preenche a struct zerada passada por ponteiro.
     let mut usage: libc::rusage = unsafe { std::mem::zeroed() };
@@ -396,4 +397,10 @@ fn main() {
         })
     });
     println!("{}", serde_json::to_string_pretty(&report).unwrap());
+}
+
+/// Fora de Unix (ex.: Windows) a medição de CPU do processo não está disponível.
+#[cfg(not(unix))]
+fn process_cpu_secs() -> f64 {
+    0.0
 }

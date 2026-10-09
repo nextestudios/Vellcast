@@ -78,6 +78,7 @@ fn now_us() -> u64 {
         .map_or(0, |d| d.as_micros() as u64)
 }
 
+#[cfg(unix)]
 fn process_cpu_secs() -> f64 {
     // SAFETY: `getrusage` preenche a struct zerada passada por ponteiro válido.
     let mut usage: libc::rusage = unsafe { std::mem::zeroed() };
@@ -87,6 +88,7 @@ fn process_cpu_secs() -> f64 {
     tv(usage.ru_utime) + tv(usage.ru_stime)
 }
 
+#[cfg(unix)]
 fn max_rss_mb() -> f64 {
     // SAFETY: idem.
     let mut usage: libc::rusage = unsafe { std::mem::zeroed() };
@@ -548,4 +550,16 @@ async fn main() {
         "{}",
         serde_json::to_string_pretty(&Value::Array(results)).unwrap()
     );
+}
+
+/// Fora de Unix (ex.: Windows) a medição de CPU do processo não está disponível.
+#[cfg(not(unix))]
+fn process_cpu_secs() -> f64 {
+    0.0
+}
+
+/// Fora de Unix a memória máxima do processo não está disponível.
+#[cfg(not(unix))]
+fn max_rss_mb() -> f64 {
+    0.0
 }

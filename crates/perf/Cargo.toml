@@ -16,7 +16,6 @@ futures-util.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 tokio-tungstenite.workspace = true
-libc = "0.2"
 quinn = { version = "=0.11.12", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
 rcgen = { version = "=0.14.10", default-features = false, features = ["crypto", "ring"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
@@ -25,3 +24,6 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 # `unsafe` (documentado em cada bloco). As regras do Clippy são as mesmas.
 [lints.clippy]
 unwrap_used = "warn"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

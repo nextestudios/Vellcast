@@ -57,7 +57,9 @@ jobs:
       - name: Build Release (desktop e relay)
         shell: pwsh
         run: |
-          $locked = if ($env:GITHUB_REF -like "refs/tags/v*") { @() } else { @("--locked") }
+          # @(...) garante um array: um if que devolve um único item vira string e o
+          # splat espalharia "--locked" letra por letra.
+          $locked = @(if ($env:GITHUB_REF -notlike "refs/tags/v*") { "--locked" })
           cargo build --release @locked -p vellcast-desktop -p vellcast-relay -p vellcast-release-sign
 
       - name: Avisos de licenças de terceiros (Rust e npm)
