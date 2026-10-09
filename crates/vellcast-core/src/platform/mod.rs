@@ -551,6 +551,9 @@ impl Pipeline {
             return Ok(());
         }
         let force = shared.keyframe.swap(false, Ordering::Relaxed);
+        // Marca o início antes do envio: encoders síncronos (software) já devolvem
+        // o quadro codificado dentro do próprio `submit`.
+        let started = Instant::now();
         let outcome = self.gpu.encoder.submit(
             &frame.texture,
             frame.width,
@@ -564,7 +567,7 @@ impl Pipeline {
                 if self.inflight.len() == MAX_INFLIGHT {
                     self.inflight.pop_front();
                 }
-                self.inflight.push_back((pts_hns, Instant::now()));
+                self.inflight.push_back((pts_hns, started));
                 self.last_submit = Instant::now();
             }
             SubmitOutcome::Busy => {

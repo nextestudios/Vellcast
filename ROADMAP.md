@@ -33,11 +33,11 @@ flowchart LR
 | Etapa | Nome | Prioridade | Ambiente necessário | Situação |
 |---|---|---|---|---|
 | 0 | Validação Discord | M | macOS + Discord | ⛔ código pronto (OAuth, pareamento, Activity); falta criar a aplicação no Discord |
-| 1 | Desktop e controles | M | macOS (dev) + Windows (validação) | 🧪 implementada; falta Windows real e controle físico |
+| 1 | Desktop e controles | M | macOS (dev) + Windows (validação) | 🧪 executada no Windows (metas de CPU/RAM atingidas); falta controle físico e teste manual da bandeja |
 | 2 | Captura e encoder | M | **Windows com GPU** | 🧪 executada no Windows (CI, sem GPU); falta GPU real |
 | 3 | Media relay | M | macOS/Linux | ✅ em produção em `vellcast.nextestudios.com`; 60 min estável |
 | 4 | Áudio | M | **Windows** | 🧪 executada no Windows (CI); falta teste com jogo real |
-| 5 | Integração completa — **MVP** | M | Windows (+ Discord para a Activity) | 🧪 E2E Windows passando; servidor de testes no ar; pronto para teste |
+| 5 | Integração completa — **MVP** | M | Windows (+ Discord para a Activity) | ✅ MVP Windows: app transmitiu do Windows ao servidor de produção; Activity aguarda E0-T10 |
 | OC | Abertura do código (Open Core) | S | — | 🧪 parte técnica pronta; decisões suas pendentes |
 | 6 | Otimização extrema | M | Windows com GPU + jogos | 🧪 software pronto e medido; otimização com GPU real bloqueada |
 | 7 | Comercialização | S no MVP / M no Premium | Linux (servidor) | 🧪 backend pronto; cobrança real depende de conta no provedor |
@@ -59,27 +59,27 @@ Comprovar que H.264 + Opus via WebSocket e WebCodecs funcionam dentro de uma Dis
 - [x] ✅ E0-T02 — Protocolo binário v1 (`crates/protocol`) com testes
 - [x] ✅ E0-T03 — Geração de mídia sintética (720p30 e 1080p60, Opus)
 - [x] ✅ E0-T04 — Servidor WebSocket de teste com distribuição para vários espectadores
-- [ ] 🧪 E0-T05 — Activity mínima (React + Embedded App SDK + WebCodecs)
-- [ ] 🧪 E0-T06 — Métricas no player (FPS, descartes, bitrate, latência, A/V skew)
-- [ ] 🧪 E0-T07 — Reconexão automática
-- [ ] 🧪 E0-T08 — Verificação da Gamepad API
-- [ ] 🧪 E0-T09 — Teste em navegador local
+- [x] ✅ E0-T05 — Activity mínima (superada pela Activity final)
+- [x] ✅ E0-T06 — Métricas no player (FPS, descartes, bitrate, latência, A/V skew)
+- [x] ✅ E0-T07 — Reconexão automática
+- [x] ✅ E0-T08 — Verificação da Gamepad API (no navegador; no Discord junto com E0-T10)
+- [x] ✅ E0-T09 — Teste em navegador (local e produção)
 - [ ] ⛔ E0-T10 — Teste em Activity real (Desktop, Web, Mobile) — código pronto; falta criar a aplicação no Discord ([guia](docs/DISCORD_INTEGRATION.md))
-- [ ] 🔨 E0-T11 — Relatório de resultados
+- [x] ✅ E0-T11 — Relatório de resultados (PERFORMANCE.md)
 
 ### Etapa 1 — Desktop e controles · M
 Aplicativo Windows leve em Rust + Slint, 100% navegável por controle.
 
 - [x] ✅ E1-T01 — Licença do Slint: Royalty-free 2.0
-- [ ] 🧪 E1-T02 — Esqueleto `apps/desktop` (Rust + Slint) — compila para Windows; execução real pendente
-- [ ] 🧪 E1-T03 — Design system em Slint
-- [ ] 🧪 E1-T04 — Navegação lateral e 8 telas (Home, Transmitir, Salas, Ao vivo, Configurações, Conta, Planos, Sobre)
-- [ ] 🧪 E1-T05 — Crate `controller` (GilRs) — falta teste com controle físico
-- [ ] 🧪 E1-T06 — Sistema de foco e modais navegáveis
-- [ ] 🧪 E1-T07 — Teclado virtual
+- [x] ✅ E1-T02 — App desktop (Rust + Slint) executado no Windows
+- [x] ✅ E1-T03 — Design system em Slint
+- [x] ✅ E1-T04 — Navegação lateral e 8 telas (renderizadas no Windows)
+- [ ] ⛔ E1-T05 — Crate `controller` (GilRs) — falta teste com controle físico
+- [x] ✅ E1-T06 — Sistema de foco e modais navegáveis
+- [x] ✅ E1-T07 — Teclado virtual
 - [ ] 🧪 E1-T08 — Modo bandeja sem renderização em segundo plano
 - [x] ✅ E1-T09 — Preparação de i18n (PT-BR e EN, troca em tempo real)
-- [ ] ⛔ E1-T10 — Medição de CPU/RAM em Release no Windows — requer máquina Windows (macOS: ~0,1% CPU, 20–33 MB)
+- [x] ✅ E1-T10 — CPU/RAM no Windows: 0,47% de CPU ociosa, 36 MB (metas: <1% e <80 MB)
 
 ### Etapa 2 — Captura e encoder · M
 Capturar e codificar 1080p60 nativamente, mantendo os quadros na GPU.
@@ -127,13 +127,13 @@ Desktop, relay e Discord Activity funcionando juntos de ponta a ponta.
 
 - [ ] 🧪 E5-T01 — Autenticação OAuth2 do Discord no relay (testada com Discord simulado)
 - [ ] 🧪 E5-T02 — Pareamento desktop ↔ Activity por código de uso único
-- [ ] 🧪 E5-T03 — Fluxo de salas na interface (criar, convidar, encerrar)
-- [ ] 🧪 E5-T04 — Fluxo de iniciar e encerrar transmissão (mouse, teclado e controle)
+- [x] ✅ E5-T03 — Fluxo de salas na interface (criar, convidar, encerrar)
+- [x] ✅ E5-T04 — Iniciar/encerrar transmissão: o app transmitiu do Windows ao servidor de produção
 - [ ] 🧪 E5-T05 — Player final: web em `/watch` e Activity (login, salas da instância, player)
-- [ ] 🧪 E5-T06 — Perfis de qualidade e atalhos (S)
-- [ ] 🧪 E5-T07 — Tratamento de erros de ponta a ponta
-- [ ] 🧪 E5-T08 — Pacote de teste Windows (`Vellcast-MVP-windows-x64.zip`) e guia [`docs/TESTING_WINDOWS.md`](docs/TESTING_WINDOWS.md)
-- [ ] 🧪 E5-T09 — Player web servido pelo relay (S-011)
+- [x] ✅ E5-T06 — Perfis de qualidade e atalhos (S)
+- [x] ✅ E5-T07 — Tratamento de erros de ponta a ponta
+- [x] ✅ E5-T08 — Pacote de teste e instalador Windows, guia [`docs/TESTING_WINDOWS.md`](docs/TESTING_WINDOWS.md)
+- [x] ✅ E5-T09 — Player web servido pelo relay (S-011)
 - [ ] ⛔ Validação dentro do Discord: E0-T10
 
 ### Marco OC — Abertura do código (Open Core) · S

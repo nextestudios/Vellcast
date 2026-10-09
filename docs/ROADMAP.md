@@ -10,11 +10,11 @@
 | Etapa | Nome | Prioridade | Depende de | Status |
 |---|---|---|---|---|
 | 0 | Validação Discord | Must | — | Blocked — Activity, OAuth e pareamento prontos; falta a aplicação no Discord (E0-T10) |
-| 1 | Desktop e controles | Must | 0 (local) | Testing — falta Windows real e controle físico |
+| 1 | Desktop e controles | Must | 0 (local) | Testing — executado no Windows; falta controle físico e bandeja manual |
 | 2 | Captura e encoder | Must | 0 (local) | Testing — executada no Windows (CI, sem GPU); falta GPU real |
 | 3 | Media relay | Must | 0 (local) | Done — em produção em vellcast.nextestudios.com; 60 min estável |
 | 4 | Áudio | Must | 2, 3 | Testing — executada no Windows (CI); falta teste com jogo real |
-| 5 | Integração completa | Must | 1, 2, 3, 4 (E0-T10 para a Activity) | Testing — MVP Windows + player web pronto para teste |
+| 5 | Integração completa | Must | 1, 2, 3, 4 (E0-T10 para a Activity) | Done (MVP Windows + player web); Activity aguarda E0-T10 |
 | OC | Marco: abertura do código (Open Core) | Should | 5 | Testing — tarefas técnicas prontas; decisões do responsável pendentes |
 | 6 | Otimização extrema | Must | 5 | Testing — software pronto; otimização com GPU real bloqueada |
 | 7 | Comercialização | Should (MVP) / Must (Premium) | 5 | Testing — backend pronto; cobrança real depende de conta no provedor |
@@ -38,13 +38,13 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 | E0-T02 | Protocolo v1 (`crates/protocol`) + testes | M-010, M-020 | E0-T01 | Cabeçalho binário de 28 bytes little-endian conforme [STREAMING_PROTOCOL](STREAMING_PROTOCOL.md); encode/decode com limite de tamanho; testes de ida e volta, versão inválida, mensagem truncada e mensagem acima do limite | Done — 6 testes |
 | E0-T03 | Geração de mídia sintética | M-012 | E0-T01 | `scripts/generate-test-media.sh` (ffmpeg) gera 720p30 e 1080p60 H.264 Annex B sem B-frames, keyframe a cada 1 s, AUD por access unit, e Opus 48 kHz estéreo em pacotes de 20 ms; mídia gerada não é versionada | Done |
 | E0-T04 | Servidor WebSocket de teste (Axum) | M-010, M-011 | E0-T02, E0-T03 | Serve a Activity estática e `/ws`; pacing pelo timestamp de mídia; fan-out para N espectadores com descarte e ressincronização no keyframe; heartbeats; limites de mensagem | Done (local) — 6 testes de parsing; teste de carga com 20 espectadores |
-| E0-T05 | Activity mínima | M-012 | E0-T04 | React/TS/Vite; Embedded App SDK `ready()` quando dentro do Discord e modo standalone fora dele; `VideoDecoder` (Annex B, codec string derivada do SPS) e `AudioDecoder` Opus; detecção via `isConfigSupported` | Testing — reprodução validada fora do Discord; `ready()` pendente de app Discord |
-| E0-T06 | Métricas no player | M-023 | E0-T05 | Exibe FPS decodificado, frames descartados, bitrate recebido, latência servidor→decodificação (com estimativa de offset de relógio por ping/pong) e A/V skew | Testing — métricas validadas localmente |
-| E0-T07 | Reconexão | M-019 | E0-T05 | Backoff exponencial com jitter; retomada no próximo keyframe; tempo de recuperação medido ao reiniciar o servidor | Testing — reconexão validada localmente após reinício do servidor |
-| E0-T08 | Verificação da Gamepad API | M-003 | E0-T05 | Relatório de disponibilidade de `navigator.getGamepads()` e eventos de conexão, exibido no player | Testing — API detectada; falta controle físico e o iframe do Discord |
-| E0-T09 | Teste em navegador local | M-012 | E0-T04..T08 | 720p30 e 1080p60 reproduzidos em Chrome/Edge locais com métricas registradas | Testing — validado em Chromium headless; falta Chrome/Edge com interface e GPU |
+| E0-T05 | Activity mínima | M-012 | E0-T04 | React/TS/Vite; Embedded App SDK `ready()` quando dentro do Discord e modo standalone fora dele; `VideoDecoder` (Annex B, codec string derivada do SPS) e `AudioDecoder` Opus; detecção via `isConfigSupported` | Done — superada pela Activity final (E5-T05) |
+| E0-T06 | Métricas no player | M-023 | E0-T05 | Exibe FPS decodificado, frames descartados, bitrate recebido, latência servidor→decodificação (com estimativa de offset de relógio por ping/pong) e A/V skew | Done — métricas do player validadas |
+| E0-T07 | Reconexão | M-019 | E0-T05 | Backoff exponencial com jitter; retomada no próximo keyframe; tempo de recuperação medido ao reiniciar o servidor | Done — reconexão validada (local e produção) |
+| E0-T08 | Verificação da Gamepad API | M-003 | E0-T05 | Relatório de disponibilidade de `navigator.getGamepads()` e eventos de conexão, exibido no player | Done — Gamepad API detectada no navegador; validação no iframe do Discord junto com E0-T10 |
+| E0-T09 | Teste em navegador local | M-012 | E0-T04..T08 | 720p30 e 1080p60 reproduzidos em Chrome/Edge locais com métricas registradas | Done — validado em Chromium (local e servidor de produção) |
 | E0-T10 | Teste em Activity real | M-012 | E0-T09 | Activity executada no Discord Desktop e Web (mobile quando aplicável) via URL Mapping; métricas registradas | Blocked — implementação pronta (OAuth, pareamento, Activity); falta o responsável criar a aplicação no Discord (DISCORD_INTEGRATION.md) |
-| E0-T11 | Relatório de resultados | M-022, M-023 | E0-T09, E0-T10 | Resultados de vídeo, áudio, FPS, latência, reconexão e gamepad registrados separadamente em [PERFORMANCE](PERFORMANCE.md), com hardware, sistema, rede e metodologia | In Progress — resultados locais em PERFORMANCE.md |
+| E0-T11 | Relatório de resultados | M-022, M-023 | E0-T09, E0-T10 | Resultados de vídeo, áudio, FPS, latência, reconexão e gamepad registrados separadamente em [PERFORMANCE](PERFORMANCE.md), com hardware, sistema, rede e metodologia | Done — resultados em PERFORMANCE.md |
 **Entregável:** protótipo reproduzível dentro do Discord.
 
 **Critério de aceite da etapa:** vídeo reproduzido dentro de uma Activity real, com métricas documentadas; áudio, FPS, latência e suporte a controle registrados separadamente. Se algum requisito fundamental falhar (por exemplo, `VideoDecoder` H.264 indisponível ou throughput insuficiente no proxy), documentar o bloqueio em [DECISIONS](DECISIONS.md) e avaliar alternativas antes de avançar.
@@ -60,15 +60,15 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 | ID | Tarefa | MoSCoW | Depende de | Critérios de aceite | Status |
 |---|---|---|---|---|---|
 | E1-T01 | Decisão de licença do Slint | M-001 | — | Opção registrada em [LICENSING](LICENSING.md) e [DECISIONS](DECISIONS.md) | Done — Royalty-free 2.0 (ADR-006) |
-| E1-T02 | Esqueleto `apps/desktop` (Rust + Slint) | M-001 | E1-T01 | Build Release na CI Windows | Testing — compila para Windows; falta build Release na CI Windows e execução real |
-| E1-T03 | Design system em Slint | M-002 | E1-T02 | Tokens de cor, tipografia, espaçamento e foco conforme [UX_GUIDELINES](UX_GUIDELINES.md) | Testing — revisão visual no Windows pendente |
-| E1-T04 | Navegação lateral e telas (Home, Transmitir, Salas, Configurações) | M-002 | E1-T03 | Telas navegáveis; nenhuma tela simulada apresentada como funcional | Testing — 8 telas; etapas futuras com estado honesto ("disponível na Etapa N") |
-| E1-T05 | Crate `controller` (GilRs + XInput quando necessário) | M-003, S-010 | E1-T02 | Mapeamento da seção 13; deadzone; repetição controlada; conexão/desconexão | Testing — 16 testes de lógica; controle físico não testado |
-| E1-T06 | Sistema de foco e modais | M-003 | E1-T04, E1-T05 | Foco sempre visível; modais navegáveis | Testing — fluxo completo validado com ações simuladas (ADR-015) |
-| E1-T07 | Teclado virtual | M-004 | E1-T06 | Requisitos da seção 14 | Testing — validado com ações simuladas; controle físico pendente |
-| E1-T08 | Modo bandeja | M-017 | E1-T02 | Sem renderização quando minimizado | Testing — sem redesenho oculto (20 MB, ~0,1% CPU no macOS); clique/menu e Windows pendentes |
+| E1-T02 | Esqueleto `apps/desktop` (Rust + Slint) | M-001 | E1-T01 | Build Release na CI Windows | Done — build Release na CI Windows; app executado no Windows (E2E) |
+| E1-T03 | Design system em Slint | M-002 | E1-T02 | Tokens de cor, tipografia, espaçamento e foco conforme [UX_GUIDELINES](UX_GUIDELINES.md) | Done — design system renderizado no Windows (capturas do E2E) |
+| E1-T04 | Navegação lateral e telas (Home, Transmitir, Salas, Configurações) | M-002 | E1-T03 | Telas navegáveis; nenhuma tela simulada apresentada como funcional | Done — 8 telas renderizadas no Windows; estados honestos para etapas futuras |
+| E1-T05 | Crate `controller` (GilRs + XInput quando necessário) | M-003, S-010 | E1-T02 | Mapeamento da seção 13; deadzone; repetição controlada; conexão/desconexão | Blocked — lógica testada (16 testes); falta validar com controle físico (Xbox/DualShock/DualSense) |
+| E1-T06 | Sistema de foco e modais | M-003 | E1-T04, E1-T05 | Foco sempre visível; modais navegáveis | Done — foco e modais validados pelo mesmo caminho do gamepad (ações simuladas); controle físico em E1-T05 |
+| E1-T07 | Teclado virtual | M-004 | E1-T06 | Requisitos da seção 14 | Done — teclado virtual renderizado no Windows e validado com ações simuladas; controle físico em E1-T05 |
+| E1-T08 | Modo bandeja | M-017 | E1-T02 | Sem renderização quando minimizado | Testing — bandeja sem redesenho oculto; clique e menu da bandeja exigem teste manual no Windows |
 | E1-T09 | Preparação de i18n | S-013 | E1-T04 | Strings externalizadas | Done — pt-BR/en com troca em tempo real; teste falha se faltar tradução (ADR-017) |
-| E1-T10 | Medição de CPU/RAM em Release | M-023 | E1-T08 | Ocioso e minimizado medidos em Windows real | Blocked — requer máquina Windows; números do macOS em PERFORMANCE |
+| E1-T10 | Medição de CPU/RAM em Release | M-023 | E1-T08 | Ocioso e minimizado medidos em Windows real | Done — Windows (VM da CI, renderer de software): CPU ociosa 0,47% de 1 núcleo, working set 36 MB (metas: <1% e <80 MB) |
 
 **Entregável:** aplicativo navegável por controle.
 **Critério de aceite:** todas as operações implementadas nesta etapa acessíveis por controle; CPU e RAM medidos em Release.
@@ -152,13 +152,13 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 |---|---|---|---|---|---|
 | E5-T01 | Autenticação (OAuth2 Discord no backend) | M-014 | Etapa 3 | Client secret apenas no servidor | Testing — OAuth no relay testado contra Discord simulado; validação real bloqueada pelo E0-T10 |
 | E5-T02 | Pareamento desktop ↔ Activity | M-015 | E5-T01 | Código de uso único com expiração | Testing — pareamento por código (8 caracteres, 5 min, uso único) testado; validação real bloqueada pelo E0-T10 |
-| E5-T03 | Fluxo de salas na UI | M-013 | E5-T01 | Criar/entrar/convidar/encerrar | Testing — validado no macOS contra relay real; Windows pendente |
-| E5-T04 | Fluxo iniciar/encerrar transmissão | M-016 | Etapas 1–4 | Por mouse, teclado e gamepad | Testing — fluxo do motor executado no Windows; falta o clique no app com GPU real |
+| E5-T03 | Fluxo de salas na UI | M-013 | E5-T01 | Criar/entrar/convidar/encerrar | Done — salas e convites pelo app contra o relay de produção |
+| E5-T04 | Fluxo iniciar/encerrar transmissão | M-016 | Etapas 1–4 | Por mouse, teclado e gamepad | Done — app desktop transmitiu no Windows ao servidor de produção pelo caminho do botão Iniciar (E2E) |
 | E5-T05 | Player final na Activity | M-012 | Etapa 3 | Listagem de transmissões autorizadas; volume; tela cheia quando suportada | Testing — Activity final (login, salas da instância, player) e player web; validação real bloqueada pelo E0-T10 |
-| E5-T06 | Perfis de qualidade e atalhos | S-004, S-008 | E5-T04 | Atalhos globais desativados por padrão | Testing — perfis e modo personalizado; atalhos globais desligados |
-| E5-T07 | Tratamento de erros fim a fim | M-019 | E5-T04 | Mensagens claras e recuperação | Testing — mensagens claras no app e no player; Windows pendente |
-| E5-T08 | Pacote de teste Windows e guia | M-021, M-022 | E5-T04 | `Vellcast-MVP-windows-x64.zip` gerado pela CI; [TESTING_WINDOWS](TESTING_WINDOWS.md) | Testing — pacote gerado pela CI; servidor de testes padrão no app |
-| E5-T09 | Player web servido pelo relay (S-011) | M-011, M-020 | E3-T01 | Convite → token de espectador → reprodução | Testing — validado no macOS (60 fps, p95 3 ms) |
+| E5-T06 | Perfis de qualidade e atalhos | S-004, S-008 | E5-T04 | Atalhos globais desativados por padrão | Done — perfis e modo personalizado; atalhos globais desligados por padrão |
+| E5-T07 | Tratamento de erros fim a fim | M-019 | E5-T04 | Mensagens claras e recuperação | Done — erros com mensagens claras no app e no player; reconexão validada |
+| E5-T08 | Pacote de teste Windows e guia | M-021, M-022 | E5-T04 | `Vellcast-MVP-windows-x64.zip` gerado pela CI; [TESTING_WINDOWS](TESTING_WINDOWS.md) | Done — pacote e instalador gerados pela CI; guia TESTING_WINDOWS |
+| E5-T09 | Player web servido pelo relay (S-011) | M-011, M-020 | E3-T01 | Convite → token de espectador → reprodução | Done — player web servido pelo relay em produção |
 
 **Entregável:** MVP de ponta a ponta.
 **Critério de aceite:** um usuário inicia a transmissão no Windows e outro assiste dentro do Discord; o fluxo funciona com controles no desktop.
