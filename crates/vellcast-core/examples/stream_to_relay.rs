@@ -34,7 +34,7 @@ fn run() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.len() < 3 {
         return Err(
-            "uso: stream_to_relay <ws-url> <indice|monitor> <segundos> [fps] [kbps] [off|app|system]"
+            "uso: stream_to_relay <ws-url> <indice|monitor> <segundos> [fps] [kbps] [off|app|system] [balanced|competitive|off]"
                 .into(),
         );
     }
@@ -46,6 +46,11 @@ fn run() -> Result<(), String> {
         Some("app") => AudioMode::Application,
         Some("system") => AudioMode::System,
         _ => AudioMode::Off,
+    };
+    let adaptation = match args.get(6).map(String::as_str) {
+        Some("competitive") => vellcast_core::Adaptation::Competitive,
+        Some("off") => vellcast_core::Adaptation::Off,
+        _ => vellcast_core::Adaptation::Balanced,
     };
     let token =
         std::env::var("VELLCAST_PUBLISHER_TOKEN").map_err(|_| "defina VELLCAST_PUBLISHER_TOKEN")?;
@@ -89,7 +94,7 @@ fn run() -> Result<(), String> {
             encoder: EncoderPreference::Auto,
             relay_ws_url: url,
             publisher_token: token,
-            adaptation: vellcast_core::Adaptation::Balanced,
+            adaptation,
         },
         Box::new(move |event| {
             println!("EVENTO {event:?}");

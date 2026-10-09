@@ -106,6 +106,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { $failed = $true }
           Stop-Process -Id $console.Id -ErrorAction SilentlyContinue
 
+          # S-002: modo competitivo com a CPU sobrecarregada (loops ocupando todos os núcleos).
+          $stress = @()
+          foreach ($i in 1..([Environment]::ProcessorCount * 2)) {
+            $stress += Start-Process pwsh -ArgumentList '-NoProfile','-Command','while ($true) { [math]::Sqrt(12345) | Out-Null }' -PassThru -WindowStyle Hidden
+          }
+          node tests/e2e/competitive-check.mjs target\release\examples\stream_to_relay.exe monitor 45
+          if ($LASTEXITCODE -ne 0) { $failed = $true }
+          $stress | ForEach-Object { Stop-Process -Id $_.Id -ErrorAction SilentlyContinue }
+
           Stop-Process -Id $relay.Id -ErrorAction SilentlyContinue
           if ($failed) { exit 1 }
 
@@ -158,6 +167,28 @@ jobs:
           $msg = "CPU ociosa: $cpuPct% de 1 núcleo ($cores núcleos) | working set (MB): $($samples -join ', ') | memória privada: $private MB"
           Write-Output $msg
           "### App desktop ocioso (Windows, renderer de software)`n`n$msg" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+
+      - name: App desktop — iniciar minimizado na bandeja
+        run: |
+          $dir = Join-Path $env:APPDATA "Next Estudios\Vellcast\config"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          $cfg = Join-Path $dir "settings.json"
+          $backup = if (Test-Path $cfg) { Get-Content $cfg -Raw } else { $null }
+          '{ "start_minimized": true, "close_to_tray": true, "config_version": 2 }' | Set-Content -Encoding utf8 $cfg
+          $p = Start-Process target\release\vellcast-desktop.exe -PassThru
+          Start-Sleep -Seconds 10
+          $p.Refresh()
+          if ($p.HasExited) { throw "o app encerrou ao iniciar minimizado" }
+          $cpu0 = $p.TotalProcessorTime.TotalMilliseconds; Start-Sleep -Seconds 20; $p.Refresh()
+          $cpuPct = [math]::Round(($p.TotalProcessorTime.TotalMilliseconds - $cpu0) / 20000 * 100, 2)
+          $visible = $p.MainWindowHandle -ne 0
+          $ws = [math]::Round($p.WorkingSet64 / 1MB, 1)
+          Stop-Process -Id $p.Id
+          if ($backup) { $backup | Set-Content -Encoding utf8 $cfg } else { Remove-Item $cfg }
+          $msg = "processo ativo sem janela visível: $(-not $visible) | CPU na bandeja: $cpuPct% de 1 núcleo | working set: $ws MB"
+          Write-Output $msg
+          "### App na bandeja (início minimizado)`n`n$msg" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          if ($visible) { throw "a janela ficou visível com início minimizado" }
 
       - name: Logs do relay
         if: always()
