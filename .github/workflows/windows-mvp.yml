@@ -41,7 +41,7 @@ jobs:
             $v = $env:GITHUB_REF_NAME.TrimStart("v")
             # A versão do app (CARGO_PKG_VERSION) é usada pelo verificador de atualizações.
             (Get-Content Cargo.toml) -replace '^version = ".*"$', "version = `"$v`"" | Set-Content Cargo.toml
-            cargo update --workspace --offline
+            cargo update --workspace
           } else {
             $v = "0.0.1-dev." + $env:GITHUB_SHA.Substring(0, 7)
           }
