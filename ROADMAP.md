@@ -159,7 +159,7 @@ Reduzir ao mínimo o impacto da transmissão nos jogos, com números reproduzív
 - [x] ✅ E6-T05 — Avaliação QUIC (Quinn) vs WebSocket: medida; QUIC adiado (ADR-037)
 - [ ] 🧪 E6-T06 — Modo competitivo (S)
 - [ ] 🧪 E6-T07 — Métricas avançadas na interface (S)
-- [ ] 🧪 E6-T08 — Testes prolongados: relay 60 min ok; 60 min no Windows real na CI
+- [x] ✅ E6-T08 — Testes prolongados: 60 min no Windows real e relay 60 min com 20/50 espectadores
 
 ### Etapa 7 — Comercialização · S no MVP / M no Premium
 Planos Free, Pro e Community sem prejudicar o núcleo gratuito (1080p60 continua grátis).

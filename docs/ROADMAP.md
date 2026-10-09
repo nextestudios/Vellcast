@@ -203,7 +203,7 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 | E6-T05 | Avaliação QUIC (Quinn) vs WebSocket | S-005 | E6-T01 | Relatório e decisão registrados | Done — avaliação Quinn × WebSocket medida; decisão: adiado (ADR-037) |
 | E6-T06 | Modo competitivo | S-002 | E6-T04 | Benchmark com/sem | Testing — política competitiva (bitrate → FPS) testada; efeito em jogo exige Windows com GPU |
 | E6-T07 | Métricas avançadas na UI | S-007 | E6-T01 | Seção própria | Testing — métricas avançadas (alvo adaptativo, CPU, RAM) na tela Ao vivo |
-| E6-T08 | Testes prolongados e de falha | M-025 | E6-T02 | ≥ 60 min estáveis | Testing — relay 60 min sem perdas (Mac); sessão de 60 min no Windows real em execução na CI |
+| E6-T08 | Testes prolongados e de falha | M-025 | E6-T02 | ≥ 60 min estáveis | Done — 60 min no Windows real (transmissor sem vazamento, áudio contínuo) e relay 60 min com 20/50 espectadores |
 
 **Entregável:** versão otimizada com relatório de desempenho.
 **Critério de aceite:** resultados reproduzíveis em hardware de referência, documentando diferenças entre jogar com e sem o Vellcast transmitindo.

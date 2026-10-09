@@ -246,7 +246,7 @@ Observação de ambiente: o desenvolvimento atual ocorre em macOS. Itens que dep
 - **Critérios de aceite:** sessão ≥ 60 min sem crash e com memória estável; recuperação de desconexões; comportamento previsível sob sobrecarga.
 - **Testes necessários:** soak test, chaos de rede (perda/latência), sobrecarga de GPU.
 - **Riscos técnicos:** vazamentos em recursos COM/D3D.
-- **Status:** Testing — relay: 60 min com 20 espectadores 1080p60 sem perdas e memória estável (PERFORMANCE §3.4); transmissor no Windows real ainda pendente de sessão longa (`windows-e2e` com duração configurável)
+- **Status:** Testing — relay 60 min (20 e 50 espectadores) e transmissor 60 min no Windows real sem vazamento; reavaliar com GPU real (um intervalo isolado de 10 s no runner)
 
 ---
 
