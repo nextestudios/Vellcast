@@ -28,7 +28,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 tray-icon = { version = "=0.24.0", default-features = false }
 # Cliente HTTP síncrono do relay (rustls); chamado só em threads de fundo.
-ureq = { version = "=3.4.2", default-features = false, features = ["rustls", "json"] }
+ureq = { version = "=3.4.2", default-features = false, features = ["rustls", "json", "platform-verifier"] }
 
 [dev-dependencies]
 # Testes de integração do cliente HTTP contra um relay real em porta efêmera.

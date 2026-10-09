@@ -174,10 +174,26 @@ impl ApiError {
                     format!("Endereço do servidor: {}.", e.message(false))
                 }
             }
-            ApiError::Unreachable(_) => pick(
-                "Não foi possível falar com o servidor. Verifique o endereço em Configurações e se o vellcast-relay está rodando.",
-                "Could not reach the server. Check the address in Settings and whether vellcast-relay is running.",
-            ),
+            ApiError::Unreachable(detail) => {
+                let lower = detail.to_ascii_lowercase();
+                let tls = lower.contains("certificate")
+                    || lower.contains("unknownissuer")
+                    || lower.contains("tls");
+                match (tls, en) {
+                    (true, false) => format!(
+                        "O certificado do servidor não foi aceito ({detail}). Um antivírus ou proxy que inspeciona HTTPS pode estar interferindo."
+                    ),
+                    (true, true) => format!(
+                        "The server certificate was not accepted ({detail}). An antivirus or proxy inspecting HTTPS may be interfering."
+                    ),
+                    (false, false) => format!(
+                        "Não foi possível falar com o servidor ({detail}). Verifique o endereço em Configurações e a sua conexão."
+                    ),
+                    (false, true) => format!(
+                        "Could not reach the server ({detail}). Check the address in Settings and your connection."
+                    ),
+                }
+            }
             ApiError::RoomGone => pick(
                 "Esta sala não existe mais no servidor (expirou, foi encerrada ou o servidor reiniciou). Ela foi removida da lista.",
                 "This room no longer exists on the server (expired, closed or the server restarted). It was removed from the list.",
@@ -205,6 +221,12 @@ impl ApiError {
     }
 }
 
+/// Falha de transporte (DNS, conexão, TLS): registra o motivo técnico no log.
+fn unreachable(e: ureq::Error) -> ApiError {
+    tracing::warn!(error = %e, "falha ao falar com o servidor");
+    ApiError::Unreachable(e.to_string())
+}
+
 impl From<UrlError> for ApiError {
     fn from(e: UrlError) -> Self {
         ApiError::Url(e)
@@ -213,6 +235,14 @@ impl From<UrlError> for ApiError {
 
 fn agent() -> ureq::Agent {
     ureq::Agent::config_builder()
+        // Verificador de certificados do sistema (repositório do Windows), como o
+        // navegador: antivírus que inspecionam HTTPS instalam uma raiz própria que
+        // a lista embutida (webpki-roots) não conhece.
+        .tls_config(
+            ureq::tls::TlsConfig::builder()
+                .root_certs(ureq::tls::RootCerts::PlatformVerifier)
+                .build(),
+        )
         .timeout_global(Some(TIMEOUT))
         .http_status_as_error(false)
         .user_agent(concat!("vellcast-desktop/", env!("CARGO_PKG_VERSION")))
@@ -236,7 +266,7 @@ pub fn classify(status: u16, code: Option<&str>) -> ApiError {
 fn finish<T: serde::de::DeserializeOwned>(
     result: Result<ureq::http::Response<ureq::Body>, ureq::Error>,
 ) -> Result<T, ApiError> {
-    let mut resp = result.map_err(|e| ApiError::Unreachable(e.to_string()))?;
+    let mut resp = result.map_err(unreachable)?;
     let status = resp.status().as_u16();
     if (200..300).contains(&status) {
         return resp
@@ -368,7 +398,7 @@ pub fn health(base: &str) -> Result<(), ApiError> {
     let mut resp = agent()
         .get(format!("{base}/healthz"))
         .call()
-        .map_err(|e| ApiError::Unreachable(e.to_string()))?;
+        .map_err(unreachable)?;
     let status = resp.status().as_u16();
     let body = resp.body_mut().read_to_string().unwrap_or_default();
     if status == 200 && body.trim() == "ok" {
@@ -388,7 +418,7 @@ pub fn delete_room(base: &str, room_id: &str, owner_token: &str) -> Result<(), A
         .delete(format!("{base}/api/rooms/{room}"))
         .header("Authorization", format!("Bearer {owner_token}"))
         .call()
-        .map_err(|e| ApiError::Unreachable(e.to_string()))?;
+        .map_err(unreachable)?;
     let status = resp.status().as_u16();
     if (200..300).contains(&status) {
         return Ok(());
