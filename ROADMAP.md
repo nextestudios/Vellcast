@@ -34,10 +34,10 @@ flowchart LR
 |---|---|---|---|---|
 | 0 | Validação Discord | M | macOS + Discord | 🧪 validação local concluída; teste no Discord ⏸️ adiado |
 | 1 | Desktop e controles | M | macOS (dev) + Windows (validação) | 🧪 implementada; falta Windows real e controle físico |
-| 2 | Captura e encoder | M | **Windows com GPU** | 🧪 implementada; compila no Windows; execução real pendente |
+| 2 | Captura e encoder | M | **Windows com GPU** | 🧪 executada no Windows (CI, sem GPU); falta GPU real |
 | 3 | Media relay | M | macOS/Linux | 🧪 implementada; falta Docker e VPS com TLS |
-| 4 | Áudio | M | **Windows** | 🧪 implementada; compila no Windows; execução real pendente |
-| 5 | Integração completa — **MVP** | M | Windows (+ Discord para a Activity) | 🧪 MVP Windows + player web pronto para teste |
+| 4 | Áudio | M | **Windows** | 🧪 executada no Windows (CI); falta teste com jogo real |
+| 5 | Integração completa — **MVP** | M | Windows (+ Discord para a Activity) | 🧪 E2E Windows passando; servidor de testes no ar; pronto para teste |
 | OC | Abertura do código (Open Core) | S | — | ⬜ |
 | 6 | Otimização extrema | M | Windows com GPU + jogos | ⬜ |
 | 7 | Comercialização | S no MVP / M no Premium | Linux (servidor) | ⬜ |

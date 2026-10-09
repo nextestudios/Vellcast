@@ -219,7 +219,8 @@ export component VirtualKeyboard inherits Rectangle {
                 }
                 VKey {
                     horizontal-stretch: 2;
-                    label: "⌫";
+                    // Texto em vez de "⌫": a fonte padrão do Windows não tem esse símbolo.
+                    label: @tr("Delete");
                     selected: root.sel-row == root.special-row && root.sel-col == 3;
                     pressed => { root.press(root.special-row, 3); }
                 }

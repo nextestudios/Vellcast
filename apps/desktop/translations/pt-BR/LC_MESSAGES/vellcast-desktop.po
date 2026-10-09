@@ -52,6 +52,9 @@ msgstr "Nome de exibição"
 msgid "Menu"
 msgstr "Menu"
 
+msgid "Delete"
+msgstr "Apagar"
+
 msgid "Space"
 msgstr "Espaço"
 

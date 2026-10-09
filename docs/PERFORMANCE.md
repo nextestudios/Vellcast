@@ -84,6 +84,11 @@ Metodologia (macOS): Apple M1 8 GB, macOS 27.0.1, build Release, 20–30 s ocios
 
 ### 3.3 ETAPA 2/6 — Captura, encoder e impacto no jogo
 
+**Captura e áudio em Windows real (runner do GitHub, workflows `windows-e2e` e `diag-audio`, 2026-10-08):**
+- WGC de monitor (1024×768) e de janela (Bloco de Notas) → H.264 pelo `H264 Encoder MFT` com conversão na CPU: arquivos começam com SPS (High) e foram gerados sem erros.
+- Áudio WASAPI: o primeiro teste derrubava o processo (`0xC0000374`, corrupção de heap). O diagnóstico sob `cdb` com page heap apontou liberação dupla do blob de `AUDIOCLIENT_ACTIVATION_PARAMS` (a ativação do Windows libera o blob). Corrigido com `CoTaskMemAlloc`; depois da correção, loopback do sistema (excluindo o Discord): 196 pacotes Opus em 4 s e loopback por processo: 149 pacotes em 3 s, intervalos de 20 ms exatos, sem alertas do verificador de heap.
+- Fonte parada: o WGC não entrega quadros sem mudança na tela; o pipeline passou a repetir o último quadro no ritmo do FPS-alvo.
+
 **Execução em Windows (runner do GitHub Actions, sem GPU, 2026-10-08):** a enumeração listou 1 janela e 1 monitor (1024×768) e o encoder `H264 Encoder MFT` (software). O teste `encodes_synthetic_frames_with_sps_idr_and_forced_keyframe` passou com conversão BGRA→NV12 na CPU (ADR-031): saída começa com SPS+IDR e o keyframe sob demanda funciona. Não mede desempenho; números com GPU e jogos continuam pendentes.
 
 | Jogo/benchmark | Hardware | FPS médio sem / com | 1% lows sem / com | Encoder | Status |
@@ -98,6 +103,8 @@ Metodologia (macOS): Apple M1 8 GB, macOS 27.0.1, build Release, 20–30 s ocios
 | 20 autenticados por convite (loopback, `tests/benchmarks/relay-viewers.mjs`, 30 s, transmissor `publish_fixture` 1080p60) | 8,21 Mbps por espectador | 4,8% de 1 núcleo | RSS máx. 9,7 MB | ~164 Mbps | Medido (local, `vellcast-relay`) |
 
 Produção (`https://vellcast.nextestudios.com`, VPS na Europa, cliente no Brasil, 2026-10-08): a rota limita uma conexão a 1,2–2,2 Mbps (RTT ~290 ms), então 720p30 a 4 Mbps chegou a 15 fps com 1 espectador e a 2–8 fps com 5. Gargalo de rede, não do relay; ver `DEPLOYMENT.md` §6.10.
+
+**Estabilidade (M-025), 2026-10-08:** `vellcast-relay` em Release, 1 transmissor 1080p60 (`publish_fixture`) e 20 espectadores autenticados por **60 minutos** (`tests/benchmarks/relay-viewers.mjs … 20 3600`), Apple M1, loopback. Resultado: todos os espectadores a 60,0 fps e 8,17 Mbps; 75 GB entregues; `laggedMessages = 0`, `staleFramesDropped = 0`, `slowViewersDisconnected = 0`, nenhum erro; latência transmissor → espectador p50 41 ms / p95 77 ms / p99 80 ms; maior intervalo entre quadros 308 ms. Memória do relay (RSS, amostra a cada 30 s): 3–11 MB, estável do início ao fim (sem crescimento); CPU média 8% de 1 núcleo.
 
 Detalhes do teste do `vellcast-relay`: 60,3 fps por espectador, maior intervalo entre quadros 113,5 ms, latência transmissor → espectador p50 0,85 ms / p95 2,23 ms / p99 9,10 ms; nenhum erro, mensagem atrasada (`lagged`), quadro velho descartado ou desconexão. Loopback sem TLS: não mede rede real nem a CPU do transmissor.
 
