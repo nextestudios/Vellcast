@@ -314,10 +314,10 @@ impl Pipeline {
             .map_err(|e| CoreError::InvalidConfig(format!("runtime de rede: {e}")))?;
         let (publisher, mut publisher_events) = {
             let _guard = runtime.enter();
-            Publisher::connect(PublisherConfig::new(
-                config.relay_ws_url.clone(),
-                config.publisher_token.clone(),
-            ))
+            let mut publisher_config =
+                PublisherConfig::new(config.relay_ws_url.clone(), config.publisher_token.clone());
+            publisher_config.display_name = config.display_name.clone();
+            Publisher::connect(publisher_config)
         };
         let publisher = Arc::new(publisher);
 

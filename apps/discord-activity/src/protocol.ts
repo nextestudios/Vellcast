@@ -16,7 +16,24 @@ export const MessageType = {
   Auth: 0x30,
   AuthOk: 0x31,
   Error: 0x32,
+  /** Participantes ativos da sala (payload JSON `Presence`). */
+  Presence: 0x40,
 } as const;
+
+/** Um participante ativo (`Participant` em crates/protocol/src/messages.rs). */
+export interface Participant {
+  /** Identificador opaco da sessão; não é token nem convite. */
+  id: string;
+  /** `null` quando o participante não informou nome. Sempre exibir como texto. */
+  name: string | null;
+  role: 'publisher' | 'viewer';
+}
+
+/** Payload de `Presence`: lista completa, não incremental. */
+export interface Presence {
+  count: number;
+  participants: Participant[];
+}
 
 /** Códigos de erro do payload JSON de `Error` (crates/protocol/src/messages.rs). */
 export type ErrorCode =

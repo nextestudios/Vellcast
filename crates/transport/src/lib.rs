@@ -21,7 +21,8 @@ use tokio::sync::{Notify, mpsc};
 use tokio::task::JoinHandle;
 use tokio_tungstenite::tungstenite::Message;
 use vellcast_protocol::messages::{
-    AudioInit, AuthOk, AuthRequest, ConnectRole, ErrorBody, ErrorCode, VideoInit,
+    AudioInit, AuthOk, AuthProfile, AuthRequest, ConnectRole, ErrorBody, ErrorCode, VideoInit,
+    sanitize_participant_name,
 };
 use vellcast_protocol::{Header, MAX_MESSAGE_LEN, MessageType, decode, encode, flags};
 
@@ -38,6 +39,9 @@ pub struct PublisherConfig {
     pub ping_interval: Duration,
     /// Atrasos entre tentativas; o último se repete. Cada um recebe ±20% de jitter.
     pub backoff: Vec<Duration>,
+    /// Nome exibido aos espectadores na lista de participantes (campo opcional
+    /// `name` do `Auth`; relays antigos o ignoram).
+    pub display_name: Option<String>,
 }
 
 impl PublisherConfig {
@@ -54,8 +58,24 @@ impl PublisherConfig {
                 .into_iter()
                 .map(Duration::from_millis)
                 .collect(),
+            display_name: None,
         }
     }
+}
+
+/// JSON da mensagem `Auth`: [`AuthRequest`] mais os campos opcionais de [`AuthProfile`].
+fn auth_json(token: &str, display_name: Option<&str>) -> serde_json::Result<Vec<u8>> {
+    let mut auth = serde_json::to_value(AuthRequest {
+        token: token.to_owned(),
+        role: ConnectRole::Publisher,
+    })?;
+    let profile = serde_json::to_value(AuthProfile {
+        name: display_name.and_then(sanitize_participant_name),
+    })?;
+    if let (Some(auth), serde_json::Value::Object(extra)) = (auth.as_object_mut(), profile) {
+        auth.extend(extra);
+    }
+    serde_json::to_vec(&auth)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -357,11 +377,7 @@ async fn session(shared: &Shared, config: &PublisherConfig, reconnect: bool) -> 
     };
     let (mut sink, mut source) = ws.split();
 
-    let auth = AuthRequest {
-        token: config.token.clone(),
-        role: ConnectRole::Publisher,
-    };
-    let Ok(auth) = serde_json::to_vec(&auth) else {
+    let Ok(auth) = auth_json(&config.token, config.display_name.as_deref()) else {
         return Outcome::Fatal(ErrorCode::Internal, "falha ao serializar Auth".into());
     };
     let Ok(auth) = encode(&Header::new(MessageType::Auth, 0), &auth) else {
@@ -483,5 +499,27 @@ async fn session(shared: &Shared, config: &PublisherConfig, reconnect: bool) -> 
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn auth_json_carries_optional_name() {
+        let plain: serde_json::Value =
+            serde_json::from_slice(&auth_json("t", None).expect("json")).expect("json");
+        assert_eq!(
+            plain,
+            serde_json::json!({"token": "t", "role": "publisher"})
+        );
+        let named: serde_json::Value =
+            serde_json::from_slice(&auth_json("t", Some(" Ana\u{7} ")).expect("json"))
+                .expect("json");
+        assert_eq!(named["name"], "Ana");
+        // Relays antigos leem o mesmo JSON como `AuthRequest`.
+        let req: AuthRequest = serde_json::from_value(named).expect("auth");
+        assert_eq!(req.role, ConnectRole::Publisher);
     }
 }

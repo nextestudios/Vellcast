@@ -245,6 +245,168 @@ kbd {
 .watch .statusbar { flex: none; }
 .badge.live { color: var(--on-accent); background: var(--accent); font-weight: 600; }
 
+/*
+ * /watch no navegador: a página ocupa exatamente a viewport (sem rolagem).
+ * Cabeçalho, controles e barra de status têm altura fixa; o palco fica com
+ * o resto e o canvas é escalado com letterbox (object-fit), preservando a
+ * proporção em qualquer tamanho de janela e em tela cheia. A Discord
+ * Activity usa só `.watch` e não é afetada.
+ */
+.watch-fit {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+.watch-fit .topbar { min-width: 0; }
+.watch-fit .topbar .tag {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.watch-fit .topbar .badge { flex: none; white-space: nowrap; }
+.watch-fit .watch-main {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  overflow: hidden;
+}
+.watch-fit .watch-main.with-people { grid-template-columns: minmax(0, 1fr) 240px; }
+.watch-player {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.watch-fit .stage {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+/* Fora do fluxo: o tamanho do quadro nunca empurra o layout. */
+.watch-fit .stage canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+}
+.watch-fit .controls { flex: none; }
+.watch-fit .watch-stats {
+  flex: none;
+  max-height: 35vh;
+  max-height: 35dvh;
+  overflow: auto;
+}
+.watch-fit .stage:fullscreen { width: 100%; height: 100%; }
+
+/* Lista de participantes. */
+.people-toggle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px var(--space-3);
+  font-size: 12px;
+}
+.people-toggle[aria-expanded='true'] { box-shadow: inset 0 0 0 1px var(--accent); }
+.count {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--bg-0);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.participants {
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-4) var(--space-3);
+  background: var(--bg-1);
+  border-left: 1px solid var(--bg-3);
+}
+.participants h2 { display: flex; align-items: center; gap: var(--space-2); }
+.participants ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
+.participants li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-1) 0;
+}
+.participants li.anonymous .participant-name { color: var(--text-secondary); font-style: italic; }
+.avatar {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--bg-3);
+  font-weight: 600;
+  font-size: 12px;
+}
+.participant-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.participants .role { flex: none; font-size: 11px; color: var(--accent-strong); }
+
+/* Nome do convidado antes de entrar (o convite só é usado ao enviar). */
+.join-screen {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+}
+.join-card {
+  width: min(360px, 100%);
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius);
+  background: var(--bg-1);
+  border: 1px solid var(--bg-3);
+}
+.join-card h1 { margin: 0 0 var(--space-2); font-size: 18px; }
+.join-card p { margin: 0; }
+.join-card label { font-weight: 600; }
+.join-input {
+  min-width: 0;
+  background: var(--bg-0);
+  border: 1px solid var(--bg-3);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+  font-size: 16px;
+}
+.join-input[aria-invalid='true'] { border-color: var(--danger); }
+
+/* Janela estreita: a lista vira um painel sobre o vídeo, sem empurrar o layout. */
+@media (max-width: 720px) {
+  .watch-fit .watch-main.with-people { grid-template-columns: minmax(0, 1fr); }
+  .watch-fit .participants {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(260px, 85%);
+    z-index: 2;
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.4);
+  }
+  .watch-fit .controls { padding: var(--space-2) var(--space-3); }
+  .watch-fit .volume input { width: 90px; }
+  .watch-fit .statusbar .hint { display: none; }
+  .watch-fit .topbar { gap: var(--space-2); padding: var(--space-2) var(--space-3); }
+}
+
 /* Discord Activity: lista de transmissões e pareamento por código. */
 .activity-panel {
   max-width: 720px;

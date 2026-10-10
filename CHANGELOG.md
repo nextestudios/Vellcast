@@ -3,6 +3,12 @@
 Notas em português do Brasil; a versão em inglês (Estados Unidos) fica em `CHANGELOG.en-US.md`. Antes de publicar uma versão, adicione uma seção `## [VERSÃO]` **nos dois arquivos** (no PR `chore(release): VERSÃO`, junto com a versão do `Cargo.toml`). O workflow de release usa a seção da tag e falha se faltar alguma. O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Unreleased]
+### Novidades
+- **Nome do convidado e lista de participantes no player web (`/watch`):** quem abre um link de convite informa um nome antes de entrar; o convite só é usado quando o nome é enviado (fechar a página antes não gasta o convite). Depois de entrar, o player mostra quem está na sala e quantos são, atualizando a cada entrada, saída, queda ou reconexão, sem nomes duplicados. O transmissor aparece com o nome de exibição das configurações do app. Nomes são sempre exibidos como texto; convites e tokens nunca aparecem na lista.
+- **Relay:** `POST /api/rooms/{id}/join` aceita `name` (1 a 32 caracteres, validado antes de consumir o convite), o nome vai assinado no token de espectador e a nova mensagem `Presence` (`0x40`) envia a lista de participantes aos espectadores ([protocolo](docs/STREAMING_PROTOCOL.md#33-participantes-presence)). Players antigos ignoram a mensagem.
+
+### Correções
+- **Player web cabe na janela:** a página `/watch` ocupa exatamente a área visível do navegador, sem barras de rolagem. A imagem é ajustada com faixas pretas quando a proporção da transmissão difere da janela (sem esticar nem cortar), acompanha redimensionamento e tela cheia, e os controles, a barra de status e as estatísticas continuam visíveis, inclusive em telas estreitas.
 
 ## [0.2.0-alpha.1]
 ### Novidades

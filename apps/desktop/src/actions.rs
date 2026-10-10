@@ -571,6 +571,9 @@ fn start_stream(ui: &AppWindow) {
                     relay_ws_url: ws_url,
                     publisher_token,
                     adaptation,
+                    // Nome mostrado aos espectadores na lista de participantes.
+                    display_name: with_state(|st| st.settings.display_name.clone())
+                        .filter(|n| !n.is_empty()),
                 };
                 with_state(|st| {
                     if let Some(e) = &st.engine {

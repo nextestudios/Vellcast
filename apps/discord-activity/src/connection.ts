@@ -1,7 +1,15 @@
 // Conexão WebSocket com o servidor: reconexão com backoff, heartbeat e
 // sincronização de relógio estilo NTP (Ping/Pong).
 
-import { MessageType, decodePacket, encodePacket, type ErrorCode, type Packet } from './protocol';
+import {
+  MessageType,
+  decodePacket,
+  encodePacket,
+  type ErrorCode,
+  type Packet,
+  type Participant,
+  type Presence,
+} from './protocol';
 import { nowMs } from './metrics';
 
 const PING_INTERVAL_MS = 1000;
@@ -24,6 +32,8 @@ export interface ConnectionEvents {
   onStatus(status: ConnectionStatus, detail?: string): void;
   /** Erro enviado pelo relay (`Error`). `fatal` = reconectar com o mesmo token não adianta. */
   onError?(code: ErrorCode, message: string, fatal: boolean): void;
+  /** Lista de participantes ativos (`Presence`), enviada na entrada e a cada mudança. */
+  onPresence?(presence: Presence): void;
 }
 
 export interface ConnectionTarget {
@@ -111,6 +121,11 @@ export class Connection {
           if (fatal) this.closed = true;
           this.events.onError?.(code, body?.message ?? '', fatal);
           if (fatal) this.events.onStatus('encerrado', body?.message);
+          break;
+        }
+        case MessageType.Presence: {
+          const presence = parsePresence(packet.payload);
+          if (presence) this.events.onPresence?.(presence);
           break;
         }
         case MessageType.StreamPaused:
@@ -212,6 +227,20 @@ export class Connection {
     window.clearTimeout(this.retryTimer);
     this.ws?.close(1000);
   }
+}
+
+/** Valida o payload de `Presence`; entradas fora do formato são descartadas. */
+export function parsePresence(payload: Uint8Array): Presence | null {
+  const body = parseJson<{ count?: unknown; participants?: unknown }>(payload);
+  if (!body || !Array.isArray(body.participants)) return null;
+  const participants = body.participants.filter(
+    (p: Partial<Participant> | null): p is Participant =>
+      typeof p?.id === 'string' &&
+      (p.name === null || typeof p.name === 'string') &&
+      (p.role === 'publisher' || p.role === 'viewer'),
+  );
+  const count = typeof body.count === 'number' ? body.count : participants.length;
+  return { count, participants };
 }
 
 function parseJson<T>(payload: Uint8Array): T | null {

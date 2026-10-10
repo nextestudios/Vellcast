@@ -39,9 +39,10 @@ Por que little-endian: é a ordem nativa de x86/ARM e de `DataView(..., true)`, 
 | `0x12` | `KeyframeRequest` | C → S | Vazio. Pede um keyframe ao transmissor. |
 | `0x20` | `StreamEnd` | T → R → E | Vazio. Do transmissor: fim normal (sala volta a ociosa). Do relay: transmissão encerrada (fim normal, tolerância expirada ou sala fechada). |
 | `0x21` | `StreamPaused` | R → E | Vazio. O transmissor caiu sem `StreamEnd`; a sala aguarda a reconexão durante o período de tolerância. |
-| `0x30` | `Auth` | C → R | JSON `{ token, role: "publisher" \| "viewer" }`. **Primeira mensagem obrigatória**, até 2 KiB, em até 5 s. |
+| `0x30` | `Auth` | C → R | JSON `{ token, role: "publisher" \| "viewer", name? }`. **Primeira mensagem obrigatória**, até 2 KiB, em até 5 s. |
 | `0x31` | `AuthOk` | R → C | JSON `{ roomId, role, sessionId, live }`. |
 | `0x32` | `Error` | R → C | JSON `{ code, message }`, seguido de close `4000`. Códigos na seção 3.2. |
+| `0x40` | `Presence` | R → E | JSON `{ count, participants: [{ id, name, role }] }`: lista **completa** dos participantes ativos da sala. Seção 3.3. |
 
 No relay, `VideoInit`, `VideoFrame`, `AudioInit`, `AudioFrame` e `StreamEnd` são enviados pelo **transmissor** e repassados aos espectadores **byte a byte** (o relay não reescreve cabeçalhos; `sent_at_us` é o relógio do transmissor). `KeyframeRequest` vai do espectador ao relay, que o repassa ao transmissor com limite de 1 a cada 500 ms por sala. `Ping`/`Pong` valem nos dois papéis.
 
@@ -53,7 +54,7 @@ No relay, `VideoInit`, `VideoFrame`, `AudioInit`, `AudioFrame` e `StreamEnd` sã
    - `viewer` exige token de papel `viewer` ou `owner`.
 3. Sucesso → `AuthOk`. Falha → `Error` + close. Qualquer outra mensagem antes de `Auth`, ou `Auth` depois de 5 s, encerra a conexão.
 
-Formato do token: `v1.<payload base64url>.<HMAC-SHA256 base64url>`, payload JSON `{ room, role, exp, nonce }`. A assinatura é verificada em tempo constante **antes** de interpretar o payload. Tokens são emitidos pela API HTTP do relay (`docs/DEPLOYMENT.md` §6).
+Formato do token: `v1.<payload base64url>.<HMAC-SHA256 base64url>`, payload JSON `{ room, role, exp, nonce, iat, name? }`. A assinatura é verificada em tempo constante **antes** de interpretar o payload. Tokens são emitidos pela API HTTP do relay (`docs/DEPLOYMENT.md` §6).
 
 ### 3.2 Códigos de erro
 
@@ -71,7 +72,19 @@ Formato do token: `v1.<payload base64url>.<HMAC-SHA256 base64url>`, payload JSON
 
 `ErrorCode::is_fatal()` (crate `vellcast-protocol`) implementa essa tabela.
 
-Tipos desconhecidos são rejeitados por quem lê (`DecodeError::UnknownType`); por isso, um tipo novo exige nova versão **ou** negociação explícita.
+Tipos desconhecidos são rejeitados por quem lê (`DecodeError::UnknownType`); por isso, um tipo novo exige nova versão **ou** negociação explícita — ou, como em `Presence` (seção 3.3), ser enviado só a clientes que comprovadamente ignoram tipos desconhecidos.
+
+### 3.3 Participantes (`Presence`)
+
+Lista de quem está na sala, para o player mostrar nomes e contagem (issue #3).
+
+- **Nome do convidado:** `POST /api/rooms/{id}/join` aceita `{ invite, name? }`. O relay remove caracteres de controle, apara espaços e exige de 1 a 32 caracteres (`sanitize_participant_name`); um nome inválido recebe `400 protocol_error` **antes** de o convite ser consumido. O nome vai assinado no token de espectador (campo `name`), então o espectador não consegue trocá-lo depois. `name` ausente continua aceito (clientes antigos) e aparece como `null` na lista.
+- **Nome do transmissor:** campo opcional `name` no `Auth` (`AuthProfile`), lido à parte de `AuthRequest`; relays antigos o ignoram. Para espectadores o campo é ignorado (vale o nome do token). O app do Windows envia o nome de exibição das configurações.
+- **Sessões, não conexões:** cada entrada é um token (`nonce`) em um papel. Duas conexões com o mesmo token — uma reconexão antes de a conexão antiga cair, ou a página recarregada na mesma aba — contam como **uma** entrada; ela sai da lista quando a última conexão termina (fechamento, queda, inatividade, revogação ou sala encerrada). O dono assistindo e transmitindo com o mesmo token aparece duas vezes (um por papel).
+- **`id`** é aleatório, criado na entrada da sessão e estável enquanto ela durar. Não deriva do token nem do convite; nenhum dos dois aparece no payload.
+- **Envio:** o espectador recebe a lista atual logo após o `AuthOk` (já incluindo a si mesmo) e uma nova lista a cada entrada, saída ou troca de nome. Mudanças em rajada são agrupadas (só a versão mais recente é enviada). A lista é ordenada: transmissor primeiro, depois espectadores por ordem de chegada, limitada a 100 itens (`count` é sempre o total).
+- **`name` é texto não confiável:** pode conter `<`, `&` etc. Clientes devem exibi-lo como texto puro (no player, React escapa; nunca `dangerouslySetInnerHTML`).
+- **Compatibilidade:** só espectadores recebem `Presence`. O player web (`connection.ts`/`player.ts`) ignora tipos que não conhece, então players antigos seguem funcionando; o transmissor (`crates/transport`) também descarta mensagens que não decodifica, mas não recebe `Presence`.
 
 ## 4. H.264
 
@@ -149,7 +162,7 @@ O relay guarda `VideoInit`, `AudioInit` e o **GOP atual** (do último keyframe e
 
 - O campo `version` muda quando o layout do cabeçalho ou a semântica de um tipo existente muda.
 - Campos e flags reservados permitem extensões compatíveis dentro da v1.
-- A ETAPA 3 estendeu a v1 de forma aditiva (tipos `0x21`, `0x30`–`0x32`). Clientes antigos da Activity ignoram tipos que não conhecem no player, mas `Header::read` em Rust rejeita tipos desconhecidos: transmissor e relay precisam ser atualizados juntos.
+- A ETAPA 3 estendeu a v1 de forma aditiva (tipos `0x21`, `0x30`–`0x32`); a lista de participantes acrescentou `0x40` (`Presence`), enviado só a espectadores. Clientes antigos da Activity ignoram tipos que não conhecem no player, mas `Header::read` em Rust rejeita tipos desconhecidos: transmissor e relay precisam ser atualizados juntos.
 - A negociação explícita de versão (versões suportadas no `Auth`) fica para quando houver clientes distribuídos de forma independente (ETAPA 5/8).
 
 ## 9. Pendências conhecidas

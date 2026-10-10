@@ -16,7 +16,8 @@ use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::broadcast::error::{RecvError, TryRecvError};
 use vellcast_protocol::messages::{
-    AudioInit, AuthOk, AuthRequest, ConnectRole, ErrorCode, VideoInit, encode_json, error_message,
+    AudioInit, AuthOk, AuthProfile, AuthRequest, ConnectRole, ErrorCode, ParticipantRole,
+    VideoInit, encode_json, error_message, sanitize_participant_name,
 };
 use vellcast_protocol::{
     Header, MAX_AUTH_MESSAGE_LEN, MAX_CLIENT_MESSAGE_LEN, MAX_MESSAGE_LEN, MessageType, decode,
@@ -99,6 +100,24 @@ struct Authed {
     room: Arc<LiveRoom>,
     nonce: String,
     claims: Claims,
+    /// Nome na lista de participantes: do token (espectador) ou do `Auth` (transmissor).
+    display_name: Option<String>,
+}
+
+/// Nome de exibição de uma conexão. Espectadores usam o nome assinado no
+/// token (escolhido ao entrar com o convite) e não podem trocá-lo pelo `Auth`.
+fn display_name(role: ConnectRole, claims: &Claims, payload: &[u8]) -> Option<String> {
+    let from_auth = || {
+        serde_json::from_slice::<AuthProfile>(payload)
+            .ok()?
+            .name
+            .as_deref()
+            .and_then(sanitize_participant_name)
+    };
+    match role {
+        ConnectRole::Viewer => claims.name.clone(),
+        ConnectRole::Publisher => from_auth().or_else(|| claims.name.clone()),
+    }
 }
 
 async fn authenticate(
@@ -148,6 +167,7 @@ async fn authenticate(
         role: req.role,
         room,
         nonce: claims.nonce.clone(),
+        display_name: display_name(req.role, &claims, &payload),
         claims,
     })
 }
@@ -176,7 +196,13 @@ async fn handle(socket: WebSocket, relay: Arc<Relay>) {
             }
             metrics::inc(&relay.metrics.viewer_sessions_total);
             let room = Arc::clone(&authed.room);
+            let presence = room.join_presence(
+                &authed.nonce,
+                ParticipantRole::Viewer,
+                authed.display_name.clone(),
+            );
             run_viewer(&relay, &room, &authed.claims, &session_id, sink, source).await;
+            drop(presence);
             room.release_viewer();
         }
     }
@@ -235,6 +261,12 @@ async fn run_publisher(
             return;
         }
     };
+    // Removido da lista de participantes quando esta função termina.
+    let _presence = room.join_presence(
+        &authed.nonce,
+        ParticipantRole::Publisher,
+        authed.display_name,
+    );
     tracing::info!(room = %room.id, session = %session_id, "transmissor conectado");
     if let Some(ok) = auth_ok(&room, ConnectRole::Publisher, session_id) {
         let _ = sink.send(Message::Binary(ok)).await;
@@ -341,11 +373,15 @@ async fn run_viewer(
     // Reaproveitado entre lotes: nenhuma alocação por mensagem no caminho quente.
     let mut batch: Vec<Bytes> = Vec::with_capacity(MAX_BATCH);
 
-    let mut initial = Vec::with_capacity(join.snapshot.len() + 1);
+    let mut presence = room.presence_signal();
+    let mut initial = Vec::with_capacity(join.snapshot.len() + 3);
     initial.extend(auth_ok(room, ConnectRole::Viewer, session_id));
     if join.state == RoomState::Paused {
         initial.extend(encode(&Header::new(MessageType::StreamPaused, 0), &[]).ok());
     }
+    // Lista de participantes atual (já inclui esta conexão); as mudanças
+    // seguintes chegam pelo `presence.changed()` do laço.
+    initial.push(presence.borrow_and_update().clone());
     initial.extend(join.snapshot);
     // Configuração + GOP em cache (até centenas de mensagens): uma única escrita.
     let initial_bytes: u64 = initial.iter().map(|m| m.len() as u64).sum();
@@ -478,6 +514,18 @@ async fn run_viewer(
             () = &mut idle => {
                 send_error(&mut sink, ErrorCode::IdleTimeout, "inatividade").await;
                 break;
+            }
+            Ok(()) = presence.changed() => {
+                // Só a versão mais recente importa: mudanças em rajada viram um envio.
+                let msg = presence.borrow_and_update().clone();
+                let len = msg.len() as u64;
+                match tokio::time::timeout(send_timeout, sink.send(Message::Binary(msg))).await {
+                    Ok(Ok(())) => {
+                        metrics::inc(&relay.metrics.messages_out);
+                        metrics::add(&relay.metrics.bytes_out, len);
+                    }
+                    _ => break,
+                }
             }
         }
     }

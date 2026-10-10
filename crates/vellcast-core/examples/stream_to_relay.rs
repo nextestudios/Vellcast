@@ -95,6 +95,7 @@ fn run() -> Result<(), String> {
             relay_ws_url: url,
             publisher_token: token,
             adaptation,
+            display_name: None,
         },
         Box::new(move |event| {
             println!("EVENTO {event:?}");

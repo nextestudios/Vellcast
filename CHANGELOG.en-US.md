@@ -3,6 +3,12 @@
 Notes in US English; the Brazilian Portuguese version lives in `CHANGELOG.md`. Before publishing a version, add a `## [VERSION]` section **to both files** (in the `chore(release): VERSION` pull request, together with the `Cargo.toml` version). The release workflow uses the tag's section and fails if either is missing. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
+### New
+- **Guest name and participant list in the web player (`/watch`):** whoever opens an invite link enters a name before joining; the invite is only used when the name is submitted (closing the page first does not spend it). After joining, the player shows who is in the room and how many, updating on every join, leave, drop or reconnect, without duplicate names. The publisher appears with the display name from the app settings. Names are always shown as plain text; invites and tokens never appear in the list.
+- **Relay:** `POST /api/rooms/{id}/join` accepts `name` (1 to 32 characters, validated before the invite is consumed), the name is signed into the viewer token, and the new `Presence` message (`0x40`) sends the participant list to viewers ([protocol](docs/STREAMING_PROTOCOL.md#33-participantes-presence)). Older players ignore the message.
+
+### Fixes
+- **Web player fits the window:** the `/watch` page uses exactly the visible browser area, with no scrollbars. The picture is letterboxed when the stream's aspect ratio differs from the window (never stretched or cropped), follows resizing and fullscreen, and the controls, status bar and statistics stay visible, including on narrow screens.
 
 ## [0.2.0-alpha.1]
 ### New

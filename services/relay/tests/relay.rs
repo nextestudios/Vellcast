@@ -135,11 +135,11 @@ async fn recv(ws: &mut Ws) -> Option<(Header, Bytes)> {
     }
 }
 
-/// Próxima mensagem cujo tipo não seja Pong.
+/// Próxima mensagem cujo tipo não seja Pong nem Presence (coberta em `tests/presence.rs`).
 async fn recv_kind(ws: &mut Ws) -> Option<(Header, Bytes)> {
     loop {
         let m = recv(ws).await?;
-        if m.0.kind != MessageType::Pong {
+        if !matches!(m.0.kind, MessageType::Pong | MessageType::Presence) {
             return Some(m);
         }
     }
@@ -631,7 +631,7 @@ async fn transport_resends_init_with_discontinuity_after_relay_drop() {
             panic!("conexão do espectador caiu")
         };
         let (h, _) = decode(&d, MAX_MESSAGE_LEN).unwrap();
-        if h.kind == MessageType::Pong {
+        if matches!(h.kind, MessageType::Pong | MessageType::Presence) {
             continue;
         }
         kinds.push(h.kind);

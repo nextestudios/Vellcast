@@ -6,14 +6,19 @@
 //! acontecem sob o mesmo lock, para que o snapshot inicial (configuração +
 //! GOP atual) e o fluxo ao vivo não tenham lacunas nem duplicatas.
 
-use std::sync::Mutex;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
 use tokio::sync::{broadcast, mpsc, oneshot, watch};
-use vellcast_protocol::messages::ErrorCode;
+use vellcast_protocol::messages::{ErrorCode, Participant, ParticipantRole, Presence, encode_json};
 use vellcast_protocol::{Header, MessageType, encode};
+
+/// Máximo de participantes listados em uma mensagem `Presence` (o total
+/// continua exato em `count`).
+pub const MAX_PRESENCE_LISTED: usize = 100;
 
 /// Uma mensagem do transmissor pronta para distribuição.
 #[derive(Debug, Clone)]
@@ -141,6 +146,59 @@ pub struct LiveRoom {
     revocations: watch::Sender<u64>,
     viewers: AtomicUsize,
     keyframe_interval: Duration,
+    /// Participantes ativos (S-PRESENCE), separado do estado de mídia.
+    presence: Mutex<PresenceBook>,
+    /// Última mensagem `Presence` serializada; espectadores enviam a mais recente.
+    presence_tx: watch::Sender<Bytes>,
+}
+
+/// Uma sessão de participante: um token (nonce) em um papel. Várias conexões
+/// com o mesmo token (reconexão antes de a anterior cair) contam como uma só.
+struct PresenceEntry {
+    id: String,
+    name: Option<String>,
+    role: ParticipantRole,
+    connections: usize,
+    /// Ordem de chegada, para uma lista estável.
+    seq: u64,
+}
+
+#[derive(Default)]
+struct PresenceBook {
+    entries: HashMap<(ParticipantRole, String), PresenceEntry>,
+    next_seq: u64,
+}
+
+impl PresenceBook {
+    fn snapshot(&self) -> Presence {
+        let mut list: Vec<&PresenceEntry> = self.entries.values().collect();
+        list.sort_by_key(|e| (e.role, e.seq));
+        Presence {
+            count: list.len(),
+            participants: list
+                .into_iter()
+                .take(MAX_PRESENCE_LISTED)
+                .map(|e| Participant {
+                    id: e.id.clone(),
+                    name: e.name.clone(),
+                    role: e.role,
+                })
+                .collect(),
+        }
+    }
+}
+
+/// Mantém um participante na lista enquanto existir; ao ser descartado
+/// (fim da conexão, por qualquer caminho), a presença é atualizada.
+pub struct PresenceGuard {
+    room: Arc<LiveRoom>,
+    key: (ParticipantRole, String),
+}
+
+impl Drop for PresenceGuard {
+    fn drop(&mut self) {
+        self.room.leave_presence(&self.key);
+    }
 }
 
 impl LiveRoom {
@@ -154,7 +212,10 @@ impl LiveRoom {
         let (tx, _) = broadcast::channel(queue.max(1));
         let (closed, _) = watch::channel(false);
         let (revocations, _) = watch::channel(0);
+        let (presence_tx, _) = watch::channel(presence_message(&PresenceBook::default()));
         Self {
+            presence: Mutex::new(PresenceBook::default()),
+            presence_tx,
             id,
             max_viewers,
             inner: Mutex::new(Inner {
@@ -384,6 +445,76 @@ impl LiveRoom {
     pub fn gop_bytes(&self) -> usize {
         self.inner().gop.bytes()
     }
+
+    fn presence_book(&self) -> std::sync::MutexGuard<'_, PresenceBook> {
+        self.presence.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Registra uma conexão de participante. `token_nonce` identifica a sessão:
+    /// reconexões com o mesmo token não duplicam a entrada. Devolve um guarda
+    /// que remove a conexão ao ser descartado.
+    pub fn join_presence(
+        self: &Arc<Self>,
+        token_nonce: &str,
+        role: ParticipantRole,
+        name: Option<String>,
+    ) -> PresenceGuard {
+        let key = (role, token_nonce.to_owned());
+        let mut book = self.presence_book();
+        let seq = book.next_seq;
+        let mut inserted = false;
+        let entry = book.entries.entry(key.clone()).or_insert_with(|| {
+            inserted = true;
+            PresenceEntry {
+                id: crate::random_id(8),
+                name: None,
+                role,
+                connections: 0,
+                seq,
+            }
+        });
+        entry.connections += 1;
+        let renamed = name.is_some() && entry.name != name;
+        if renamed {
+            entry.name = name;
+        }
+        if inserted {
+            book.next_seq += 1;
+        }
+        if inserted || renamed {
+            self.presence_tx.send_replace(presence_message(&book));
+        }
+        PresenceGuard {
+            room: Arc::clone(self),
+            key,
+        }
+    }
+
+    fn leave_presence(&self, key: &(ParticipantRole, String)) {
+        let mut book = self.presence_book();
+        let Some(entry) = book.entries.get_mut(key) else {
+            return;
+        };
+        entry.connections = entry.connections.saturating_sub(1);
+        if entry.connections == 0 {
+            book.entries.remove(key);
+            self.presence_tx.send_replace(presence_message(&book));
+        }
+    }
+
+    /// Lista atual de participantes.
+    pub fn presence(&self) -> Presence {
+        self.presence_book().snapshot()
+    }
+
+    /// Mensagem `Presence` mais recente; muda a cada entrada ou saída.
+    pub fn presence_signal(&self) -> watch::Receiver<Bytes> {
+        self.presence_tx.subscribe()
+    }
+}
+
+fn presence_message(book: &PresenceBook) -> Bytes {
+    encode_json(MessageType::Presence, 0, &book.snapshot()).unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -486,6 +617,70 @@ mod tests {
         assert!(!r.reserve_viewer());
         r.release_viewer();
         assert!(r.reserve_viewer());
+    }
+
+    fn decode_presence(msg: &Bytes) -> Presence {
+        let (h, p) =
+            vellcast_protocol::decode(msg, vellcast_protocol::MAX_MESSAGE_LEN).expect("decode");
+        assert_eq!(h.kind, MessageType::Presence);
+        serde_json::from_slice(&p).expect("json")
+    }
+
+    #[test]
+    fn presence_join_leave_and_reconnect_without_duplicates() {
+        let r = Arc::new(room());
+        let mut signal = r.presence_signal();
+        assert_eq!(decode_presence(&signal.borrow_and_update()).count, 0);
+
+        let host = r.join_presence("pub", ParticipantRole::Publisher, Some("Host".into()));
+        let ana = r.join_presence("tok-ana", ParticipantRole::Viewer, Some("Ana".into()));
+        assert!(signal.has_changed().unwrap_or(false));
+        let p = decode_presence(&signal.borrow_and_update());
+        assert_eq!(p.count, 2);
+        assert_eq!(p.participants[0].role, ParticipantRole::Publisher);
+        assert_eq!(p.participants[0].name.as_deref(), Some("Host"));
+        assert_eq!(p.participants[1].name.as_deref(), Some("Ana"));
+        let ana_id = p.participants[1].id.clone();
+
+        // Reconexão com o mesmo token antes de a conexão antiga cair: uma entrada só.
+        let ana_again = r.join_presence("tok-ana", ParticipantRole::Viewer, Some("Ana".into()));
+        assert!(!signal.has_changed().unwrap_or(true), "nada mudou");
+        drop(ana);
+        assert!(!signal.has_changed().unwrap_or(true));
+        let p = r.presence();
+        assert_eq!(p.count, 2);
+        assert_eq!(p.participants[1].id, ana_id, "id estável na reconexão");
+
+        drop(ana_again);
+        let p = decode_presence(&signal.borrow_and_update());
+        assert_eq!(p.count, 1);
+        assert_eq!(p.participants[0].role, ParticipantRole::Publisher);
+
+        // Mesmo token em papéis diferentes (dono transmitindo e assistindo) são duas entradas.
+        let owner_view = r.join_presence("pub", ParticipantRole::Viewer, None);
+        assert_eq!(r.presence().count, 2);
+        drop(owner_view);
+        drop(host);
+        assert_eq!(decode_presence(&signal.borrow_and_update()).count, 0);
+    }
+
+    #[test]
+    fn presence_list_is_bounded_but_count_is_exact() {
+        let r = Arc::new(LiveRoom::new(
+            "r".into(),
+            500,
+            16,
+            1000,
+            Duration::from_millis(500),
+        ));
+        let guards: Vec<PresenceGuard> = (0..MAX_PRESENCE_LISTED + 5)
+            .map(|i| r.join_presence(&format!("t{i}"), ParticipantRole::Viewer, None))
+            .collect();
+        let p = r.presence();
+        assert_eq!(p.count, MAX_PRESENCE_LISTED + 5);
+        assert_eq!(p.participants.len(), MAX_PRESENCE_LISTED);
+        drop(guards);
+        assert_eq!(r.presence().count, 0);
     }
 
     #[test]

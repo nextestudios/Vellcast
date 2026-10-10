@@ -2,7 +2,9 @@
 //
 // O link de convite é `<relay>/watch#room=<id>&invite=<código>`. O fragmento
 // nunca chega ao servidor; o código é trocado uma única vez por um token de
-// espectador (POST /api/rooms/{id}/join), guardado só nesta aba.
+// espectador (POST /api/rooms/{id}/join), guardado só nesta aba. A troca só
+// acontece quando o convidado envia o nome (lista de participantes): abrir o
+// link e sair sem enviar não gasta o convite.
 
 import type { ErrorCode } from './protocol';
 
@@ -75,11 +77,66 @@ export class JoinError extends Error {
   }
 }
 
-export async function joinRoom(room: string, invite: string): Promise<Joined> {
+/** Limite do nome do convidado (`MAX_PARTICIPANT_NAME_CHARS` no relay). */
+export const MAX_GUEST_NAME = 32;
+const PENDING_INVITE_KEY = 'vellcast.invite.';
+const GUEST_NAME_KEY = 'vellcast.guestName';
+
+/**
+ * Normaliza o nome do convidado como o relay faz: remove caracteres de
+ * controle, apara espaços e limita o tamanho. `null` = nome vazio.
+ */
+export function sanitizeGuestName(raw: string): string | null {
+  const name = Array.from(raw.replace(/[\u0000-\u001f\u007f-\u009f]/g, '').trim())
+    .slice(0, MAX_GUEST_NAME)
+    .join('')
+    .trimEnd();
+  return name ? name : null;
+}
+
+/**
+ * Convite ainda não usado desta aba. Fica fora da URL (que é limpa ao abrir)
+ * até o convidado enviar o nome; só então é trocado por um token.
+ */
+export function loadPendingInvite(room: string): string | null {
+  try {
+    return sessionStorage.getItem(PENDING_INVITE_KEY + room);
+  } catch {
+    return null;
+  }
+}
+
+export function savePendingInvite(room: string, invite: string | null): void {
+  try {
+    if (invite) sessionStorage.setItem(PENDING_INVITE_KEY + room, invite);
+    else sessionStorage.removeItem(PENDING_INVITE_KEY + room);
+  } catch {
+    // Sem armazenamento: o convite fica só na memória desta página.
+  }
+}
+
+/** Último nome usado neste navegador (conveniência para preencher o campo). */
+export function loadGuestName(): string {
+  try {
+    return localStorage.getItem(GUEST_NAME_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+export function saveGuestName(name: string): void {
+  try {
+    localStorage.setItem(GUEST_NAME_KEY, name);
+  } catch {
+    // Opcional.
+  }
+}
+
+export async function joinRoom(room: string, invite: string, name: string | null = null): Promise<Joined> {
   const res = await fetch(`/api/rooms/${encodeURIComponent(room)}/join`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ invite }),
+    body: JSON.stringify(name === null ? { invite } : { invite, name }),
     credentials: 'omit',
     referrerPolicy: 'no-referrer',
   });

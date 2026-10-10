@@ -13,7 +13,9 @@ use axum::extract::{ConnectInfo, Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
-use vellcast_protocol::messages::{ErrorBody, ErrorCode};
+use vellcast_protocol::messages::{
+    ErrorBody, ErrorCode, MAX_PARTICIPANT_NAME_CHARS, sanitize_participant_name,
+};
 
 use crate::room::{LiveRoom, RoomState};
 use crate::store::{Invite, RoomRecord, StoreError, hash_invite};
@@ -347,6 +349,25 @@ pub async fn create_invite(
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct JoinRoom {
     pub invite: String,
+    /// Nome de exibição do convidado (lista de participantes). Opcional para
+    /// clientes antigos; quando presente, precisa ser válido.
+    #[serde(default)]
+    pub name: Option<String>,
+}
+
+/// Valida o nome do convidado antes de consumir o convite: um nome recusado
+/// não gasta um uso do convite.
+pub fn guest_name(name: Option<&str>) -> ApiResult<Option<String>> {
+    let Some(raw) = name else {
+        return Ok(None);
+    };
+    let too_long = raw.trim().chars().count() > MAX_PARTICIPANT_NAME_CHARS;
+    match sanitize_participant_name(raw) {
+        Some(name) if !too_long => Ok(Some(name)),
+        _ => Err(bad_request(
+            "nome inválido (1 a 32 caracteres, sem caracteres de controle)",
+        )),
+    }
 }
 
 #[derive(Serialize)]
@@ -367,6 +388,7 @@ pub async fn join_room(
     if body.invite.len() > 128 {
         return Err(bad_request("convite inválido"));
     }
+    let name = guest_name(body.name.as_deref())?;
     let (record, live) = lookup(&relay, &id)?;
     let now = unix_now();
     relay
@@ -384,7 +406,7 @@ pub async fn join_room(
         .config
         .viewer_token_ttl
         .min(Duration::from_secs(record.expires_at.saturating_sub(now)));
-    let (viewer_token, _) = relay.signer.issue(&id, Role::Viewer, ttl, now);
+    let (viewer_token, _) = relay.signer.issue_named(&id, Role::Viewer, ttl, now, name);
     Ok(Json(Joined {
         viewer_token,
         room: view(&record, &live),
@@ -497,4 +519,28 @@ pub async fn revoke(
 
 pub async fn metrics(State(relay): State<Arc<Relay>>) -> Json<metrics::Snapshot> {
     Json(relay.metrics_snapshot())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn guest_name_validation() {
+        assert_eq!(guest_name(None).ok(), Some(None));
+        assert_eq!(
+            guest_name(Some("  Ana  ")).ok(),
+            Some(Some("Ana".to_owned()))
+        );
+        assert_eq!(
+            guest_name(Some("Ana\u{0007}")).ok(),
+            Some(Some("Ana".to_owned())),
+            "caracteres de controle são removidos"
+        );
+        assert!(guest_name(Some("")).is_err());
+        assert!(guest_name(Some("   \t ")).is_err());
+        assert!(guest_name(Some("\u{0000}\u{001b}")).is_err());
+        assert!(guest_name(Some(&"x".repeat(MAX_PARTICIPANT_NAME_CHARS + 1))).is_err());
+        assert!(guest_name(Some(&"é".repeat(MAX_PARTICIPANT_NAME_CHARS))).is_ok());
+    }
 }

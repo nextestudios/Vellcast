@@ -159,6 +159,8 @@ pub struct SessionConfig {
     pub publisher_token: String,
     /// Adaptação de bitrate/FPS durante a transmissão (S-001; competitivo = S-002).
     pub adaptation: Adaptation,
+    /// Nome do transmissor na lista de participantes vista pelos espectadores.
+    pub display_name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

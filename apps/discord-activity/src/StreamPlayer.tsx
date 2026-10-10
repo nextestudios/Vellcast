@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Connection, wsUrl, type ConnectionStatus } from './connection';
 import { Player } from './player';
-import type { ErrorCode } from './protocol';
+import type { ErrorCode, Presence } from './protocol';
 import { friendlyError } from './watch';
 
 interface Stats {
@@ -33,10 +33,12 @@ export interface StreamPlayerProps {
   /** Erro fatal do relay (token expirado, sala encerrada…). */
   onFatal?(code: ErrorCode): void;
   onStatus?(status: ConnectionStatus): void;
+  /** Participantes ativos da sala (mensagem `Presence` do relay). */
+  onPresence?(presence: Presence): void;
 }
 
 /** Vídeo + áudio de uma transmissão do relay, com controles e estatísticas. */
-export function StreamPlayer({ token, notice, onFatal, onStatus }: StreamPlayerProps) {
+export function StreamPlayer({ token, notice, onFatal, onStatus, onPresence }: StreamPlayerProps) {
   const [status, setStatus] = useState<{ s: ConnectionStatus; detail?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -49,8 +51,8 @@ export function StreamPlayer({ token, notice, onFatal, onStatus }: StreamPlayerP
   const playerRef = useRef<Player | null>(null);
   const volumeRef = useRef(volume);
   const audioRef = useRef(audioOn);
-  const callbacks = useRef({ onFatal, onStatus });
-  callbacks.current = { onFatal, onStatus };
+  const callbacks = useRef({ onFatal, onStatus, onPresence });
+  callbacks.current = { onFatal, onStatus, onPresence };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -81,6 +83,7 @@ export function StreamPlayer({ token, notice, onFatal, onStatus }: StreamPlayerP
           setError(friendlyError(code));
           callbacks.current.onFatal?.(code);
         },
+        onPresence: (presence) => callbacks.current.onPresence?.(presence),
       },
     );
 

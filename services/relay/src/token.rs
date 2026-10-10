@@ -40,6 +40,10 @@ pub struct Claims {
     /// tratados como emitidos antes de qualquer revogação em massa.
     #[serde(default)]
     pub iat: u64,
+    /// Nome de exibição do convidado (lista de participantes), já saneado.
+    /// Ausente em tokens sem nome e nos emitidos antes deste campo.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -91,7 +95,22 @@ impl TokenSigner {
             exp: now + ttl.as_secs(),
             nonce: crate::random_id(12),
             iat: now,
+            name: None,
         };
+        (self.sign(&claims), claims)
+    }
+
+    /// Como [`Self::issue`], com o nome de exibição do participante assinado no token.
+    pub fn issue_named(
+        &self,
+        room: &str,
+        role: Role,
+        ttl: Duration,
+        now: u64,
+        name: Option<String>,
+    ) -> (String, Claims) {
+        let (_, mut claims) = self.issue(room, role, ttl, now);
+        claims.name = name;
         (self.sign(&claims), claims)
     }
 
@@ -224,6 +243,29 @@ mod tests {
             URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes())
         );
         assert_eq!(s.verify(&token, NOW).map(|c| c.iat), Ok(0));
+    }
+
+    #[test]
+    fn name_is_signed_and_optional() {
+        let s = signer();
+        let (token, claims) = s.issue_named(
+            "r",
+            Role::Viewer,
+            Duration::from_secs(60),
+            NOW,
+            Some("Ana".into()),
+        );
+        assert_eq!(s.verify(&token, NOW), Ok(claims));
+        assert_eq!(
+            s.verify(&token, NOW).ok().and_then(|c| c.name),
+            Some("Ana".into())
+        );
+        // Sem nome, o campo nem é serializado (tokens antigos continuam iguais).
+        let (plain, _) = s.issue("r", Role::Viewer, Duration::from_secs(60), NOW);
+        let payload = URL_SAFE_NO_PAD
+            .decode(plain.split('.').nth(1).unwrap_or_default())
+            .unwrap_or_default();
+        assert!(!String::from_utf8_lossy(&payload).contains("name"));
     }
 
     #[test]

@@ -22,6 +22,60 @@ pub struct AuthRequest {
     pub role: ConnectRole,
 }
 
+/// Campos opcionais da mensagem `Auth`, lidos à parte de [`AuthRequest`]
+/// para que clientes e relays antigos continuem compatíveis.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuthProfile {
+    /// Nome de exibição do transmissor na lista de participantes. O nome de
+    /// espectadores vem do token (definido ao entrar com o convite) e este
+    /// campo é ignorado para eles.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+/// Limite de caracteres de um nome de exibição de participante.
+pub const MAX_PARTICIPANT_NAME_CHARS: usize = 32;
+
+/// Normaliza um nome de exibição: remove caracteres de controle, apara
+/// espaços e limita o tamanho. Devolve `None` se nada sobrar.
+pub fn sanitize_participant_name(name: &str) -> Option<String> {
+    let name: String = name.chars().filter(|c| !c.is_control()).collect();
+    let name: String = name
+        .trim()
+        .chars()
+        .take(MAX_PARTICIPANT_NAME_CHARS)
+        .collect();
+    let name = name.trim_end();
+    (!name.is_empty()).then(|| name.to_owned())
+}
+
+/// Papel de um participante na lista de presença.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ParticipantRole {
+    Publisher,
+    Viewer,
+}
+
+/// Um participante ativo. `id` é opaco e estável enquanto a sessão (token)
+/// estiver conectada; não revela token nem convite.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Participant {
+    pub id: String,
+    /// `None` para clientes que não informaram nome.
+    pub name: Option<String>,
+    pub role: ParticipantRole,
+}
+
+/// Payload de `Presence`: a lista completa (não incremental) de participantes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Presence {
+    /// Total de participantes ativos; pode exceder `participants.len()` em
+    /// salas muito grandes (a lista é limitada).
+    pub count: usize,
+    pub participants: Vec<Participant>,
+}
+
 /// Resposta `AuthOk`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -148,6 +202,56 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&ErrorCode::PublisherExists).expect("json"),
             "\"publisher_exists\""
+        );
+    }
+
+    #[test]
+    fn auth_profile_is_optional_and_compatible() {
+        let json = r#"{"token":"abc","role":"publisher","name":"Ana"}"#;
+        // Relays antigos leem só `AuthRequest` e ignoram o campo extra.
+        let req: AuthRequest = serde_json::from_str(json).expect("json");
+        assert_eq!(req.token, "abc");
+        let profile: AuthProfile = serde_json::from_str(json).expect("json");
+        assert_eq!(profile.name.as_deref(), Some("Ana"));
+        let none: AuthProfile =
+            serde_json::from_str(r#"{"token":"abc","role":"viewer"}"#).expect("json");
+        assert_eq!(none, AuthProfile::default());
+    }
+
+    #[test]
+    fn participant_names_are_sanitized() {
+        assert_eq!(
+            sanitize_participant_name("  Ana \u{0007}\n"),
+            Some("Ana".into())
+        );
+        assert_eq!(sanitize_participant_name("A\u{0000}na"), Some("Ana".into()));
+        assert_eq!(sanitize_participant_name(" \t\n "), None);
+        assert_eq!(sanitize_participant_name(""), None);
+        let long = "x".repeat(100);
+        assert_eq!(
+            sanitize_participant_name(&long).map(|n| n.chars().count()),
+            Some(MAX_PARTICIPANT_NAME_CHARS)
+        );
+        assert_eq!(
+            sanitize_participant_name("<b>Zé</b>"),
+            Some("<b>Zé</b>".into()),
+            "marcação é texto; quem exibe é responsável por escapar"
+        );
+    }
+
+    #[test]
+    fn presence_json_shape() {
+        let p = Presence {
+            count: 1,
+            participants: vec![Participant {
+                id: "abc".into(),
+                name: Some("Ana".into()),
+                role: ParticipantRole::Publisher,
+            }],
+        };
+        assert_eq!(
+            serde_json::to_string(&p).expect("json"),
+            r#"{"count":1,"participants":[{"id":"abc","name":"Ana","role":"publisher"}]}"#
         );
     }
 
