@@ -15,7 +15,7 @@
 | 3 | Media relay | Must | 0 (local) | Done — em produção em vellcast.nextestudios.com; 60 min estável |
 | 4 | Áudio | Must | 2, 3 | Done — executada no Windows real; sincronia A/V de 9,2 ms no transporte |
 | 5 | Integração completa | Must | 1, 2, 3, 4 (E0-T10 para a Activity) | Done (MVP Windows + player web); Activity aguarda E0-T10 |
-| OC | Marco: abertura do código (Open Core) | Should | 5 | Em andamento — AGPL-3.0-only definida; abertura adiada (ADR-060) |
+| OC | Marco: abertura do código (Open Core) | Should | 5 | Done — AGPL-3.0-only e repositório público (ADR-060) |
 | 6 | Otimização extrema | Must | 5 | Testing — software pronto; otimização com GPU real bloqueada |
 | 7 | Comercialização | Should (MVP) / Must (Premium) | 5 | Testing — backend pronto; cobrança real depende de conta no provedor |
 | 8 | Lançamento | Must (lançamento) | 6, 7 | Testing — instalador e atualizador prontos; certificado e revisão jurídica pendentes |
@@ -182,11 +182,11 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 | OC-T06 | Política de reporte de vulnerabilidades | M-020 | — | `SECURITY.md` na raiz com contato privado e prazos de resposta; GitHub Private Vulnerability Reporting habilitado | Done — SECURITY.md; falta habilitar Private Vulnerability Reporting nas configurações |
 | OC-T07 | Varredura de segredos no histórico | M-024 | — | `gitleaks` (ou equivalente) em todo o histórico sem achados; verificação adicionada à CI | Done — gitleaks no histórico (sem segredos) e na CI |
 | OC-T08 | Preparação para contribuidores externos | M-022 | OC-T01 | `CONTRIBUTING.md` revisado, código de conduta, templates de issue e PR, proteção da branch `main` | Done — código de conduta, modelos de issue e PR |
-| OC-T09 | Tornar o repositório público | — | OC-T01..OC-T08 | Visibilidade alterada pelo responsável; README público revisado; anúncio planejado | Pending — adiado pelo responsável até o projeto estar pronto; abrir num repositório novo com histórico limpo (ADR-060) |
+| OC-T09 | Tornar o repositório público | — | OC-T01..OC-T08 | Visibilidade alterada pelo responsável; README público revisado; anúncio planejado | Done — repositório público em 2026-10-10, num repositório novo com histórico limpo (ADR-060) |
 
 **Entregável:** repositório público do Vellcast Core.
 **Critério de aceite:** todas as tarefas OC-T01 a OC-T08 concluídas e a abertura (OC-T09) aprovada explicitamente pelo responsável.
-**Status:** In Progress — licença definida; abertura adiada.
+**Status:** Done (2026-10-10).
 
 ---
 

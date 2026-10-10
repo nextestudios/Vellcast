@@ -6,7 +6,7 @@ Notas em português do Brasil; a versão em inglês (Estados Unidos) fica em `CH
 
 ## [0.2.0-alpha.1]
 ### Novidades
-- **Código aberto sob a AGPL-3.0-only:** o Vellcast passa a ser software livre; o repositório [github.com/nextestudios/Vellcast](https://github.com/nextestudios/Vellcast) será aberto quando o projeto estiver pronto. As versões até a 0.1.2 foram distribuídas sob licença proprietária ([notas de licença](docs/LICENSING.md)). Os serviços comerciais (contas e planos) continuam num repositório privado separado e não são necessários para transmitir.
+- **Código aberto sob a AGPL-3.0-only:** o Vellcast passa a ser software livre, com o código público em [github.com/nextestudios/Vellcast](https://github.com/nextestudios/Vellcast). As versões até a 0.1.2 foram distribuídas sob licença proprietária ([notas de licença](docs/LICENSING.md)). Os serviços comerciais (contas e planos) continuam num repositório privado separado e não são necessários para transmitir.
 - **Versão portátil:** `Vellcast-Portable-x64.exe`, um único executável que guarda configurações e logs na pasta `Vellcast_Data` ao lado dele. Ele avisa quando há versão nova; a troca do arquivo é manual.
 - **Nome do convidado e lista de participantes no player web (`/watch`):** quem abre um link de convite informa um nome antes de entrar; o convite só é usado quando o nome é enviado (fechar a página antes não gasta o convite). Depois de entrar, o player mostra quem está na sala e quantos são, atualizando a cada entrada, saída, queda ou reconexão, sem nomes duplicados. O transmissor aparece com o nome de exibição das configurações do app. Nomes são sempre exibidos como texto; convites e tokens nunca aparecem na lista.
 - **Relay:** `POST /api/rooms/{id}/join` aceita `name` (1 a 32 caracteres, validado antes de consumir o convite), o nome vai assinado no token de espectador e a nova mensagem `Presence` (`0x40`) envia a lista de participantes aos espectadores ([protocolo](docs/STREAMING_PROTOCOL.md#33-participantes-presence)). Players antigos ignoram a mensagem.
@@ -31,7 +31,7 @@ Notas em português do Brasil; a versão em inglês (Estados Unidos) fica em `CH
 - Ainda não validado com GPUs e jogos reais nem com controle físico; a integração com o Discord aguarda a aplicação no Discord.
 - O servidor de testes fica na Europa: a partir do Brasil, use a qualidade **Econômico**.
 - Executáveis sem assinatura de código ([política](docs/CODE_SIGNING.md)): o SmartScreen pode avisar na primeira execução.
-- Quem está na 0.1.1 ou na 0.1.2 vê esta versão em **Sobre → Verificar atualizações**.
+- **Quem está na 0.1.1 ou na 0.1.2 precisa instalar esta versão à mão** (baixe o instalador abaixo): a chave que assina as atualizações mudou com a abertura do código. Daqui em diante, as atualizações voltam a ser verificadas pelo app.
 - Microfone real, troca de dispositivo e controle físico ainda não foram validados em hardware; o servidor de testes da CI não tem microfone.
 
 ## [0.1.2]

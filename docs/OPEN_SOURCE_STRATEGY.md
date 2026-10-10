@@ -1,6 +1,6 @@
 # Estratégia Open Core — Vellcast
 
-> Status: **Em andamento (2026-10-10, ADR-060).** O núcleo (este repositório) é licenciado sob **AGPL-3.0-only** e será aberto quando o projeto estiver pronto; a parte comercial fica no repositório privado `nextestudios/vellcast-cloud`. A licença proposta abaixo (Apache-2.0) foi substituída pela AGPL-3.0-only.
+> Status: **Em vigor (2026-10-10, ADR-060).** O núcleo (este repositório) é público sob **AGPL-3.0-only**; a parte comercial fica no repositório privado `nextestudios/vellcast-cloud`. A licença proposta abaixo (Apache-2.0) foi substituída pela AGPL-3.0-only.
 
 ## 1. Divisão
 

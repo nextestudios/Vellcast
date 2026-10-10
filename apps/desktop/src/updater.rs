@@ -22,7 +22,7 @@ use sha2::{Digest, Sha256};
 
 /// Chave pública Ed25519 (32 bytes, base64) que assina os manifestos de atualização.
 /// A chave privada correspondente fica só no segredo `UPDATE_SIGNING_KEY` do repositório.
-pub const UPDATE_PUBLIC_KEY: &str = "Bh+Na4Efvg7Yf3UOgKOv2SSGkJiQ32bWJgl5EWn6TJU=";
+pub const UPDATE_PUBLIC_KEY: &str = "V3koZ2VF+7DFB9NJAQaOPblSkSn9EOzLHySucAhQhxA=";
 
 /// Manifesto padrão: ativo do último release do GitHub.
 pub const DEFAULT_MANIFEST_URL: &str =

@@ -6,7 +6,7 @@ Notes in US English; the Brazilian Portuguese version lives in `CHANGELOG.md`. B
 
 ## [0.2.0-alpha.1]
 ### New
-- **Open source under AGPL-3.0-only:** Vellcast is now free software; the [github.com/nextestudios/Vellcast](https://github.com/nextestudios/Vellcast) repository will be opened once the project is ready. Versions up to 0.1.2 were distributed under a proprietary license ([licensing notes](docs/LICENSING.md)). The commercial services (accounts and plans) stay in a separate private repository and are not needed to stream.
+- **Open source under AGPL-3.0-only:** Vellcast is now free software, with its source code public at [github.com/nextestudios/Vellcast](https://github.com/nextestudios/Vellcast). Versions up to 0.1.2 were distributed under a proprietary license ([licensing notes](docs/LICENSING.md)). The commercial services (accounts and plans) stay in a separate private repository and are not needed to stream.
 - **Portable version:** `Vellcast-Portable-x64.exe`, a single executable that keeps its settings and logs in the `Vellcast_Data` folder next to it. It tells you about new versions; replacing the file is manual.
 - **Guest name and participant list in the web player (`/watch`):** whoever opens an invite link enters a name before joining; the invite is only used when the name is submitted (closing the page first does not spend it). After joining, the player shows who is in the room and how many, updating on every join, leave, drop or reconnect, without duplicate names. The publisher appears with the display name from the app settings. Names are always shown as plain text; invites and tokens never appear in the list.
 - **Relay:** `POST /api/rooms/{id}/join` accepts `name` (1 to 32 characters, validated before the invite is consumed), the name is signed into the viewer token, and the new `Presence` message (`0x40`) sends the participant list to viewers ([protocol](docs/STREAMING_PROTOCOL.md#33-participantes-presence)). Older players ignore the message.
@@ -31,7 +31,7 @@ Notes in US English; the Brazilian Portuguese version lives in `CHANGELOG.md`. B
 - Not yet validated with real GPUs and games or with a physical controller; the Discord integration waits for the Discord application.
 - The test server is in Europe: from Brazil, use the **Economy** quality.
 - Executables are not code-signed ([policy](docs/CODE_SIGNING.md)): SmartScreen may warn on first run.
-- Whoever is on 0.1.1 or 0.1.2 sees this version in **About → Check for updates**.
+- **If you are on 0.1.1 or 0.1.2, install this version by hand** (download the installer below): the key that signs updates changed when the code was opened. From here on, the app verifies updates again.
 - A real microphone, switching devices and a physical controller have not been validated on hardware yet; the CI test machine has no microphone.
 
 ## [0.1.2]
