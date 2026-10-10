@@ -11,6 +11,8 @@ import type { ErrorCode } from './protocol';
 export interface InviteParams {
   room: string;
   invite: string | null;
+  /** Token de espectador já obtido (o app desktop abre o player sem gastar outro convite). */
+  token: string | null;
 }
 
 export interface RoomView {
@@ -19,6 +21,8 @@ export interface RoomView {
   state: string;
   viewers: number;
   maxViewers: number;
+  /** Nome de quem compartilha agora, quando informado. */
+  sharerName?: string;
 }
 
 export interface Joined {
@@ -27,19 +31,25 @@ export interface Joined {
 }
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+const TOKEN_PATTERN = /^v1\.[A-Za-z0-9_-]{1,1000}\.[A-Za-z0-9_-]{1,100}$/;
 const SESSION_KEY = 'vellcast.viewer.';
 
 export function isWatchPath(pathname: string, hash: string): boolean {
   return pathname.startsWith('/watch') || /(^|[#&])room=/.test(hash);
 }
 
-/** Lê `room` e `invite` do fragmento; valores fora do formato são ignorados. */
+/** Lê `room`, `invite` e `token` do fragmento; valores fora do formato são ignorados. */
 export function parseInvite(hash: string): InviteParams | null {
   const params = new URLSearchParams(hash.replace(/^#/, ''));
   const room = params.get('room');
   if (!room || !ID_PATTERN.test(room)) return null;
   const invite = params.get('invite');
-  return { room, invite: invite && ID_PATTERN.test(invite) ? invite : null };
+  const token = params.get('token');
+  return {
+    room,
+    invite: invite && ID_PATTERN.test(invite) ? invite : null,
+    token: token && TOKEN_PATTERN.test(token) ? token : null,
+  };
 }
 
 /** Remove o código de convite da barra de endereços e do histórico. */

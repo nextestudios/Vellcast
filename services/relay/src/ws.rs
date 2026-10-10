@@ -17,7 +17,7 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::sync::broadcast::error::{RecvError, TryRecvError};
 use vellcast_protocol::messages::{
     AudioInit, AuthOk, AuthProfile, AuthRequest, ConnectRole, ErrorCode, ParticipantRole,
-    VideoInit, encode_json, error_message, sanitize_participant_name,
+    ShareInfo, VideoInit, encode_json, error_message, sanitize_participant_name,
 };
 use vellcast_protocol::{
     Header, MAX_AUTH_MESSAGE_LEN, MAX_CLIENT_MESSAGE_LEN, MAX_MESSAGE_LEN, MessageType, decode,
@@ -25,7 +25,7 @@ use vellcast_protocol::{
 };
 
 use crate::ratelimit::TokenBucket;
-use crate::room::{LiveRoom, Relayed, RoomState};
+use crate::room::{Kick, LiveRoom, PublisherIdentity, Relayed, RoomState};
 use crate::token::{Claims, Role};
 use crate::{Relay, metrics, random_id, unix_now};
 
@@ -61,7 +61,10 @@ impl Gate<'_> {
                     *self.waiting_keyframe = false;
                 }
             }
-            MessageType::StreamPaused | MessageType::StreamEnd => *self.waiting_keyframe = true,
+            // Fim, pausa ou troca de transmissor: o próximo quadro útil é um keyframe.
+            MessageType::StreamPaused | MessageType::StreamEnd | MessageType::ShareChanged => {
+                *self.waiting_keyframe = true;
+            }
             _ => {}
         }
         Some(msg.data)
@@ -254,7 +257,14 @@ async fn run_publisher(
 ) {
     let room = authed.room;
     let claims = authed.claims;
-    let mut lease = match room.attach_publisher(session_id, &authed.nonce) {
+    let identity = PublisherIdentity {
+        nonce: authed.nonce.clone(),
+        // Mesmo nome da lista de participantes (token de `/share` ou `Auth`).
+        name: authed.display_name.clone(),
+        handoff: claims.handoff,
+        exp: claims.exp,
+    };
+    let mut lease = match room.attach_publisher_as(session_id, &identity, unix_now()) {
         Ok(l) => l,
         Err(code) => {
             send_error(&mut sink, code, "não foi possível transmitir nesta sala").await;
@@ -308,7 +318,8 @@ async fn run_publisher(
                             send_error(&mut sink, ErrorCode::ProtocolError, "configuração inválida").await;
                             break false;
                         }
-                        room.publish(Relayed {
+                        // Após uma troca, o que esta sessão ainda enviar é descartado.
+                        room.publish_from(session_id, Relayed {
                             kind: header.kind,
                             keyframe: header.flags & flags::KEYFRAME != 0,
                             received_at: Instant::now(),
@@ -331,13 +342,24 @@ async fn run_publisher(
                 }
             }
             kicked = &mut lease.kicked => {
-                // Ok: outra conexão com o mesmo token assumiu. Err: a vaga foi
-                // removida (sala encerrada).
-                let (code, msg) = if kicked.is_ok() {
-                    (ErrorCode::PublisherExists, "substituído por uma nova conexão")
-                } else {
-                    (ErrorCode::RoomClosed, "sala encerrada")
+                // Ok: outra conexão assumiu (mesmo token ou troca de participante).
+                // Err: a vaga foi removida (sala encerrada).
+                let (code, msg) = match &kicked {
+                    Ok(Kick::SameToken) => (ErrorCode::PublisherExists, "substituído por uma nova conexão"),
+                    Ok(Kick::Replaced { by }) => {
+                        // Aviso explícito antes do erro: clientes novos mostram quem
+                        // assumiu; os antigos tratam só o `publisher_exists` (fatal).
+                        let info = ShareInfo { name: by.clone(), handoff: true };
+                        if let Ok(m) = encode_json(MessageType::PublisherReplaced, 0, &info) {
+                            let _ = sink.send(Message::Binary(m)).await;
+                        }
+                        (ErrorCode::PublisherExists, "outro participante começou a compartilhar a tela")
+                    }
+                    Err(_) => (ErrorCode::RoomClosed, "sala encerrada"),
                 };
+                if matches!(kicked, Ok(Kick::Replaced { .. })) {
+                    metrics::inc(&relay.metrics.publisher_handoffs);
+                }
                 send_error(&mut sink, code, msg).await;
                 break kicked.is_err();
             }

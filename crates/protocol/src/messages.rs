@@ -150,6 +150,18 @@ pub struct AudioInit {
     pub number_of_channels: u8,
 }
 
+/// Quem compartilha a tela (`ShareChanged` e `PublisherReplaced`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShareInfo {
+    /// Nome exibido de quem compartilha; ausente quando o transmissor não informou.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// `true` quando a vaga foi tomada de outro transmissor ativo (troca explícita).
+    #[serde(default)]
+    pub handoff: bool,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum JsonMessageError {
     #[error(transparent)]
@@ -253,6 +265,23 @@ mod tests {
             serde_json::to_string(&p).expect("json"),
             r#"{"count":1,"participants":[{"id":"abc","name":"Ana","role":"publisher"}]}"#
         );
+    }
+
+    #[test]
+    fn share_info_json_shape() {
+        let info = ShareInfo {
+            name: Some("Ana".into()),
+            handoff: true,
+        };
+        let json = serde_json::to_string(&info).expect("json");
+        assert_eq!(json, r#"{"name":"Ana","handoff":true}"#);
+        // Campos ausentes têm padrão: transmissor sem nome, sem troca.
+        let empty: ShareInfo = serde_json::from_str("{}").expect("json");
+        assert_eq!(empty, ShareInfo::default());
+        let msg = encode_json(MessageType::ShareChanged, 0, &info).expect("encode");
+        let (h, p) = decode(&msg, MAX_MESSAGE_LEN).expect("decode");
+        assert_eq!(h.kind, MessageType::ShareChanged);
+        assert_eq!(serde_json::from_slice::<ShareInfo>(&p).expect("json"), info);
     }
 
     #[test]

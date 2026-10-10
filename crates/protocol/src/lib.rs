@@ -50,6 +50,14 @@ pub enum MessageType {
     /// Servidor → cliente: participantes ativos da sala (payload JSON [`messages::Presence`]).
     /// Clientes que não conhecem o tipo o ignoram.
     Presence = 0x40,
+    /// Servidor → espectador: um transmissor assumiu a sala (payload JSON
+    /// [`messages::ShareInfo`]). O fluxo anterior acabou; descarte tudo até a
+    /// nova configuração e o próximo keyframe.
+    ShareChanged = 0x22,
+    /// Servidor → transmissor: outro participante assumiu o compartilhamento
+    /// (payload JSON [`messages::ShareInfo`]). Segue-se `Error` com
+    /// `publisher_exists` e o fechamento da conexão.
+    PublisherReplaced = 0x23,
 }
 
 impl TryFrom<u8> for MessageType {
@@ -70,6 +78,8 @@ impl TryFrom<u8> for MessageType {
             0x31 => Self::AuthOk,
             0x32 => Self::Error,
             0x40 => Self::Presence,
+            0x22 => Self::ShareChanged,
+            0x23 => Self::PublisherReplaced,
             other => return Err(DecodeError::UnknownType(other)),
         })
     }
@@ -271,7 +281,8 @@ mod tests {
     #[test]
     fn all_types_roundtrip() {
         for code in [
-            0x01u8, 0x02, 0x03, 0x04, 0x10, 0x11, 0x12, 0x20, 0x21, 0x30, 0x31, 0x32, 0x40,
+            0x01u8, 0x02, 0x03, 0x04, 0x10, 0x11, 0x12, 0x20, 0x21, 0x30, 0x31, 0x32, 0x40, 0x01u8,
+            0x02, 0x03, 0x04, 0x10, 0x11, 0x12, 0x20, 0x21, 0x30, 0x31, 0x32, 0x22, 0x23,
         ] {
             let kind = MessageType::try_from(code).expect("tipo conhecido");
             assert_eq!(kind as u8, code);

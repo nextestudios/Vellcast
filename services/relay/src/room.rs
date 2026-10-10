@@ -13,12 +13,17 @@ use std::time::{Duration, Instant};
 
 use bytes::Bytes;
 use tokio::sync::{broadcast, mpsc, oneshot, watch};
-use vellcast_protocol::messages::{ErrorCode, Participant, ParticipantRole, Presence, encode_json};
+use vellcast_protocol::messages::{
+    ErrorCode, Participant, ParticipantRole, Presence, ShareInfo, encode_json,
+};
 use vellcast_protocol::{Header, MessageType, encode};
 
 /// Máximo de participantes listados em uma mensagem `Presence` (o total
 /// continua exato em `count`).
 pub const MAX_PRESENCE_LISTED: usize = 100;
+
+/// Nonces de tokens de compartilhamento já usados, guardados por sala até expirarem.
+const MAX_HANDOFF_NONCES: usize = 256;
 
 /// Uma mensagem do transmissor pronta para distribuição.
 #[derive(Debug, Clone)]
@@ -40,6 +45,38 @@ impl Relayed {
             received_at: Instant::now(),
         }
     }
+
+    /// `ShareChanged` com quem compartilha agora.
+    pub fn share_changed(info: &ShareInfo) -> Self {
+        let data = encode_json(MessageType::ShareChanged, 0, info).unwrap_or_default();
+        Self {
+            data,
+            kind: MessageType::ShareChanged,
+            keyframe: false,
+            received_at: Instant::now(),
+        }
+    }
+}
+
+/// Por que um transmissor perdeu a vaga.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Kick {
+    /// Outra conexão com o mesmo token assumiu (reconexão).
+    SameToken,
+    /// Outro participante começou a compartilhar (troca explícita).
+    Replaced { by: Option<String> },
+}
+
+/// Quem pede a vaga de transmissor, segundo o token.
+#[derive(Debug, Clone, Default)]
+pub struct PublisherIdentity {
+    pub nonce: String,
+    /// Nome exibido aos espectadores (opcional).
+    pub name: Option<String>,
+    /// Pode tomar a vaga de outro token ativo, só no primeiro uso.
+    pub handoff: bool,
+    /// Expiração do token (Unix, segundos).
+    pub exp: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
@@ -105,13 +142,19 @@ impl GopCache {
 struct PublisherSlot {
     session_id: String,
     token_nonce: String,
+    name: Option<String>,
     keyframe_tx: mpsc::Sender<()>,
-    kick: Option<oneshot::Sender<()>>,
+    kick: Option<oneshot::Sender<Kick>>,
 }
 
 struct Inner {
     state: RoomState,
     publisher: Option<PublisherSlot>,
+    /// Nonce do último token que transmitiu (troca de transmissor descarta a configuração).
+    last_nonce: Option<String>,
+    /// Tokens de compartilhamento já usados → expiração: uma reconexão nunca
+    /// toma a vaga de quem assumiu depois.
+    handoff_used: HashMap<String, u64>,
     paused_since: Option<Instant>,
     video_init: Option<Bytes>,
     audio_init: Option<Bytes>,
@@ -123,8 +166,9 @@ struct Inner {
 /// O que um transmissor recém-conectado recebe.
 pub struct PublisherLease {
     pub keyframe_rx: mpsc::Receiver<()>,
-    /// Disparado quando outra conexão com o mesmo token assume o lugar.
-    pub kicked: oneshot::Receiver<()>,
+    /// Disparado quando outra conexão assume o lugar (mesmo token ou troca de
+    /// participante). Erro: a vaga foi removida (sala encerrada).
+    pub kicked: oneshot::Receiver<Kick>,
 }
 
 /// O que um espectador recém-conectado recebe.
@@ -221,6 +265,8 @@ impl LiveRoom {
             inner: Mutex::new(Inner {
                 state: RoomState::Idle,
                 publisher: None,
+                last_nonce: None,
+                handoff_used: HashMap::new(),
                 paused_since: None,
                 video_init: None,
                 audio_init: None,
@@ -274,28 +320,72 @@ impl LiveRoom {
         session_id: &str,
         token_nonce: &str,
     ) -> Result<PublisherLease, ErrorCode> {
+        let identity = PublisherIdentity {
+            nonce: token_nonce.to_owned(),
+            ..PublisherIdentity::default()
+        };
+        self.attach_publisher_as(session_id, &identity, 0)
+    }
+
+    /// Registra o transmissor conforme o token. Continua havendo um só por sala:
+    /// - o mesmo token (reconexão) substitui a própria conexão anterior;
+    /// - um token de compartilhamento (`handoff`) no primeiro uso toma a vaga de
+    ///   outro transmissor ativo, que recebe [`Kick::Replaced`] (troca explícita);
+    /// - qualquer outro caso com a vaga ocupada é recusado (`PublisherExists`).
+    ///
+    /// Os espectadores recebem `ShareChanged` sempre que quem transmite muda.
+    pub fn attach_publisher_as(
+        &self,
+        session_id: &str,
+        identity: &PublisherIdentity,
+        now_unix: u64,
+    ) -> Result<PublisherLease, ErrorCode> {
         let mut inner = self.inner();
-        match inner.state {
-            RoomState::Closed => return Err(ErrorCode::RoomClosed),
-            _ if inner
-                .publisher
-                .as_ref()
-                .is_some_and(|p| p.token_nonce != token_nonce) =>
-            {
-                return Err(ErrorCode::PublisherExists);
-            }
-            _ => {}
+        if inner.state == RoomState::Closed {
+            return Err(ErrorCode::RoomClosed);
+        }
+        let first_use = identity.handoff && !inner.handoff_used.contains_key(&identity.nonce);
+        let replaces_other = inner
+            .publisher
+            .as_ref()
+            .is_some_and(|p| p.token_nonce != identity.nonce);
+        if replaces_other && !first_use {
+            return Err(ErrorCode::PublisherExists);
+        }
+        if identity.handoff {
+            remember_handoff(
+                &mut inner.handoff_used,
+                &identity.nonce,
+                identity.exp,
+                now_unix,
+            );
         }
         if let Some(mut old) = inner.publisher.take()
             && let Some(kick) = old.kick.take()
         {
-            let _ = kick.send(());
+            let reason = if replaces_other {
+                Kick::Replaced {
+                    by: identity.name.clone(),
+                }
+            } else {
+                Kick::SameToken
+            };
+            let _ = kick.send(reason);
+        }
+        let new_sharer = inner.last_nonce.as_deref() != Some(identity.nonce.as_str());
+        if new_sharer {
+            // Outro transmissor: a configuração do anterior não vale para o novo
+            // fluxo (codec, resolução e linha do tempo podem mudar).
+            inner.video_init = None;
+            inner.audio_init = None;
+            inner.last_nonce = Some(identity.nonce.clone());
         }
         let (keyframe_tx, keyframe_rx) = mpsc::channel(1);
         let (kick, kicked) = oneshot::channel();
         inner.publisher = Some(PublisherSlot {
             session_id: session_id.to_owned(),
-            token_nonce: token_nonce.to_owned(),
+            token_nonce: identity.nonce.clone(),
+            name: identity.name.clone(),
             keyframe_tx,
             kick: Some(kick),
         });
@@ -303,10 +393,23 @@ impl LiveRoom {
         inner.paused_since = None;
         inner.gop.clear();
         inner.last_activity = Instant::now();
+        inner.last_keyframe_request = None;
+        if new_sharer {
+            let info = ShareInfo {
+                name: identity.name.clone(),
+                handoff: replaces_other,
+            };
+            let _ = self.tx.send(Relayed::share_changed(&info));
+        }
         Ok(PublisherLease {
             keyframe_rx,
             kicked,
         })
+    }
+
+    /// Nome de quem compartilha agora (`None` sem transmissor ou sem nome).
+    pub fn sharer_name(&self) -> Option<String> {
+        self.inner().publisher.as_ref().and_then(|p| p.name.clone())
     }
 
     /// Libera o transmissor. `graceful` = enviou `StreamEnd`; caso contrário,
@@ -330,6 +433,7 @@ impl LiveRoom {
             inner.state = RoomState::Idle;
             inner.video_init = None;
             inner.audio_init = None;
+            inner.last_nonce = None;
             MessageType::StreamEnd
         } else {
             inner.state = RoomState::Paused;
@@ -342,6 +446,26 @@ impl LiveRoom {
     /// Distribui uma mensagem do transmissor e atualiza o cache.
     pub fn publish(&self, msg: Relayed) {
         let mut inner = self.inner();
+        self.publish_locked(&mut inner, msg);
+    }
+
+    /// Como [`Self::publish`], mas só se `session_id` ainda for o transmissor
+    /// da sala: quadros que uma sessão substituída ainda tinha em mãos não
+    /// chegam aos espectadores do novo fluxo. Devolve `false` se descartou.
+    pub fn publish_from(&self, session_id: &str, msg: Relayed) -> bool {
+        let mut inner = self.inner();
+        if !inner
+            .publisher
+            .as_ref()
+            .is_some_and(|p| p.session_id == session_id)
+        {
+            return false;
+        }
+        self.publish_locked(&mut inner, msg);
+        true
+    }
+
+    fn publish_locked(&self, inner: &mut Inner, msg: Relayed) {
         match msg.kind {
             MessageType::VideoInit => {
                 inner.video_init = Some(msg.data.clone());
@@ -361,6 +485,14 @@ impl LiveRoom {
         let rx = self.tx.subscribe();
         let mut snapshot = Vec::new();
         let live = inner.state == RoomState::Live;
+        if let Some(p) = inner.publisher.as_ref().filter(|_| live) {
+            // Quem compartilha, antes da configuração (a interface já mostra o nome).
+            let info = ShareInfo {
+                name: p.name.clone(),
+                handoff: false,
+            };
+            snapshot.push(Relayed::share_changed(&info).data);
+        }
         if live {
             snapshot.extend(inner.video_init.iter().cloned());
             snapshot.extend(inner.audio_init.iter().cloned());
@@ -409,6 +541,7 @@ impl LiveRoom {
             inner.paused_since = None;
             inner.video_init = None;
             inner.audio_init = None;
+            inner.last_nonce = None;
             let _ = self.tx.send(Relayed::control(MessageType::StreamEnd, 0));
         }
         inner.state == RoomState::Idle
@@ -517,6 +650,21 @@ fn presence_message(book: &PresenceBook) -> Bytes {
     encode_json(MessageType::Presence, 0, &book.snapshot()).unwrap_or_default()
 }
 
+/// Registra o uso de um token de compartilhamento, limpando os expirados e
+/// respeitando o limite (sai o que expira primeiro).
+fn remember_handoff(used: &mut HashMap<String, u64>, nonce: &str, exp: u64, now_unix: u64) {
+    if used.contains_key(nonce) {
+        return;
+    }
+    used.retain(|_, e| *e > now_unix);
+    if used.len() >= MAX_HANDOFF_NONCES
+        && let Some(oldest) = used.iter().min_by_key(|(_, e)| **e).map(|(n, _)| n.clone())
+    {
+        used.remove(&oldest);
+    }
+    used.insert(nonce.to_owned(), exp);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -604,9 +752,121 @@ mod tests {
         r.publish(frame(MessageType::AudioFrame, false, 5)); // áudio não entra no GOP
         r.publish(frame(MessageType::VideoFrame, false, 6));
         let join = r.join_viewer();
-        let lens: Vec<usize> = join.snapshot.iter().map(Bytes::len).collect();
+        let kinds: Vec<MessageType> = join
+            .snapshot
+            .iter()
+            .map(|b| {
+                Header::read(b)
+                    .map(|h| h.kind)
+                    .unwrap_or(MessageType::Error)
+            })
+            .collect();
+        assert_eq!(
+            kinds[0],
+            MessageType::ShareChanged,
+            "quem compartilha vem primeiro"
+        );
+        let lens: Vec<usize> = join.snapshot[1..].iter().map(Bytes::len).collect();
         assert_eq!(lens, vec![1, 2, 4, 6]);
         assert!(join.has_keyframe);
+    }
+
+    fn sharer(nonce: &str, name: &str) -> PublisherIdentity {
+        PublisherIdentity {
+            nonce: nonce.into(),
+            name: Some(name.into()),
+            handoff: true,
+            exp: 1_000,
+        }
+    }
+
+    fn next_kind(rx: &mut broadcast::Receiver<Relayed>) -> Option<MessageType> {
+        rx.try_recv().ok().map(|m| m.kind)
+    }
+
+    #[test]
+    fn share_token_hands_off_once_and_never_on_reconnect() {
+        let r = room();
+        let mut viewer = r.join_viewer().rx;
+        let mut ana = r
+            .attach_publisher_as("s1", &sharer("ana", "Ana"), 10)
+            .expect("ana");
+        assert_eq!(next_kind(&mut viewer), Some(MessageType::ShareChanged));
+        r.publish(frame(MessageType::VideoInit, false, 10));
+        r.publish(frame(MessageType::VideoFrame, true, 10));
+        assert_eq!(r.sharer_name().as_deref(), Some("Ana"));
+
+        // Bia assume: Ana é avisada, config e GOP de Ana somem, espectadores são avisados.
+        let _bia = r
+            .attach_publisher_as("s2", &sharer("bia", "Bia"), 10)
+            .expect("troca");
+        assert_eq!(
+            ana.kicked.try_recv().ok(),
+            Some(Kick::Replaced {
+                by: Some("Bia".into())
+            })
+        );
+        assert_eq!(r.sharer_name().as_deref(), Some("Bia"));
+        assert_eq!(r.gop_bytes(), 0);
+        let snapshot = r.join_viewer().snapshot;
+        assert_eq!(snapshot.len(), 1, "sem configuração velha: só ShareChanged");
+        while let Some(kind) = next_kind(&mut viewer) {
+            if kind == MessageType::ShareChanged {
+                break;
+            }
+        }
+        // Quadros que a sessão antiga ainda tinha em mãos são descartados.
+        assert!(!r.publish_from("s1", frame(MessageType::VideoFrame, true, 5)));
+        assert!(r.publish_from("s2", frame(MessageType::VideoInit, false, 5)));
+        // A saída tardia da sessão de Ana não derruba a de Bia.
+        r.detach_publisher("s1", false);
+        assert_eq!(r.state(), RoomState::Live);
+
+        // Reconexão do token de Ana (já usado) não toma a vaga de volta.
+        assert_eq!(
+            r.attach_publisher_as("s3", &sharer("ana", "Ana"), 10).err(),
+            Some(ErrorCode::PublisherExists)
+        );
+        // Token comum (sem troca) também não toma a vaga.
+        assert_eq!(
+            r.attach_publisher("s4", "outro").err(),
+            Some(ErrorCode::PublisherExists)
+        );
+    }
+
+    #[test]
+    fn stopping_or_dropping_releases_the_slot() {
+        let r = room();
+        let _a = r
+            .attach_publisher_as("s1", &sharer("a", "A"), 10)
+            .expect("a");
+        r.detach_publisher("s1", true);
+        assert_eq!(r.state(), RoomState::Idle);
+        assert_eq!(r.sharer_name(), None);
+        // Vaga livre: até um token sem troca pode transmitir.
+        let _b = r.attach_publisher("s2", "b").expect("b");
+        r.detach_publisher("s2", false);
+        assert_eq!(r.state(), RoomState::Paused);
+        // Queda também libera a vaga para outro participante, sem esperar a tolerância.
+        let mut viewer = r.join_viewer().rx;
+        let _c = r
+            .attach_publisher_as("s3", &sharer("c", "C"), 10)
+            .expect("c");
+        assert_eq!(next_kind(&mut viewer), Some(MessageType::ShareChanged));
+        assert_eq!(r.state(), RoomState::Live);
+    }
+
+    #[test]
+    fn handoff_registry_is_bounded_and_prunes_expired() {
+        let mut used = HashMap::new();
+        remember_handoff(&mut used, "velho", 5, 0);
+        remember_handoff(&mut used, "novo", 50, 10);
+        assert!(!used.contains_key("velho"), "expirado sai");
+        for i in 0..(MAX_HANDOFF_NONCES + 10) {
+            remember_handoff(&mut used, &format!("n{i}"), 100 + i as u64, 10);
+        }
+        assert_eq!(used.len(), MAX_HANDOFF_NONCES);
+        assert!(!used.contains_key("novo"), "o que expira primeiro sai");
     }
 
     #[test]

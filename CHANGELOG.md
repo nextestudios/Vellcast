@@ -6,9 +6,15 @@ Notas em português do Brasil; a versão em inglês (Estados Unidos) fica em `CH
 ### Novidades
 - **Nome do convidado e lista de participantes no player web (`/watch`):** quem abre um link de convite informa um nome antes de entrar; o convite só é usado quando o nome é enviado (fechar a página antes não gasta o convite). Depois de entrar, o player mostra quem está na sala e quantos são, atualizando a cada entrada, saída, queda ou reconexão, sem nomes duplicados. O transmissor aparece com o nome de exibição das configurações do app. Nomes são sempre exibidos como texto; convites e tokens nunca aparecem na lista.
 - **Relay:** `POST /api/rooms/{id}/join` aceita `name` (1 a 32 caracteres, validado antes de consumir o convite), o nome vai assinado no token de espectador e a nova mensagem `Presence` (`0x40`) envia a lista de participantes aos espectadores ([protocolo](docs/STREAMING_PROTOCOL.md#33-participantes-presence)). Players antigos ignoram a mensagem.
+- **Salas pelo Início:** a tela Início ganhou "Criar sala" e "Entrar com link". Cole o link de convite (ou toque em **Colar link**) para entrar na sala de outra pessoa; a sala aparece em Salas marcada como **Participante**.
+- **Qualquer participante pode compartilhar a tela:** na sala, toque em **Compartilhar minha tela**, escolha o que compartilhar e inicie. Uma pessoa compartilha por vez: quem começa assume a vez, quem compartilhava é avisado e os espectadores passam para o novo fluxo sem imagem travada. Parar, sair da sala ou cair libera a vez na hora.
+- A sala mostra quem está compartilhando (no app e no player web) e tem **Assistir no navegador**, **Parar de compartilhar** e **Sair da sala**.
 
 ### Correções
 - **Player web cabe na janela:** a página `/watch` ocupa exatamente a área visível do navegador, sem barras de rolagem. A imagem é ajustada com faixas pretas quando a proporção da transmissão difere da janela (sem esticar nem cortar), acompanha redimensionamento e tela cheia, e os controles, a barra de status e as estatísticas continuam visíveis, inclusive em telas estreitas.
+
+### Segurança
+- Só quem entrou com um convite válido (ou o dono) pode pedir para compartilhar; revogar um participante encerra o compartilhamento dele. Convites, tokens e nomes não aparecem nos logs do servidor.
 
 ## [0.2.0-alpha.1]
 ### Novidades

@@ -14,7 +14,8 @@ component PageTitle inherits VerticalLayout {
 }
 
 export struct SourceItem { title: string, detail: string, game: bool }
-export struct RoomItem { name: string, detail: string, live: bool }
+// `joined`: sala de outra pessoa, em que este PC entrou por convite (participante).
+export struct RoomItem { name: string, detail: string, live: bool, joined: bool }
 
 export component HomePage inherits VerticalLayout {
     in property <string> display-name;
@@ -22,6 +23,17 @@ export component HomePage inherits VerticalLayout {
     in property <bool> live;
     in property <int> room-count;
     callback navigate(int);
+    // Entrada em salas (issue #4): criar ou entrar com um link de convite.
+    in-out property <string> join-link;
+    in property <bool> joining;
+    in property <bool> rooms-busy;
+    in property <string> message;
+    in property <bool> message-error;
+    in property <int> refocus-token;
+    callback create-room;
+    callback join-room(string);
+    callback paste-invite;
+    callback request-virtual-keyboard(string);
     spacing: Theme.sp-4;
 
     PageTitle {
@@ -37,6 +49,51 @@ export component HomePage inherits VerticalLayout {
             LiveBadge { text: @tr("LIVE"); }
             VButton { text: @tr("Open Live"); primary: true; clicked => { root.navigate(3); } }
         }
+    }
+
+    Card {
+        title: @tr("Play together");
+        Text {
+            text: @tr("Create a private room or join someone else's room with the invite link they sent you. Anyone in the room can share their screen, one at a time.");
+            color: Theme.text-secondary;
+            font-size: Theme.fs-body;
+            wrap: word-wrap;
+        }
+        HorizontalLayout {
+            alignment: start;
+            spacing: Theme.sp-2;
+            VButton {
+                text: root.rooms-busy ? @tr("Please wait…") : @tr("Create room");
+                primary: true;
+                enabled: !root.rooms-busy;
+                clicked => { root.create-room(); }
+            }
+            if root.room-count > 0: VButton { text: @tr("My rooms"); clicked => { root.navigate(2); } }
+        }
+        VTextField {
+            label: @tr("Join with a link");
+            placeholder: @tr("Paste the invite link (…/watch#room=…&invite=…)");
+            text: root.join-link;
+            refocus-token: root.refocus-token;
+            request-virtual-keyboard(t) => { root.request-virtual-keyboard(t); }
+            edited(t) => { root.join-link = t; }
+        }
+        HorizontalLayout {
+            alignment: start;
+            spacing: Theme.sp-2;
+            VButton {
+                text: root.joining ? @tr("Joining…") : @tr("Join room");
+                primary: root.join-link != "";
+                enabled: !root.joining && root.join-link != "";
+                clicked => { root.join-room(root.join-link); }
+            }
+            VButton {
+                text: @tr("Paste link");
+                enabled: !root.joining;
+                clicked => { root.paste-invite(); }
+            }
+        }
+        StatusLine { text: root.message; error: root.message-error; }
     }
 
     Card {
@@ -240,7 +297,28 @@ export component RoomsPage inherits VerticalLayout {
     callback copy-invite;
     callback close-room(int);
     callback request-virtual-keyboard(string);
+    // Sala selecionada: quem compartilha e compartilhamento por participantes (issue #4).
+    in property <string> share-status;
+    in property <bool> share-active;
+    in property <bool> share-mine;
+    in property <bool> starting;
+    callback refresh-status(int);
+    callback share-screen(int);
+    callback stop-share;
+    callback watch-room(int);
+    callback leave-room(int);
+    property <bool> has-room: root.room-index >= 0 && root.room-index < root.rooms.length;
+    property <bool> joined-room: root.has-room && root.rooms[root.room-index].joined;
     spacing: Theme.sp-4;
+
+    init => { root.refresh-status(root.room-index); }
+    changed room-index => { root.refresh-status(root.room-index); }
+    // Quem compartilha muda a qualquer momento: consulta leve só com esta tela aberta.
+    Timer {
+        interval: 5s;
+        running: root.has-room;
+        triggered => { root.refresh-status(root.room-index); }
+    }
 
     PageTitle {
         title: @tr("Rooms");
@@ -290,7 +368,8 @@ export component RoomsPage inherits VerticalLayout {
             selected: root.room-index == i;
             activated => { root.room-index = i; }
         }
-        if root.room-index >= 0: HorizontalLayout {
+        // Ações de dono; em salas de outra pessoa ficam ocultas.
+        if root.has-room && !root.joined-room: HorizontalLayout {
             alignment: start;
             spacing: Theme.sp-2;
             VButton {
@@ -309,6 +388,66 @@ export component RoomsPage inherits VerticalLayout {
                 enabled: !root.busy;
                 clicked => { root.close-room(root.room-index); }
             }
+        }
+    }
+
+    if root.has-room: Card {
+        title: root.joined-room ? @tr("Room · participant") : @tr("Room · you created it");
+        Text {
+            text: root.rooms[root.room-index].name;
+            color: Theme.text-primary;
+            font-size: Theme.fs-body-strong;
+            overflow: elide;
+        }
+        HorizontalLayout {
+            alignment: start;
+            spacing: Theme.sp-3;
+            if root.share-active: VerticalLayout {
+                alignment: center;
+                LiveBadge { text: @tr("LIVE"); }
+            }
+            Text {
+                text: root.share-status == "" ? @tr("Checking who is sharing…") : root.share-status;
+                color: root.share-active ? Theme.text-primary : Theme.text-secondary;
+                font-size: Theme.fs-body;
+                vertical-alignment: center;
+                wrap: word-wrap;
+                horizontal-stretch: 1;
+            }
+        }
+        HorizontalLayout {
+            alignment: start;
+            spacing: Theme.sp-2;
+            if !root.share-mine: VButton {
+                text: root.starting ? @tr("Starting…") : @tr("Share my screen");
+                primary: true;
+                enabled: !root.starting;
+                clicked => { root.share-screen(root.room-index); }
+            }
+            if root.share-mine: VButton {
+                text: @tr("Stop sharing");
+                primary: true;
+                clicked => { root.stop-share(); }
+            }
+            if root.share-active && !root.share-mine: VButton {
+                text: @tr("Watch in browser");
+                enabled: !root.busy;
+                clicked => { root.watch-room(root.room-index); }
+            }
+            VButton {
+                text: @tr("Refresh");
+                clicked => { root.refresh-status(root.room-index); }
+            }
+            if root.joined-room: VButton {
+                text: @tr("Leave room");
+                clicked => { root.leave-room(root.room-index); }
+            }
+        }
+        Text {
+            text: @tr("One person shares at a time. When you start sharing, it becomes your turn and the person sharing now is notified. You always choose what to share before anything is captured.");
+            color: Theme.text-secondary;
+            font-size: Theme.fs-caption;
+            wrap: word-wrap;
         }
     }
 

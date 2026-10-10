@@ -18,6 +18,10 @@ export const MessageType = {
   Error: 0x32,
   /** Participantes ativos da sala (payload JSON `Presence`). */
   Presence: 0x40,
+  /** Servidor → espectador: quem compartilha agora (JSON `ShareInfo`); o fluxo anterior acabou. */
+  ShareChanged: 0x22,
+  /** Servidor → transmissor: outro participante assumiu o compartilhamento. */
+  PublisherReplaced: 0x23,
 } as const;
 
 /** Um participante ativo (`Participant` em crates/protocol/src/messages.rs). */
@@ -33,6 +37,14 @@ export interface Participant {
 export interface Presence {
   count: number;
   participants: Participant[];
+}
+
+/** Payload de `ShareChanged` (crates/protocol/src/messages.rs). */
+export interface ShareInfo {
+  /** Nome exibido de quem compartilha (opcional). */
+  name?: string;
+  /** `true` quando outro participante assumiu a vaga de quem compartilhava. */
+  handoff?: boolean;
 }
 
 /** Códigos de erro do payload JSON de `Error` (crates/protocol/src/messages.rs). */

@@ -20,6 +20,8 @@ pub struct Metrics {
     pub rooms_created: AtomicU64,
     pub rooms_closed: AtomicU64,
     pub slow_viewers_disconnected: AtomicU64,
+    /// Trocas de quem compartilha (um participante assumiu a vaga de outro).
+    pub publisher_handoffs: AtomicU64,
 }
 
 pub fn inc(c: &AtomicU64) {
@@ -51,6 +53,7 @@ pub struct Snapshot {
     pub rooms_created: u64,
     pub rooms_closed: u64,
     pub slow_viewers_disconnected: u64,
+    pub publisher_handoffs: u64,
 }
 
 impl Metrics {
@@ -81,6 +84,7 @@ impl Metrics {
             rooms_created: l(&self.rooms_created),
             rooms_closed: l(&self.rooms_closed),
             slow_viewers_disconnected: l(&self.slow_viewers_disconnected),
+            publisher_handoffs: l(&self.publisher_handoffs),
         }
     }
 }

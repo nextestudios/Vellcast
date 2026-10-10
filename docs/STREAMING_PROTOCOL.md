@@ -43,6 +43,8 @@ Por que little-endian: é a ordem nativa de x86/ARM e de `DataView(..., true)`, 
 | `0x31` | `AuthOk` | R → C | JSON `{ roomId, role, sessionId, live }`. |
 | `0x32` | `Error` | R → C | JSON `{ code, message }`, seguido de close `4000`. Códigos na seção 3.2. |
 | `0x40` | `Presence` | R → E | JSON `{ count, participants: [{ id, name, role }] }`: lista **completa** dos participantes ativos da sala. Seção 3.3. |
+| `0x22` | `ShareChanged` | R → E | JSON `{ name?, handoff }`. Quem compartilha agora (`name` opcional). Enviado quando um transmissor diferente do anterior assume a sala e no início do snapshot de quem entra com a sala ao vivo. O fluxo anterior acabou: descarte tudo até o novo `VideoInit` e o próximo keyframe. `handoff: true` = a vaga foi tomada de outro transmissor ativo. |
+| `0x23` | `PublisherReplaced` | R → T | JSON `{ name?, handoff: true }`. Outro participante assumiu o compartilhamento (`name` = quem assumiu). Seguido de `Error` `publisher_exists` (fatal) e close; clientes antigos tratam só o erro. |
 
 No relay, `VideoInit`, `VideoFrame`, `AudioInit`, `AudioFrame` e `StreamEnd` são enviados pelo **transmissor** e repassados aos espectadores **byte a byte** (o relay não reescreve cabeçalhos; `sent_at_us` é o relógio do transmissor). `KeyframeRequest` vai do espectador ao relay, que o repassa ao transmissor com limite de 1 a cada 500 ms por sala. `Ping`/`Pong` valem nos dois papéis.
 
@@ -54,7 +56,7 @@ No relay, `VideoInit`, `VideoFrame`, `AudioInit`, `AudioFrame` e `StreamEnd` sã
    - `viewer` exige token de papel `viewer` ou `owner`.
 3. Sucesso → `AuthOk`. Falha → `Error` + close. Qualquer outra mensagem antes de `Auth`, ou `Auth` depois de 5 s, encerra a conexão.
 
-Formato do token: `v1.<payload base64url>.<HMAC-SHA256 base64url>`, payload JSON `{ room, role, exp, nonce, iat, name? }`. A assinatura é verificada em tempo constante **antes** de interpretar o payload. Tokens são emitidos pela API HTTP do relay (`docs/DEPLOYMENT.md` §6).
+Formato do token: `v1.<payload base64url>.<HMAC-SHA256 base64url>`, payload JSON `{ room, role, exp, nonce, iat, name?, member?, parent?, handoff? }` (os três últimos: compartilhamento por participantes, seção 7.5). A assinatura é verificada em tempo constante **antes** de interpretar o payload. Tokens são emitidos pela API HTTP do relay (`docs/DEPLOYMENT.md` §6).
 
 ### 3.2 Códigos de erro
 
@@ -158,11 +160,18 @@ O relay guarda `VideoInit`, `AudioInit` e o **GOP atual** (do último keyframe e
 - Reconexão com backoff 0,5 s → 8 s e jitter de ±20%. Após reconectar, reenvia `VideoInit`/`AudioInit` com a flag `DISCONTINUITY` e pede um keyframe ao encoder.
 - Uma nova conexão com o **mesmo token** substitui a anterior (útil quando a conexão antiga ainda não caiu do lado do relay); um token diferente recebe `publisher_exists`.
 
+### 7.5 Compartilhamento por participantes e troca de transmissor (ADR-061)
+
+- `POST /api/rooms/{id}/share` (corpo opcional `{ "name": "Ana" }`, mesmas regras do nome do convidado; sem `name`, vale o nome assinado no token do participante) aceita o token do **dono** ou o de um **participante** — token de espectador obtido em `POST /join` com um convite válido (claim `member`). Tokens de espectador de outras origens (Discord) recebem `403`. Devolve `{ publisherToken }`: token de transmissor com `handoff`, `name` e, para participantes, `parent` (nonce do token de espectador de origem). Ele nunca dura mais que o token de origem e é revogado junto com ele (revogação individual ou em massa de espectadores).
+- Continua havendo **um único transmissor por sala**. No **primeiro uso**, um token com `handoff` assume a vaga de quem estiver transmitindo: o anterior recebe `PublisherReplaced` + `Error` `publisher_exists`; o relay descarta a configuração e o GOP do anterior, ignora quadros que a sessão antiga ainda envie e manda `ShareChanged` aos espectadores, que esperam o novo `VideoInit` e keyframe. Reconexões do mesmo token (nonce já usado) **nunca** tomam a vaga de outro; tokens sem `handoff` (o `publisherToken` da criação e o de `POST /publisher-token`) recebem `publisher_exists` como antes.
+- Parar (`StreamEnd`), sair ou cair libera a vaga na hora: outro participante pode compartilhar sem esperar a tolerância de reconexão. Na lista `Presence`, quem foi substituído sai como `publisher` assim que a conexão dele fecha e quem assumiu entra no lugar.
+- `GET /api/rooms/{id}` inclui `sharerName` quando quem compartilha informou um nome. Nomes, convites e tokens não são registrados em log.
+
 ## 8. Versionamento
 
 - O campo `version` muda quando o layout do cabeçalho ou a semântica de um tipo existente muda.
 - Campos e flags reservados permitem extensões compatíveis dentro da v1.
-- A ETAPA 3 estendeu a v1 de forma aditiva (tipos `0x21`, `0x30`–`0x32`); a lista de participantes acrescentou `0x40` (`Presence`), enviado só a espectadores. Clientes antigos da Activity ignoram tipos que não conhecem no player, mas `Header::read` em Rust rejeita tipos desconhecidos: transmissor e relay precisam ser atualizados juntos.
+- A ETAPA 3 estendeu a v1 de forma aditiva (tipos `0x21`, `0x30`–`0x32`); a lista de participantes acrescentou `0x40` (`Presence`), enviado só a espectadores, e o compartilhamento por participantes acrescentou `0x22` (`ShareChanged`) e `0x23` (`PublisherReplaced`) — o transporte em Rust descarta durante a sessão as mensagens que não decodifica. Clientes antigos da Activity ignoram tipos que não conhecem no player, mas `Header::read` em Rust rejeita tipos desconhecidos: transmissor e relay precisam ser atualizados juntos.
 - A negociação explícita de versão (versões suportadas no `Auth`) fica para quando houver clientes distribuídos de forma independente (ETAPA 5/8).
 
 ## 9. Pendências conhecidas

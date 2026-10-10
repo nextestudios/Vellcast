@@ -29,8 +29,11 @@ type Phase =
 /** Abaixo desta largura a lista de participantes começa fechada (sobreposta ao vídeo). */
 const NARROW_PX = 900;
 
-function initialPhase(id: string | null, invite: string | null): Phase {
+function initialPhase(id: string | null, invite: string | null, token: string | null = null): Phase {
   if (!id) return { kind: 'failed', message: 'Link incompleto. Abra o link de convite exatamente como foi enviado.' };
+  // Aberto pelo app desktop com o token do participante: o nome já está no
+  // token (o do app) e nenhum convite é gasto, então não há formulário de nome.
+  if (token) return { kind: 'ready', token };
   if (invite) return { kind: 'name', invite, error: null, busy: false };
   const saved = loadViewerToken(id);
   if (saved) return { kind: 'ready', token: saved };
@@ -49,18 +52,20 @@ export function WatchApp() {
   const [params] = useState(() => parseInvite(location.hash));
   const roomId = params?.room ?? null;
   const [room, setRoom] = useState<RoomView | null>(null);
-  const [phase, setPhase] = useState<Phase>(() => initialPhase(roomId, params?.invite ?? null));
+  const [phase, setPhase] = useState<Phase>(() => initialPhase(roomId, params?.invite ?? null, params?.token ?? null));
   const [status, setStatus] = useState<ConnectionStatus | null>(null);
   const [fatal, setFatal] = useState(false);
   const [name, setName] = useState(loadGuestName);
   const [presence, setPresence] = useState<Presence | null>(null);
   const [showPeople, setShowPeople] = useState(() => window.innerWidth >= NARROW_PX);
+  const [sharer, setSharer] = useState<string | null>(null);
 
   // O código de convite sai da barra de endereços e do histórico na hora;
   // fica só nesta aba até o convidado enviar o nome.
   useEffect(() => {
     if (!params) return;
-    if (params.invite) savePendingInvite(params.room, params.invite);
+    if (params.token) saveViewerToken(params.room, params.token);
+    else if (params.invite) savePendingInvite(params.room, params.invite);
     scrubInviteFromUrl(params.room);
   }, [params]);
 
@@ -140,6 +145,7 @@ export function WatchApp() {
           Vellcast
         </span>
         <span className="tag">{room?.name ?? (roomId ? 'Sala privada' : '')}</span>
+        {live && sharer && <span className="tag">{sharer} está compartilhando</span>}
         <span className="spacer" />
         {ready && (
           <button
@@ -194,6 +200,7 @@ export function WatchApp() {
               notice={notice}
               onStatus={setStatus}
               onPresence={setPresence}
+              onSharer={setSharer}
               onFatal={(code) => {
                 setFatal(true);
                 setPresence(null);

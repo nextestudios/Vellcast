@@ -40,17 +40,17 @@ pub fn now_unix() -> u64 {
         .map_or(0, |d| d.as_secs())
 }
 
-fn en() -> bool {
+pub(crate) fn en() -> bool {
     with_state(|st| st.settings.language == Language::En).unwrap_or(false)
 }
 
 /// Texto da interface gerado em Rust, no idioma atual.
-fn t(pt: &str, en_text: &str) -> SharedString {
+pub(crate) fn t(pt: &str, en_text: &str) -> SharedString {
     if en() { en_text.into() } else { pt.into() }
 }
 
 /// Executa `work` em uma thread de fundo e entrega o resultado na thread da interface.
-fn background<T: Send + 'static>(
+pub(crate) fn background<T: Send + 'static>(
     ui: &AppWindow,
     work: impl FnOnce() -> T + Send + 'static,
     done: impl FnOnce(&AppWindow, T) + Send + 'static,
@@ -535,7 +535,8 @@ fn start_stream(ui: &AppWindow) {
         st.live = Some(LiveSession {
             room_id: room.id.clone(),
             relay: room.relay.clone(),
-            owner_token: room.owner_token.clone(),
+            // Participante: o token de participante também consulta a sala.
+            owner_token: room.access_token().to_owned(),
             started: None,
             ticks: 0,
         });
@@ -548,14 +549,15 @@ fn start_stream(ui: &AppWindow) {
 
     let quality = prefs.quality();
     let adaptation = prefs.adaptation();
-    let (relay, room_id, owner) = (
-        room.relay.clone(),
-        room.id.clone(),
-        room.owner_token.clone(),
+    let (token_room, sharer) = (
+        room.clone(),
+        with_state(|st| st.settings.display_name.clone()).unwrap_or_default(),
     );
     background(
         ui,
-        move || relay_api::publisher_token(&relay, &room_id, &owner),
+        // Pedido explícito de compartilhamento: assume a vaga de quem estiver
+        // compartilhando na sala (troca explícita, issue #4).
+        move || crate::lobby::publisher_token_for(&token_room, &sharer),
         move |ui, result| match result {
             Ok(publisher_token) => {
                 // O usuário pode ter cancelado enquanto o token era emitido.
@@ -584,7 +586,7 @@ fn start_stream(ui: &AppWindow) {
             Err(e) => {
                 with_state(|st| st.live = None);
                 ui.set_starting(false);
-                if e == ApiError::RoomGone {
+                if matches!(e, ApiError::RoomGone | ApiError::ParticipantRevoked) {
                     forget_room(ui, &room.id);
                 }
                 set_stream_message(ui, &e.user_message(en()), true);
@@ -696,7 +698,7 @@ fn tick(ui: &AppWindow) {
 // ---------------------------------------------------------------------------
 // Salas e convites
 
-fn set_rooms_message(ui: &AppWindow, text: &str, error: bool) {
+pub(crate) fn set_rooms_message(ui: &AppWindow, text: &str, error: bool) {
     ui.set_rooms_message(text.into());
     ui.set_rooms_message_error(error);
 }
@@ -719,15 +721,19 @@ pub fn refresh_rooms_ui(ui: &AppWindow) {
         .iter()
         .map(|r| {
             let hours = r.expires_at.saturating_sub(now) / 3600;
-            let detail = if en() {
+            let mut detail = if en() {
                 format!("{} · expires in {hours} h", r.relay)
             } else {
                 format!("{} · expira em {hours} h", r.relay)
             };
+            if r.joined {
+                detail = format!("{} · {detail}", t("Participante", "Participant"));
+            }
             RoomItem {
                 name: r.name.clone().into(),
                 detail: detail.into(),
                 live: live_room.as_deref() == Some(r.id.as_str()),
+                joined: r.joined,
             }
         })
         .collect();
@@ -744,7 +750,7 @@ pub fn refresh_rooms_ui(ui: &AppWindow) {
     }
 }
 
-fn save_rooms() {
+pub(crate) fn save_rooms() {
     with_state(|st| {
         if let Some(path) = &st.rooms_path
             && let Err(e) = rooms::save(path, &st.rooms)
@@ -754,14 +760,14 @@ fn save_rooms() {
     });
 }
 
-fn forget_room(ui: &AppWindow, id: &str) {
+pub(crate) fn forget_room(ui: &AppWindow, id: &str) {
     with_state(|st| st.rooms.remove(id));
     save_rooms();
     ui.set_invite_link(SharedString::new());
     refresh_rooms_ui(ui);
 }
 
-fn create_room(ui: &AppWindow, name: &str) {
+pub(crate) fn create_room(ui: &AppWindow, name: &str) {
     let mut name: String = name
         .chars()
         .filter(|c| !c.is_control())
@@ -808,6 +814,7 @@ fn create_room(ui: &AppWindow, name: &str) {
                         owner_token: created.owner_token,
                         created_at: now_unix(),
                         expires_at: created.room.expires_at,
+                        ..SavedRoom::default()
                     };
                     with_state(|st| st.rooms.add(room));
                     save_rooms();
@@ -834,6 +841,9 @@ fn make_invite(ui: &AppWindow, room_id: String) {
     let Some(room) = with_state(|st| st.rooms.get(&room_id).cloned()).flatten() else {
         return;
     };
+    if crate::lobby::refuse_owner_action(ui, &room) {
+        return;
+    }
     let public = with_state(|st| st.settings.public_url.clone()).unwrap_or_default();
     // Links usam o endereço público (túnel/proxy HTTPS) quando configurado.
     let link_base = if public.trim().is_empty() {
@@ -900,6 +910,9 @@ fn make_pairing(ui: &AppWindow, room_id: String) {
     let Some(room) = with_state(|st| st.rooms.get(&room_id).cloned()).flatten() else {
         return;
     };
+    if crate::lobby::refuse_owner_action(ui, &room) {
+        return;
+    }
     ui.set_rooms_busy(true);
     let (relay, owner, id) = (
         room.relay.clone(),
@@ -968,6 +981,9 @@ fn close_room(ui: &AppWindow, index: i32) {
     else {
         return;
     };
+    if crate::lobby::refuse_owner_action(ui, &room) {
+        return;
+    }
     let live_here =
         with_state(|st| st.live.as_ref().is_some_and(|l| l.room_id == room.id)).unwrap_or(false);
     if live_here {

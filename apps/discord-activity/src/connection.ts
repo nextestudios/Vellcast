@@ -9,6 +9,7 @@ import {
   type Packet,
   type Participant,
   type Presence,
+  type ShareInfo,
 } from './protocol';
 import { nowMs } from './metrics';
 
@@ -34,6 +35,8 @@ export interface ConnectionEvents {
   onError?(code: ErrorCode, message: string, fatal: boolean): void;
   /** Lista de participantes ativos (`Presence`), enviada na entrada e a cada mudança. */
   onPresence?(presence: Presence): void;
+  /** Quem compartilha mudou (`ShareChanged`); com `handoff`, o fluxo anterior acabou. */
+  onShare?(info: ShareInfo): void;
 }
 
 export interface ConnectionTarget {
@@ -128,6 +131,9 @@ export class Connection {
           if (presence) this.events.onPresence?.(presence);
           break;
         }
+        case MessageType.ShareChanged:
+          this.events.onShare?.(parseJson<ShareInfo>(packet.payload) ?? {});
+          break;
         case MessageType.StreamPaused:
           this.events.onStatus('aguardando', 'o transmissor está reconectando');
           break;

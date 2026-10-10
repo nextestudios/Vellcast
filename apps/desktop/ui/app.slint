@@ -201,7 +201,24 @@ export component AppWindow inherits Window {
     callback copy-invite;
     callback close-room(int);
 
-    // Campo que o teclado virtual está editando: 0 nome, 1 servidor, 2 chave, 3 nome da sala, 4 endereço público.
+    // Entrar em salas (Início) e compartilhamento por participantes (issue #4).
+    in-out property <string> join-link;
+    in property <bool> joining;
+    in property <string> home-message;
+    in property <bool> home-message-error;
+    in property <string> room-share-status;
+    in property <bool> room-share-active;
+    in property <bool> room-share-mine;
+    callback join-room(string);
+    callback paste-invite;
+    callback create-room-from-home;
+    callback refresh-room-status(int);
+    callback share-screen(int);
+    callback stop-share;
+    callback watch-room(int);
+    callback leave-room(int);
+
+    // Campo que o teclado virtual está editando: 0 nome, 1 servidor, 2 chave, 3 nome da sala, 4 endereço público, 5 link de convite.
     property <int> keyboard-target: 0;
 
     property <[{icon: image, label: string}]> nav-items: [
@@ -251,6 +268,8 @@ export component AppWindow inherits Window {
         } else if (root.keyboard-target == 4) {
             root.public-url = text;
             root.settings-changed();
+        } else if (root.keyboard-target == 5) {
+            root.join-link = text;
         } else {
             root.new-room-name = text;
         }
@@ -391,6 +410,16 @@ export component AppWindow inherits Window {
                             live: root.live;
                             room-count: root.rooms.length;
                             navigate(i) => { root.navigate(i); }
+                            join-link <=> root.join-link;
+                            joining: root.joining;
+                            rooms-busy: root.rooms-busy;
+                            message: root.home-message;
+                            message-error: root.home-message-error;
+                            refocus-token: root.refocus-token;
+                            create-room => { root.create-room-from-home(); }
+                            join-room(link) => { root.join-room(link); }
+                            paste-invite => { root.paste-invite(); }
+                            request-virtual-keyboard(t) => { root.open-keyboard-for(5, t); }
                         }
                         if root.current-page == 1: StreamPage {
                             sources: root.sources;
@@ -433,6 +462,15 @@ export component AppWindow inherits Window {
                             copy-invite => { root.copy-invite(); }
                             close-room(i) => { root.close-room(i); }
                             request-virtual-keyboard(t) => { root.open-keyboard-for(3, t); }
+                            share-status: root.room-share-status;
+                            share-active: root.room-share-active;
+                            share-mine: root.room-share-mine;
+                            starting: root.starting;
+                            refresh-status(i) => { root.refresh-room-status(i); }
+                            share-screen(i) => { root.share-screen(i); }
+                            stop-share => { root.stop-share(); }
+                            watch-room(i) => { root.watch-room(i); }
+                            leave-room(i) => { root.leave-room(i); }
                         }
                         if root.current-page == 3: LivePage {
                             live: root.live;
@@ -542,8 +580,9 @@ export component AppWindow inherits Window {
             : root.keyboard-target == 1 ? @tr("Server address")
             : root.keyboard-target == 2 ? @tr("Room creation key")
             : root.keyboard-target == 4 ? @tr("Public address for invites")
+            : root.keyboard-target == 5 ? @tr("Invite link")
             : @tr("Room name");
-        max-length: root.keyboard-target == 0 ? 32 : root.keyboard-target == 3 ? 64 : 256;
+        max-length: root.keyboard-target == 0 ? 32 : root.keyboard-target == 3 ? 64 : root.keyboard-target == 5 ? 1024 : 256;
         confirmed(text) => { root.keyboard-confirmed(text); }
         cancelled => { root.close-modal(); }
     }

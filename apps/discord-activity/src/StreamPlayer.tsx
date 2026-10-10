@@ -35,10 +35,12 @@ export interface StreamPlayerProps {
   onStatus?(status: ConnectionStatus): void;
   /** Participantes ativos da sala (mensagem `Presence` do relay). */
   onPresence?(presence: Presence): void;
+  /** Quem compartilha agora (`null` quando o transmissor não informou um nome). */
+  onSharer?(name: string | null): void;
 }
 
 /** Vídeo + áudio de uma transmissão do relay, com controles e estatísticas. */
-export function StreamPlayer({ token, notice, onFatal, onStatus, onPresence }: StreamPlayerProps) {
+export function StreamPlayer({ token, notice, onFatal, onStatus, onPresence, onSharer }: StreamPlayerProps) {
   const [status, setStatus] = useState<{ s: ConnectionStatus; detail?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -51,8 +53,8 @@ export function StreamPlayer({ token, notice, onFatal, onStatus, onPresence }: S
   const playerRef = useRef<Player | null>(null);
   const volumeRef = useRef(volume);
   const audioRef = useRef(audioOn);
-  const callbacks = useRef({ onFatal, onStatus, onPresence });
-  callbacks.current = { onFatal, onStatus, onPresence };
+  const callbacks = useRef({ onFatal, onStatus, onPresence, onSharer });
+  callbacks.current = { onFatal, onStatus, onPresence, onSharer };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -77,6 +79,11 @@ export function StreamPlayer({ token, notice, onFatal, onStatus, onPresence }: S
         onStatus: (s, detail) => {
           setStatus({ s, detail });
           callbacks.current.onStatus?.(s);
+        },
+        onShare: (info) => {
+          // Troca de quem compartilha: descarta decoders e linha do tempo do fluxo anterior.
+          if (info.handoff) player.reset();
+          callbacks.current.onSharer?.(info.name ?? null);
         },
         onError: (code, _message, fatal) => {
           if (!fatal) return;

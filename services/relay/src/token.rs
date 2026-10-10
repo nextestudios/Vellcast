@@ -40,10 +40,28 @@ pub struct Claims {
     /// tratados como emitidos antes de qualquer revogação em massa.
     #[serde(default)]
     pub iat: u64,
-    /// Nome de exibição do convidado (lista de participantes), já saneado.
-    /// Ausente em tokens sem nome e nos emitidos antes deste campo.
+    /// Espectador que entrou com um convite válido (`POST /join`): pode pedir
+    /// para compartilhar a tela (`POST /share`). Tokens de espectador de outras
+    /// origens (ex.: Discord) não têm esta permissão.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub member: bool,
+    /// Token de transmissor derivado de um participante: nonce do token de
+    /// espectador de origem. Revogar o participante revoga também o compartilhamento.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
+    /// Nome de exibição, já saneado: o do convidado nos tokens de espectador
+    /// (lista de participantes) e o de quem compartilha nos tokens de
+    /// `POST /share`. Ausente em tokens sem nome e nos emitidos antes deste campo.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// No primeiro uso, o token pode assumir a vaga de outro transmissor ativo
+    /// (troca explícita de quem compartilha). Reconexões nunca tomam a vaga.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub handoff: bool,
+}
+
+fn is_false(v: &bool) -> bool {
+    !v
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -89,14 +107,30 @@ impl TokenSigner {
     }
 
     pub fn issue(&self, room: &str, role: Role, ttl: Duration, now: u64) -> (String, Claims) {
-        let claims = Claims {
+        self.issue_with(room, role, ttl, now, |_| {})
+    }
+
+    /// Como [`Self::issue`], ajustando os campos opcionais antes de assinar.
+    pub fn issue_with(
+        &self,
+        room: &str,
+        role: Role,
+        ttl: Duration,
+        now: u64,
+        extra: impl FnOnce(&mut Claims),
+    ) -> (String, Claims) {
+        let mut claims = Claims {
             room: room.to_owned(),
             role,
             exp: now + ttl.as_secs(),
             nonce: crate::random_id(12),
             iat: now,
+            member: false,
+            parent: None,
             name: None,
+            handoff: false,
         };
+        extra(&mut claims);
         (self.sign(&claims), claims)
     }
 
@@ -266,6 +300,27 @@ mod tests {
             .decode(plain.split('.').nth(1).unwrap_or_default())
             .unwrap_or_default();
         assert!(!String::from_utf8_lossy(&payload).contains("name"));
+    }
+
+    #[test]
+    fn share_claims_roundtrip_and_stay_compact() {
+        let s = signer();
+        let (plain, _) = s.issue("r", Role::Viewer, Duration::from_secs(60), NOW);
+        let (token, claims) =
+            s.issue_with("r", Role::Publisher, Duration::from_secs(60), NOW, |c| {
+                c.parent = Some("pai".into());
+                c.name = Some("Ana".into());
+                c.handoff = true;
+            });
+        assert_eq!(s.verify(&token, NOW), Ok(claims));
+        // Tokens sem os campos novos continuam com o formato anterior.
+        let payload = plain.split('.').nth(1).unwrap_or_default();
+        let json = String::from_utf8(URL_SAFE_NO_PAD.decode(payload).unwrap_or_default())
+            .unwrap_or_default();
+        assert!(
+            !json.contains("member") && !json.contains("handoff"),
+            "{json}"
+        );
     }
 
     #[test]

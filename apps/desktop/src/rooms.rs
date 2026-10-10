@@ -12,15 +12,34 @@ use serde::{Deserialize, Serialize};
 /// Limite de salas guardadas; as mais antigas saem primeiro.
 pub const MAX_SAVED_ROOMS: usize = 20;
 
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SavedRoom {
     pub id: String,
     pub name: String,
     /// Endereço base do relay em que a sala foi criada.
     pub relay: String,
+    /// Vazio nas salas em que este PC entrou por convite.
     pub owner_token: String,
     pub created_at: u64,
     pub expires_at: u64,
+    /// Sala de outra pessoa, em que este PC entrou com um link de convite
+    /// (participante: assiste e pode compartilhar, mas não gerencia a sala).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub joined: bool,
+    /// Token de participante (só nas salas em que entrou por convite).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub viewer_token: String,
+}
+
+impl SavedRoom {
+    /// Token usado para consultar a sala e pedir para compartilhar.
+    pub fn access_token(&self) -> &str {
+        if self.joined {
+            &self.viewer_token
+        } else {
+            &self.owner_token
+        }
+    }
 }
 
 // Debug manual: o token de dono nunca aparece em logs.
@@ -31,6 +50,8 @@ impl std::fmt::Debug for SavedRoom {
             .field("name", &self.name)
             .field("relay", &self.relay)
             .field("owner_token", &"<oculto>")
+            .field("viewer_token", &"<oculto>")
+            .field("joined", &self.joined)
             .field("expires_at", &self.expires_at)
             .finish()
     }
@@ -116,7 +137,39 @@ mod tests {
             owner_token: "segredo-do-dono".into(),
             created_at: 1,
             expires_at,
+            ..SavedRoom::default()
         }
+    }
+
+    #[test]
+    fn joined_rooms_roundtrip_and_old_files_still_load() {
+        let dir = temp_dir("joined");
+        let path = dir.join("rooms.json");
+        let mut book = RoomBook::default();
+        book.add(SavedRoom {
+            joined: true,
+            viewer_token: "token-do-participante".into(),
+            owner_token: String::new(),
+            ..room("p", 300)
+        });
+        book.add(room("d", 300));
+        save(&path, &book).expect("save");
+        let loaded = load(&path, 0);
+        assert_eq!(loaded, book);
+        let joined = loaded.get("p").expect("sala");
+        assert_eq!(joined.access_token(), "token-do-participante");
+        assert_eq!(
+            loaded.get("d").expect("sala").access_token(),
+            "segredo-do-dono"
+        );
+        assert!(!format!("{joined:?}").contains("token-do-participante"));
+        // Arquivo de versões anteriores (sem os campos novos) continua válido.
+        let old = br#"{"rooms":[{"id":"a","name":"A","relay":"http://x","owner_token":"t","created_at":1,"expires_at":300}]}"#;
+        std::fs::write(&path, old).expect("write");
+        let loaded = load(&path, 0);
+        assert!(!loaded.rooms[0].joined);
+        assert_eq!(loaded.rooms[0].access_token(), "t");
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     fn temp_dir(name: &str) -> PathBuf {

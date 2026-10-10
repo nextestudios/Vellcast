@@ -114,6 +114,9 @@ pub struct RoomView {
     pub max_viewers: usize,
     pub created_at: u64,
     pub expires_at: u64,
+    /// Nome de quem compartilha agora (quando o transmissor informou um).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sharer_name: Option<String>,
 }
 
 fn view(record: &RoomRecord, live: &LiveRoom) -> RoomView {
@@ -126,6 +129,7 @@ fn view(record: &RoomRecord, live: &LiveRoom) -> RoomView {
         max_viewers: record.max_viewers,
         created_at: record.created_at,
         expires_at: record.expires_at,
+        sharer_name: live.sharer_name(),
     }
 }
 
@@ -406,7 +410,11 @@ pub async fn join_room(
         .config
         .viewer_token_ttl
         .min(Duration::from_secs(record.expires_at.saturating_sub(now)));
-    let (viewer_token, _) = relay.signer.issue_named(&id, Role::Viewer, ttl, now, name);
+    // Quem entra por convite é participante: pode pedir para compartilhar (`/share`).
+    let (viewer_token, _) = relay.signer.issue_with(&id, Role::Viewer, ttl, now, |c| {
+        c.member = true;
+        c.name = name;
+    });
     Ok(Json(Joined {
         viewer_token,
         room: view(&record, &live),
@@ -435,6 +443,62 @@ pub async fn publisher_token(
         .publisher_token_ttl
         .min(Duration::from_secs(record.expires_at.saturating_sub(now)));
     let (publisher_token, _) = relay.signer.issue(&id, Role::Publisher, ttl, now);
+    Ok(Json(PublisherToken { publisher_token }))
+}
+
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ShareRequest {
+    /// Nome exibido aos demais enquanto compartilha. Ausente: usa o nome do
+    /// token do participante (informado ao entrar), se houver.
+    pub name: Option<String>,
+}
+
+/// Pedido explícito para compartilhar a tela na sala.
+///
+/// Aceita o token do dono ou o de um participante que entrou com convite
+/// (`member`). Devolve um token de transmissor de compartilhamento: no primeiro
+/// uso ele assume a vaga de quem estiver compartilhando (troca explícita; a
+/// sala continua com um único transmissor). O token do participante nunca dura
+/// mais que o token de espectador de origem e cai junto com ele na revogação.
+pub async fn share(
+    State(relay): State<Arc<Relay>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    body: Option<Json<ShareRequest>>,
+) -> ApiResult<Json<PublisherToken>> {
+    rate_limit(&relay, peer, &headers)?;
+    let claims = authorize(&relay, &headers, &id, &[Role::Owner, Role::Viewer])?;
+    if claims.role == Role::Viewer && !claims.member {
+        metrics::inc(&relay.metrics.auth_failures);
+        return Err(ApiError(
+            StatusCode::FORBIDDEN,
+            ErrorCode::Forbidden,
+            "este acesso não permite compartilhar nesta sala",
+        ));
+    }
+    let (record, _) = lookup(&relay, &id)?;
+    let body = body.map(|Json(b)| b).unwrap_or_default();
+    let name = guest_name(body.name.as_deref())?.or_else(|| claims.name.clone());
+    let now = unix_now();
+    let mut ttl = relay
+        .config
+        .publisher_token_ttl
+        .min(Duration::from_secs(record.expires_at.saturating_sub(now)));
+    let participant = claims.role == Role::Viewer;
+    if participant {
+        ttl = ttl.min(Duration::from_secs(claims.exp.saturating_sub(now)));
+    }
+    let (publisher_token, _) = relay
+        .signer
+        .issue_with(&id, Role::Publisher, ttl, now, |c| {
+            c.handoff = true;
+            c.name = name;
+            c.parent = participant.then(|| claims.nonce.clone());
+        });
+    // Sem nome nem token no log: só o fato e o tipo de quem pediu.
+    tracing::info!(room = %id, participant, "token de compartilhamento emitido");
     Ok(Json(PublisherToken { publisher_token }))
 }
 

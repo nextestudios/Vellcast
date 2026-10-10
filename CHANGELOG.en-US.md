@@ -6,9 +6,15 @@ Notes in US English; the Brazilian Portuguese version lives in `CHANGELOG.md`. B
 ### New
 - **Guest name and participant list in the web player (`/watch`):** whoever opens an invite link enters a name before joining; the invite is only used when the name is submitted (closing the page first does not spend it). After joining, the player shows who is in the room and how many, updating on every join, leave, drop or reconnect, without duplicate names. The publisher appears with the display name from the app settings. Names are always shown as plain text; invites and tokens never appear in the list.
 - **Relay:** `POST /api/rooms/{id}/join` accepts `name` (1 to 32 characters, validated before the invite is consumed), the name is signed into the viewer token, and the new `Presence` message (`0x40`) sends the participant list to viewers ([protocol](docs/STREAMING_PROTOCOL.md#33-participantes-presence)). Older players ignore the message.
+- **Rooms from Home:** the Home page now has "Create room" and "Join with a link". Paste an invite link (or select **Paste link**) to join someone else's room; it shows up in Rooms marked as **Participant**.
+- **Any participant can share their screen:** in the room, select **Share my screen**, choose what to share and start. One person shares at a time: whoever starts takes the turn, the previous sharer is notified and viewers switch to the new stream without a frozen picture. Stopping, leaving the room or dropping frees the turn immediately.
+- The room shows who is sharing (in the app and in the web player) and offers **Watch in browser**, **Stop sharing** and **Leave room**.
 
 ### Fixes
 - **Web player fits the window:** the `/watch` page uses exactly the visible browser area, with no scrollbars. The picture is letterboxed when the stream's aspect ratio differs from the window (never stretched or cropped), follows resizing and fullscreen, and the controls, status bar and statistics stay visible, including on narrow screens.
+
+### Security
+- Only people who joined with a valid invite (or the owner) can ask to share; revoking a participant ends their share. Invites, tokens and names never appear in server logs.
 
 ## [0.2.0-alpha.1]
 ### New

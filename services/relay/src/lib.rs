@@ -111,10 +111,19 @@ impl Relay {
     }
 
     /// `true` se o token foi revogado (por nonce ou pela revogação em massa de espectadores).
+    ///
+    /// Um token de compartilhamento derivado de um participante (`parent`) segue
+    /// o participante: cai junto com o token de espectador de origem e com a
+    /// revogação em massa de espectadores.
     pub fn is_revoked(&self, claims: &Claims) -> bool {
-        self.store
-            .get(&claims.room)
-            .is_some_and(|r| r.is_revoked(&claims.nonce, claims.role == Role::Viewer, claims.iat))
+        self.store.get(&claims.room).is_some_and(|r| {
+            let viewer_class = claims.role == Role::Viewer || claims.parent.is_some();
+            r.is_revoked(&claims.nonce, viewer_class, claims.iat)
+                || claims
+                    .parent
+                    .as_deref()
+                    .is_some_and(|p| r.revoked.contains_key(p))
+        })
     }
 
     pub fn room(&self, id: &str) -> Option<Arc<LiveRoom>> {
@@ -218,6 +227,7 @@ pub fn router_with_discord(relay: Arc<Relay>, discord: Option<discord::DiscordCo
             post(api::publisher_token),
         )
         .route("/api/rooms/{id}/revoke", post(api::revoke))
+        .route("/api/rooms/{id}/share", post(api::share))
         .with_state(relay)
         .merge(discord_routes);
     match static_dir {

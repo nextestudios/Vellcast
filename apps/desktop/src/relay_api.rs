@@ -118,6 +118,9 @@ pub struct RoomView {
     pub viewers: usize,
     pub max_viewers: usize,
     pub expires_at: u64,
+    /// Nome de quem compartilha agora (relays antigos não enviam).
+    #[serde(default)]
+    pub sharer_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -147,6 +150,10 @@ struct ErrorBody {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ApiError {
+    /// O servidor não tem `POST /share` (vellcast-relay anterior ao compartilhamento por participantes).
+    ShareUnsupported,
+    /// O acesso de participante expirou ou foi revogado pelo dono da sala.
+    ParticipantRevoked,
     Url(UrlError),
     /// Servidor inacessível (desligado, endereço errado, firewall, TLS).
     Unreachable(String),
@@ -167,6 +174,14 @@ impl ApiError {
     pub fn user_message(&self, en: bool) -> String {
         let pick = |pt: &str, e: &str| if en { e.to_owned() } else { pt.to_owned() };
         match self {
+            ApiError::ShareUnsupported => pick(
+                "Este servidor não permite que participantes compartilhem a tela. Atualize o vellcast-relay.",
+                "This server does not let participants share their screen. Update vellcast-relay.",
+            ),
+            ApiError::ParticipantRevoked => pick(
+                "Seu acesso a esta sala expirou ou foi revogado por quem a criou. Peça um novo link de convite. A sala foi removida da lista.",
+                "Your access to this room expired or was revoked by its creator. Ask for a new invite link. The room was removed from the list.",
+            ),
             ApiError::Url(e) => {
                 if en {
                     format!("Server address: {}.", e.message(true))
@@ -431,6 +446,205 @@ pub fn delete_room(base: &str, room_id: &str, owner_token: &str) -> Result<(), A
     Err(classify(status, code.as_deref()))
 }
 
+// ---------------------------------------------------------------------------
+// Entrar em salas por link e compartilhar como participante (issue #4)
+
+/// Link de convite decomposto: `<base>/watch#room=<id>&invite=<código>`.
+#[derive(Clone, PartialEq, Eq)]
+pub struct InviteLink {
+    /// Endereço base do relay (normalizado), o mesmo que serve o player.
+    pub base: String,
+    pub room: String,
+    pub invite: String,
+}
+
+// Debug manual: o código de convite nunca aparece em logs.
+impl std::fmt::Debug for InviteLink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InviteLink")
+            .field("base", &self.base)
+            .field("room", &self.room)
+            .field("invite", &"<oculto>")
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InviteLinkError {
+    Empty,
+    /// Não parece um link de convite do Vellcast (sem `/watch#`).
+    NotInvite,
+    /// Endereço do servidor inválido.
+    Url(UrlError),
+    /// Falta a sala ou o código, ou eles têm caracteres inválidos.
+    Incomplete,
+}
+
+impl InviteLinkError {
+    pub fn message(&self, en: bool) -> String {
+        let pick = |pt: &str, e: &str| if en { e.to_owned() } else { pt.to_owned() };
+        match self {
+            InviteLinkError::Empty => pick(
+                "Cole o link de convite que você recebeu.",
+                "Paste the invite link you received.",
+            ),
+            InviteLinkError::NotInvite => pick(
+                "Isso não é um link de convite do Vellcast. Ele termina em /watch#room=…&invite=….",
+                "This is not a Vellcast invite link. It ends with /watch#room=…&invite=….",
+            ),
+            InviteLinkError::Url(e) => {
+                if en {
+                    format!("Invite link: {}.", e.message(true))
+                } else {
+                    format!("Link de convite: {}.", e.message(false))
+                }
+            }
+            InviteLinkError::Incomplete => pick(
+                "O link de convite está incompleto. Copie o link inteiro de novo.",
+                "The invite link is incomplete. Copy the whole link again.",
+            ),
+        }
+    }
+}
+
+/// Valida e decompõe um link de convite colado pelo usuário.
+pub fn parse_invite_link(input: &str) -> Result<InviteLink, InviteLinkError> {
+    let s = input.trim();
+    if s.is_empty() {
+        return Err(InviteLinkError::Empty);
+    }
+    if s.len() > 1024 {
+        return Err(InviteLinkError::NotInvite);
+    }
+    let (before, fragment) = s.split_once('#').ok_or(InviteLinkError::NotInvite)?;
+    let base = before
+        .trim_end_matches('/')
+        .strip_suffix("/watch")
+        .ok_or(InviteLinkError::NotInvite)?;
+    let base = normalize_base(base).map_err(InviteLinkError::Url)?;
+    let (mut room, mut invite) = (None, None);
+    for pair in fragment.split('&') {
+        match pair.split_once('=') {
+            Some(("room", v)) => room = Some(v),
+            Some(("invite", v)) => invite = Some(v),
+            _ => {}
+        }
+    }
+    match (room, invite) {
+        (Some(room), Some(invite)) if is_safe_id(room) && is_safe_id(invite) => Ok(InviteLink {
+            base,
+            room: room.to_owned(),
+            invite: invite.to_owned(),
+        }),
+        _ => Err(InviteLinkError::Incomplete),
+    }
+}
+
+/// Link do player com o token de espectador no fragmento (nunca enviado ao
+/// servidor): o participante assiste no navegador sem gastar outro convite.
+pub fn watch_link_with_token(base: &str, room_id: &str, token: &str) -> Result<String, UrlError> {
+    let base = normalize_base(base)?;
+    let token_ok = token.len() <= 1024
+        && token
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'));
+    if !is_safe_id(room_id) || !token_ok {
+        return Err(UrlError::Invalid);
+    }
+    Ok(format!("{base}/watch#room={room_id}&token={token}"))
+}
+
+/// Expiração (Unix) lida do payload de um token do relay, sem verificar a
+/// assinatura: serve só para saber até quando guardar a sala na lista.
+pub fn token_expiry(token: &str) -> Option<u64> {
+    use base64::Engine;
+    let payload = token.split('.').nth(1)?;
+    let json = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(payload)
+        .ok()?;
+    serde_json::from_slice::<serde_json::Value>(&json)
+        .ok()?
+        .get("exp")?
+        .as_u64()
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Joined {
+    pub viewer_token: String,
+    pub room: RoomView,
+}
+
+#[derive(Serialize)]
+struct JoinBody<'a> {
+    invite: &'a str,
+    /// Nome na lista de participantes (opcional; o relay valida antes de usar o convite).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<&'a str>,
+}
+
+/// Troca um convite (uso único) por um token de participante da sala, com o
+/// nome de exibição assinado no token (vazio = sem nome).
+pub fn join_room(link: &InviteLink, name: &str) -> Result<Joined, ApiError> {
+    let name = name.trim();
+    crate::local_relay::ensure(&link.base);
+    let room = checked_room(&link.room)?;
+    finish(
+        agent()
+            .post(format!("{}/api/rooms/{room}/join", link.base))
+            .send_json(JoinBody {
+                invite: &link.invite,
+                name: (!name.is_empty()).then_some(name),
+            }),
+    )
+}
+
+#[derive(Serialize)]
+struct ShareBody<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<&'a str>,
+}
+
+/// Pede para compartilhar a tela na sala (`POST /share`), com o token de dono
+/// ou de participante. O token devolvido assume a vaga de quem estiver
+/// compartilhando no primeiro uso.
+pub fn share_token(
+    base: &str,
+    room_id: &str,
+    access_token: &str,
+    name: &str,
+) -> Result<String, ApiError> {
+    crate::local_relay::ensure(base);
+    let base = normalize_base(base)?;
+    let room = checked_room(room_id)?;
+    let name = name.trim();
+    let result = agent()
+        .post(format!("{base}/api/rooms/{room}/share"))
+        .header("Authorization", format!("Bearer {access_token}"))
+        .send_json(ShareBody {
+            name: (!name.is_empty()).then_some(name),
+        });
+    let mut resp = result.map_err(unreachable)?;
+    let status = resp.status().as_u16();
+    if (200..300).contains(&status) {
+        return resp
+            .body_mut()
+            .read_json::<PublisherToken>()
+            .map(|t| t.publisher_token)
+            .map_err(|_| ApiError::BadResponse);
+    }
+    let code = resp
+        .body_mut()
+        .read_json::<ErrorBody>()
+        .ok()
+        .map(|b| b.code);
+    // 404 sem código JSON = rota inexistente (relay antigo), não sala inexistente.
+    if status == 404 && code.is_none() {
+        return Err(ApiError::ShareUnsupported);
+    }
+    Err(classify(status, code.as_deref()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -588,6 +802,143 @@ mod tests {
         assert_eq!(
             create_invite(&base, &id, &owner).err(),
             Some(ApiError::RoomGone)
+        );
+        rt.shutdown_background();
+    }
+
+    #[test]
+    fn parses_valid_invite_links() {
+        let link = parse_invite_link("  https://relay.exemplo.com/watch#room=abc_1&invite=COD-2  ")
+            .expect("link válido");
+        assert_eq!(link.base, "https://relay.exemplo.com");
+        assert_eq!(
+            (link.room.as_str(), link.invite.as_str()),
+            ("abc_1", "COD-2")
+        );
+        // Prefixo de caminho, barra antes do fragmento e ordem trocada.
+        let link = parse_invite_link("http://192.168.0.10:8788/vellcast/watch/#invite=x&room=y")
+            .expect("link válido");
+        assert_eq!(link.base, "http://192.168.0.10:8788/vellcast");
+        assert_eq!((link.room.as_str(), link.invite.as_str()), ("y", "x"));
+        // O round-trip com o link gerado pelo próprio app funciona.
+        let made = watch_link("https://r.exemplo.com", "sala", "codigo").expect("link");
+        assert!(parse_invite_link(&made).is_ok());
+    }
+
+    #[test]
+    fn rejects_malformed_invite_links() {
+        let err = |s: &str| parse_invite_link(s).expect_err(s);
+        assert_eq!(err(""), InviteLinkError::Empty);
+        assert_eq!(err("abc"), InviteLinkError::NotInvite);
+        assert_eq!(
+            err("https://x.com/#room=a&invite=b"),
+            InviteLinkError::NotInvite
+        );
+        assert_eq!(
+            err("https://x.com/watch?room=a&invite=b"),
+            InviteLinkError::NotInvite
+        );
+        assert_eq!(
+            err("relay.com/watch#room=a&invite=b"),
+            InviteLinkError::Url(UrlError::Scheme)
+        );
+        assert_eq!(
+            err("ftp://x/watch#room=a&invite=b"),
+            InviteLinkError::Url(UrlError::Scheme)
+        );
+        assert_eq!(
+            err("https://x.com/watch#room=a"),
+            InviteLinkError::Incomplete
+        );
+        assert_eq!(
+            err("https://x.com/watch#invite=b"),
+            InviteLinkError::Incomplete
+        );
+        assert_eq!(
+            err("https://x.com/watch#room=../a&invite=b"),
+            InviteLinkError::Incomplete
+        );
+        assert_eq!(
+            err("https://x.com/watch#room=a&invite=b c"),
+            InviteLinkError::Incomplete
+        );
+        assert_eq!(
+            err(&format!(
+                "https://x.com/watch#room=a&invite={}",
+                "b".repeat(2000)
+            )),
+            InviteLinkError::NotInvite
+        );
+        for e in [
+            InviteLinkError::Empty,
+            InviteLinkError::NotInvite,
+            InviteLinkError::Incomplete,
+        ] {
+            assert!(!e.message(false).is_empty() && !e.message(true).is_empty());
+        }
+    }
+
+    #[test]
+    fn invite_link_debug_hides_the_code() {
+        let link = parse_invite_link("https://x.com/watch#room=a&invite=segredo123").expect("link");
+        assert!(!format!("{link:?}").contains("segredo123"));
+    }
+
+    #[test]
+    fn builds_token_watch_link_and_reads_expiry() {
+        let link = watch_link_with_token("https://x.com/", "sala", "v1.abc_-.sig").expect("link");
+        assert_eq!(link, "https://x.com/watch#room=sala&token=v1.abc_-.sig");
+        assert!(watch_link_with_token("https://x.com", "sala", "v1.a&b.c").is_err());
+        assert!(watch_link_with_token("https://x.com", "../x", "v1.a.b").is_err());
+        // {"exp":123}
+        assert_eq!(token_expiry("v1.eyJleHAiOjEyM30.sig"), Some(123));
+        assert_eq!(token_expiry("lixo"), None);
+    }
+
+    /// Participante: entra pelo link, pede para compartilhar e vê quem compartilha.
+    #[test]
+    fn participant_flow_against_real_relay() {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("runtime");
+        let config = vellcast_relay::config::Config::with_secret(
+            b"desktop-test-secret-desktop-test-se".to_vec(),
+        );
+        let relay = vellcast_relay::Relay::new(config);
+        let listener = rt
+            .block_on(tokio::net::TcpListener::bind("127.0.0.1:0"))
+            .expect("bind");
+        let base = format!("http://{}", listener.local_addr().expect("addr"));
+        rt.spawn(vellcast_relay::serve(relay, listener));
+
+        let created = create_room(&base, "", "Lobby").expect("criar sala");
+        let id = created.room.id.clone();
+        let invite = create_invite(&base, &id, &created.owner_token).expect("convite");
+        let link = parse_invite_link(&watch_link(&base, &id, &invite.code).expect("link"))
+            .expect("link válido");
+        let joined = join_room(&link, "Ana").expect("entrar");
+        assert_eq!(joined.room.name, "Lobby");
+        assert!(token_expiry(&joined.viewer_token).is_some_and(|e| e > 0));
+
+        // O participante vê a sala e pode pedir para compartilhar.
+        let view = get_room(&base, &id, &joined.viewer_token).expect("sala");
+        assert_eq!((view.state.as_str(), view.sharer_name), ("idle", None));
+        let token = share_token(&base, &id, &joined.viewer_token, "Ana").expect("compartilhar");
+        assert!(!token.is_empty());
+        // O dono também usa o mesmo caminho.
+        assert!(share_token(&base, &id, &created.owner_token, "").is_ok());
+        // Convite forjado não dá acesso.
+        let mut bad = link.clone();
+        bad.invite = "forjado".into();
+        assert!(matches!(
+            join_room(&bad, "").err(),
+            Some(ApiError::Rejected { status: 403, .. })
+        ));
+        assert_eq!(
+            share_token(&base, &id, "v1.forjado.assinatura", "").err(),
+            Some(ApiError::Unauthorized)
         );
         rt.shutdown_background();
     }

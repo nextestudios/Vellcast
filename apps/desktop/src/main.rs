@@ -11,6 +11,7 @@
 mod actions;
 mod engine;
 mod input;
+mod lobby;
 mod local_relay;
 mod paths;
 mod procstats;
@@ -171,6 +172,7 @@ fn main() -> anyhow::Result<()> {
         });
     });
     actions::init(&ui);
+    lobby::wire(&ui);
 
     // A bandeja precisa do loop de eventos já ativo (exigência do macOS).
     let weak = ui.as_weak();

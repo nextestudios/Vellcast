@@ -536,3 +536,52 @@ msgstr "Código de pareamento do Discord"
 
 msgid "Open the Vellcast Activity in a Discord voice channel and enter this code. It works once and expires in 5 minutes."
 msgstr "Abra a Activity do Vellcast em um canal de voz do Discord e digite este código. Ele vale uma vez e expira em 5 minutos."
+
+# Entrada em salas e compartilhamento por participantes (issue #4)
+msgid "Play together"
+msgstr "Jogar junto"
+
+msgid "Create a private room or join someone else's room with the invite link they sent you. Anyone in the room can share their screen, one at a time."
+msgstr "Crie uma sala privada ou entre na sala de alguém com o link de convite que você recebeu. Qualquer pessoa na sala pode compartilhar a tela, uma de cada vez."
+
+msgid "Join with a link"
+msgstr "Entrar com link"
+
+msgid "Paste the invite link (…/watch#room=…&invite=…)"
+msgstr "Cole o link de convite (…/watch#room=…&invite=…)"
+
+msgid "Joining…"
+msgstr "Entrando…"
+
+msgid "Join room"
+msgstr "Entrar na sala"
+
+msgid "Paste link"
+msgstr "Colar link"
+
+msgid "Room · participant"
+msgstr "Sala · participante"
+
+msgid "Room · you created it"
+msgstr "Sala · criada por você"
+
+msgid "Checking who is sharing…"
+msgstr "Verificando quem está compartilhando…"
+
+msgid "Share my screen"
+msgstr "Compartilhar minha tela"
+
+msgid "Stop sharing"
+msgstr "Parar de compartilhar"
+
+msgid "Watch in browser"
+msgstr "Assistir no navegador"
+
+msgid "Refresh"
+msgstr "Atualizar"
+
+msgid "Leave room"
+msgstr "Sair da sala"
+
+msgid "One person shares at a time. When you start sharing, it becomes your turn and the person sharing now is notified. You always choose what to share before anything is captured."
+msgstr "Uma pessoa compartilha por vez. Quando você começa a compartilhar, a vez passa para você e quem está compartilhando é avisado. Você sempre escolhe o que compartilhar antes de qualquer captura."
