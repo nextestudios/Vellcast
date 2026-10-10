@@ -15,6 +15,7 @@ Notas em português do Brasil; a versão em inglês (Estados Unidos) fica em `CH
 
 ### Correções
 - **Player web cabe na janela:** a página `/watch` ocupa exatamente a área visível do navegador, sem barras de rolagem. A imagem é ajustada com faixas pretas quando a proporção da transmissão difere da janela (sem esticar nem cortar), acompanha redimensionamento e tela cheia, e os controles, a barra de status e as estatísticas continuam visíveis, inclusive em telas estreitas.
+- **Janela transparente depois de um tempo aberta (#6):** quando o Windows descartava o conteúdo da janela (tela que dorme e acorda, bloqueio de sessão, reinício do driver de vídeo), o app só redesenhava o que tinha mudado e o resto ficava transparente, mostrando a área de trabalho com um botão "Copiar link" solto. A janela agora é opaca e é redesenhada por inteiro quando o sistema pede, ao voltar a ficar visível e ao receber o foco. O consumo ocioso não muda.
 
 ### Segurança
 - Só quem entrou com um convite válido (ou o dono) pode pedir para compartilhar; revogar um participante encerra o compartilhamento dele. Convites, tokens e nomes não aparecem nos logs do servidor.

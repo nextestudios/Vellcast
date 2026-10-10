@@ -15,6 +15,7 @@ Notes in US English; the Brazilian Portuguese version lives in `CHANGELOG.md`. B
 
 ### Fixes
 - **Web player fits the window:** the `/watch` page uses exactly the visible browser area, with no scrollbars. The picture is letterboxed when the stream's aspect ratio differs from the window (never stretched or cropped), follows resizing and fullscreen, and the controls, status bar and statistics stay visible, including on narrow screens.
+- **Window turning transparent after being open for a while (#6):** when Windows discarded the window contents (display sleeping and waking, session lock, graphics driver restart), the app only redrew what had changed and the rest stayed transparent, showing the desktop with a lone "Copy link" button. The window is now opaque and is fully redrawn when the system asks, when it becomes visible again and when it gets focus. Idle usage is unchanged.
 
 ### Security
 - Only people who joined with a valid invite (or the owner) can ask to share; revoking a participant ends their share. Invites, tokens and names never appear in server logs.

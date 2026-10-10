@@ -17,6 +17,7 @@ mod local_relay;
 mod paths;
 mod procstats;
 mod relay_api;
+mod repaint;
 mod rooms;
 mod settings;
 mod tray;
@@ -137,6 +138,8 @@ fn main() -> anyhow::Result<()> {
         .map(|p| rooms::load(p, actions::now_unix()))
         .unwrap_or_default();
 
+    // Antes de criar a janela: a janela nativa precisa nascer opaca (issue #6).
+    repaint::select_opaque_backend();
     let ui = AppWindow::new()?;
     apply_settings_to_ui(&ui, &settings);
     select_language(settings.language);
@@ -430,10 +433,14 @@ fn hide_window(ui: &AppWindow) {
 }
 
 /// O controle só age com a janela do Vellcast em foco (spec §13).
-/// Também recolhe a lista de salas em janelas estreitas.
+/// Também recolhe a lista de salas em janelas estreitas e força a repintura
+/// completa quando o sistema descarta o conteúdo da janela (issue #6).
 fn track_window_focus(ui: &AppWindow) {
     let weak = ui.as_weak();
     ui.window().on_winit_window_event(move |window, event| {
+        if let Some(ui) = weak.upgrade() {
+            repaint::on_window_event(&ui, window, event);
+        }
         match event {
             winit::event::WindowEvent::Focused(focused) => {
                 with_state(|st| {

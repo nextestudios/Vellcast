@@ -97,7 +97,10 @@ export component AppWindow inherits Window {
     min-height: 600px;
     preferred-width: 1180px;
     preferred-height: 720px;
-    background: Theme.bg-0;
+    // Alternar `repaint-toggle` força o renderer a redesenhar a janela inteira:
+    // o gradiente de uma cor só tem os mesmos pixels da cor sólida (issue #6).
+    in property <bool> repaint-toggle;
+    background: root.repaint-toggle ? @linear-gradient(0deg, Theme.bg-0 0%, Theme.bg-0 100%) : Theme.bg-0;
     default-font-size: Theme.fs-body;
 
     in-out property <int> current-page: 0;
