@@ -11,7 +11,7 @@ on:
     inputs:
       seconds:
         description: Duração da transmissão principal em segundos (3600 = teste de estabilidade de 60 min)
-        default: "60"
+        default: "30"
 
 permissions:
   contents: read

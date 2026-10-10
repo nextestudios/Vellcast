@@ -23,7 +23,7 @@ env:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 40
     # Secrets de assinatura podem ficar no ambiente "release"; com revisores obrigatórios nele, cada release espera
     # a aprovação do mantenedor antes de rodar.
     environment: release
@@ -99,9 +99,8 @@ jobs:
         with:
           node-version: 22
 
-      # Suíte completa antes de publicar (a release não usa cache).
-      - name: Testes
-        run: cargo test --workspace --locked
+      # Sem cargo test aqui: os testes rodam na CI (Linux) e localmente; repetir no Windows dobraria a compilação.
+      # O que só existe no Windows é validado abaixo: build Release, relay do pacote e o app aberto de verdade.
 
       # Só builds de tag são assinados, e só quando houver certificado (E8-T02).
       - name: Modo de assinatura

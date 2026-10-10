@@ -6,10 +6,10 @@ Use este checklist antes de publicar uma versão (tag `vX.Y.Z` na `main`; fluxo 
 
 | Verificação | Onde | Cobre |
 |---|---|---|
-| fmt, clippy `-D warnings`, testes (Linux e Windows) | `CI` → Rust | Qualidade geral |
-| Build do player/Activity | `CI` → Discord Activity | M-012 (build) |
-| Licenças, RustSec, duplicatas, origens | `CI` → Licenças e segurança | OC-T02, M-022 |
-| Segredos no histórico | `CI` → Varredura de segredos | OC-T07, M-024 |
+| fmt, clippy `-D warnings`, testes (Linux; desktop verificado com `cargo xwin check` e compilado no `Release`) | `CI` | Qualidade geral |
+| Build do player/Activity | `CI` | M-012 (build) |
+| Licenças, RustSec, duplicatas, origens | `CI` | OC-T02, M-022 |
+| Segredos no histórico | `CI` | OC-T07, M-024 |
 | Captura WGC real (monitor e janela) → H.264 | `Windows E2E` (manual, rodar antes da release) | M-005, M-006, M-007 (software) |
 | Áudio WASAPI (sistema e processo) | `Windows E2E` / `Diagnóstico de áudio` | M-009 |
 | Ponta a ponta: captura → relay → espectadores, com áudio | `Windows E2E` | M-008, M-010, M-011, M-018 |

@@ -47,14 +47,17 @@ Seguimos o [Gitflow](https://www.atlassian.com/git/tutorials/comparing-workflows
 
 | Workflow | Quando | O que faz |
 |---|---|---|
-| **CI** | PR para `main`/`develop` (exceto só docs) | fmt, clippy, testes (Linux e Windows), build do player, licenças, varredura de segredos |
-| **Release** | tag `vX.Y.Z` na `main` | testes completos, pacote, instalador, smoke (instalar/abrir/desinstalar), manifesto de atualização assinado e release publicada |
+| **CI** | PR para `main`/`develop` (exceto só docs) | um job Linux: fmt, clippy, testes, build do player, licenças, varredura de segredos |
+| **Release** | tag `vX.Y.Z` na `main` | build Release no Windows, pacote, instalador, portátil, smoke (abrir/instalar/desinstalar), manifesto assinado e release publicada |
 | **CodeQL** | push na `main` e semanal | análise de segurança (ativa quando o repositório for público) |
 | **Smoke** | manual | gera pacote e instalador de um commit, ou testa o instalador de uma release publicada |
 | **Windows E2E** | manual | captura → encoder → relay → espectadores, bitrate adaptativo, modo competitivo, app e bandeja |
 | **Diagnóstico de áudio** | manual | captura WASAPI sob o depurador com page heap |
 
-PRs não geram pacotes. Rode o **Windows E2E** antes de uma release que mexa em captura, encoder, áudio, transporte ou relay.
+**Economia de minutos do Actions** (o repositório é privado; o Windows conta em dobro):
+- PRs rodam só o job Linux. Código só de Windows é verificado localmente antes do PR: `cargo xwin check --target x86_64-pc-windows-msvc -p <crate>`.
+- O Windows roda uma vez por versão, no workflow **Release**.
+- **Windows E2E**, **Smoke** e **Diagnóstico de áudio** só rodam quando o mantenedor pedir (por exemplo, antes de uma release que mexa em captura, encoder ou áudio). Agentes e automações não disparam workflows.
 
 ### Publicar uma versão
 
