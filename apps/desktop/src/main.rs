@@ -11,6 +11,7 @@
 mod actions;
 mod engine;
 mod input;
+mod live_controls;
 mod lobby;
 mod local_relay;
 mod paths;
@@ -498,6 +499,7 @@ fn handle_action(ui: &AppWindow, action: Action) {
     match input::route(action, ui.get_modal() != 0) {
         Route::Key(key) => press_key(ui, key),
         Route::Modal(a) => ui.invoke_modal_action(nav_action(a)),
+        Route::HistoryBack if live_controls::handle_back(ui) => {}
         Route::HistoryBack => {
             if let Some(page) = with_state(|st| st.history.back()).flatten() {
                 ui.set_current_page(page);

@@ -14,7 +14,12 @@
 //!   equilibrado espera a sobrecarga persistir.
 //! - **Recuperação**: depois de um período estável (histerese), aumenta o bitrate
 //!   de forma aditiva e, mais tarde, devolve o FPS um degrau por vez.
+//! - **Nitidez** (texto e código, issue #5): na rede congestionada reduz o
+//!   bitrate **e** um degrau de FPS de uma vez (até 15 FPS), preservando os
+//!   bits por quadro, que é o que deixa o texto legível.
 //! - Nunca passa da qualidade escolhida pelo usuário nem desce do piso.
+//! - O modo e o bitrate máximo podem mudar durante a transmissão
+//!   ([`Adapter::set_mode`], [`Adapter::set_max_bitrate`]).
 //!
 //! Resolução não muda durante a transmissão (exigiria reiniciar o encoder):
 //! no modo competitivo, sobrecarga persistente no FPS mínimo gera apenas uma
@@ -23,7 +28,7 @@
 /// Piso de bitrate (kbps).
 pub const MIN_BITRATE_KBPS: u32 = 500;
 /// Degraus de FPS, do maior para o menor.
-const FPS_STEPS: [u32; 4] = [60, 45, 30, 24];
+const FPS_STEPS: [u32; 5] = [60, 45, 30, 24, 15];
 
 /// Modo de adaptação.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -35,6 +40,19 @@ pub enum Adaptation {
     Balanced,
     /// Prioriza o desempenho do jogo: reage na hora à carga do encoder.
     Competitive,
+    /// Prioriza a nitidez (texto e código): troca FPS por bits por quadro quando a rede aperta.
+    Clarity,
+}
+
+impl Adaptation {
+    /// FPS mínimo que a adaptação pode atingir neste modo.
+    fn fps_floor(self) -> u32 {
+        match self {
+            Self::Competitive => 24,
+            Self::Clarity => 15,
+            Self::Off | Self::Balanced => 30,
+        }
+    }
 }
 
 /// Sinais de uma janela de medição (normalmente 1 s).
@@ -123,12 +141,8 @@ impl Adapter {
     pub fn new(mode: Adaptation, max_bitrate_kbps: u32, max_fps: u32, now_ms: u64) -> Self {
         let max_bitrate = max_bitrate_kbps.max(MIN_BITRATE_KBPS);
         let max_fps = max_fps.max(1);
-        // O FPS só desce até 30 no modo equilibrado; no competitivo, até 24.
-        let floor = if mode == Adaptation::Competitive {
-            24
-        } else {
-            30
-        };
+        // O FPS só desce até 30 no modo equilibrado; no competitivo, até 24; na nitidez, até 15.
+        let floor = mode.fps_floor();
         Self {
             mode,
             max_bitrate,
@@ -147,6 +161,40 @@ impl Adapter {
 
     pub fn bitrate_kbps(&self) -> u32 {
         self.bitrate
+    }
+
+    pub fn mode(&self) -> Adaptation {
+        self.mode
+    }
+
+    pub fn max_bitrate_kbps(&self) -> u32 {
+        self.max_bitrate
+    }
+
+    /// Troca o modo durante a transmissão (preferência de conteúdo). Mantém o
+    /// bitrate atual; o FPS atual sobe ao piso do novo modo, se preciso.
+    pub fn set_mode(&mut self, mode: Adaptation, now_ms: u64) {
+        self.mode = mode;
+        self.min_fps = mode.fps_floor().min(self.max_fps);
+        self.fps = self.fps.clamp(self.min_fps, self.max_fps);
+        if mode == Adaptation::Off {
+            // Sem adaptação valem os valores escolhidos pelo usuário.
+            self.bitrate = self.max_bitrate;
+            self.fps = self.max_fps;
+        }
+        self.overload_streak = 0;
+        self.recommended_resolution = false;
+        self.stable_since_ms = now_ms;
+        self.last_change_ms = now_ms;
+    }
+
+    /// Novo bitrate escolhido pelo usuário durante a transmissão: vira o teto e
+    /// o valor atual (a adaptação volta a reduzir se a rede não aguentar).
+    pub fn set_max_bitrate(&mut self, kbps: u32, now_ms: u64) {
+        self.max_bitrate = kbps.max(MIN_BITRATE_KBPS);
+        self.bitrate = self.max_bitrate;
+        self.stable_since_ms = now_ms;
+        self.last_change_ms = now_ms;
     }
 
     pub fn fps(&self) -> u32 {
@@ -248,7 +296,13 @@ impl Adapter {
                 return None;
             }
             let target = (self.bitrate as f32 * 0.7) as u32;
-            return self.change(now_ms, target, self.fps, Reason::NetworkCongestion);
+            // Nitidez: menos quadros com o mesmo tamanho, em vez de quadros borrados.
+            let fps = if self.mode == Adaptation::Clarity {
+                self.step_fps_down().unwrap_or(self.fps)
+            } else {
+                self.fps
+            };
+            return self.change(now_ms, target, fps, Reason::NetworkCongestion);
         }
 
         if self.overload_streak >= timing.overload_windows {
@@ -490,5 +544,61 @@ mod tests {
             a.update(t * 1000, overloaded());
         }
         assert_eq!(a.fps(), 30);
+    }
+
+    #[test]
+    fn clarity_trades_fps_for_bits_per_frame_under_congestion() {
+        let mut clarity = Adapter::new(Adaptation::Clarity, 8000, 60, 0);
+        let mut motion = Adapter::new(Adaptation::Balanced, 8000, 60, 0);
+        let c = clarity.update(1000, congested()).expect("reduz");
+        let m = motion.update(1000, congested()).expect("reduz");
+        assert_eq!((c.bitrate_kbps, c.fps), (5600, 45));
+        assert_eq!(
+            (m.bitrate_kbps, m.fps),
+            (5600, 60),
+            "movimento mantém o FPS"
+        );
+        // Bits por quadro: a nitidez preserva mais que o movimento.
+        assert!(c.bitrate_kbps / c.fps > m.bitrate_kbps / m.fps);
+        for t in 2..20 {
+            clarity.update(t * 1000, congested());
+        }
+        assert_eq!(clarity.fps(), 15, "piso da nitidez");
+        assert_eq!(clarity.bitrate_kbps(), MIN_BITRATE_KBPS);
+    }
+
+    #[test]
+    fn mode_change_mid_stream_keeps_bitrate_and_respects_new_floor() {
+        let mut a = Adapter::new(Adaptation::Clarity, 8000, 60, 0);
+        for t in 1..=3 {
+            a.update(t * 2000, congested());
+        }
+        assert_eq!(a.fps(), 24);
+        let bitrate = a.bitrate_kbps();
+        a.set_mode(Adaptation::Balanced, 10_000);
+        assert_eq!(a.mode(), Adaptation::Balanced);
+        assert_eq!(a.fps(), 30, "sobe ao piso do equilibrado");
+        assert_eq!(a.bitrate_kbps(), bitrate);
+        a.set_mode(Adaptation::Off, 11_000);
+        assert_eq!((a.bitrate_kbps(), a.fps()), (8000, 60));
+        assert_eq!(a.update(12_000, congested()), None);
+    }
+
+    #[test]
+    fn user_bitrate_change_becomes_new_ceiling() {
+        let mut a = Adapter::new(Adaptation::Balanced, 8000, 60, 0);
+        a.update(1000, congested());
+        assert_eq!(a.bitrate_kbps(), 5600);
+        a.set_max_bitrate(12_000, 2000);
+        assert_eq!((a.bitrate_kbps(), a.max_bitrate_kbps()), (12_000, 12_000));
+        a.set_max_bitrate(100, 3000);
+        assert_eq!(a.bitrate_kbps(), MIN_BITRATE_KBPS);
+        // Recuperação nunca passa do novo teto.
+        let mut a = Adapter::new(Adaptation::Balanced, 8000, 60, 0);
+        a.set_max_bitrate(3000, 0);
+        for t in 1..60 {
+            a.update(t * 1000, calm());
+        }
+        assert_eq!(a.bitrate_kbps(), 3000);
     }
 }

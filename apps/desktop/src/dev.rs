@@ -27,6 +27,9 @@ pub fn schedule(ui: &AppWindow) {
     let weak = ui.as_weak();
     Timer::single_shot(Duration::from_millis(600), move || {
         let Some(ui) = weak.upgrade() else { return };
+        if std::env::var("VELLCAST_DEV_LIVE_DEMO").as_deref() == Ok("1") {
+            show_live_demo(&ui);
+        }
         if let Some(page) = std::env::var("VELLCAST_DEV_PAGE")
             .ok()
             .and_then(|p| p.parse().ok())
@@ -85,6 +88,19 @@ pub fn schedule(ui: &AppWindow) {
             let _ = slint::quit_event_loop();
         });
     });
+}
+
+/// Tela Ao vivo com dados de exemplo e os controles rápidos (issue #5).
+/// `VELLCAST_DEV_LIVE_PANEL=<1-4>` abre um dos painéis.
+fn show_live_demo(ui: &AppWindow) {
+    ui.set_live(true);
+    ui.set_live_status("Transmitindo · conectado ao servidor".into());
+    ui.set_live_source("Jogo de exemplo".into());
+    ui.set_live_room("Sala de exemplo".into());
+    ui.set_live_uptime("00:12:34".into());
+    ui.set_live_viewers("3 / 10".into());
+    ui.set_live_video("1920×1080 @ 60 · NVIDIA NVENC H.264".into());
+    crate::live_controls::demo(ui);
 }
 
 fn parse_action(name: &str) -> Option<Action> {

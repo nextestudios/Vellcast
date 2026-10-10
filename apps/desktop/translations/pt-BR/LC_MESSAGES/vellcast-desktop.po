@@ -585,3 +585,142 @@ msgstr "Sair da sala"
 
 msgid "One person shares at a time. When you start sharing, it becomes your turn and the person sharing now is notified. You always choose what to share before anything is captured."
 msgstr "Uma pessoa compartilha por vez. Quando você começa a compartilhar, a vez passa para você e quem está compartilhando é avisado. Você sempre escolhe o que compartilhar antes de qualquer captura."
+
+# Controles rápidos da tela Ao vivo (issue #5)
+msgid "Quick controls"
+msgstr "Controles rápidos"
+
+msgid "Change the source, quality and audio in Quick controls above, without stopping the stream."
+msgstr "Troque a fonte, a qualidade e o áudio em Controles rápidos, acima, sem parar a transmissão."
+
+msgid "Source"
+msgstr "Fonte"
+
+msgid "Source closed"
+msgstr "Fonte fechada"
+
+msgid "Selected app"
+msgstr "Só o aplicativo"
+
+msgid "Microphone"
+msgstr "Microfone"
+
+msgid "On"
+msgstr "Ligado"
+
+msgid "Muted"
+msgstr "Mudo"
+
+msgid "Unavailable"
+msgstr "Indisponível"
+
+msgid "Confirm the restart: capture and the encoder restart now and viewers see the image freeze for a moment. The room, viewers and audio stay connected."
+msgstr "Confirme o reinício: a captura e o encoder reiniciam agora e os espectadores veem a imagem congelar por um instante. A sala, os espectadores e o áudio continuam conectados."
+
+msgid "Restart and apply"
+msgstr "Reiniciar e aplicar"
+
+msgid "Back"
+msgstr "Voltar"
+
+msgid "Close"
+msgstr "Fechar"
+
+msgid "What you are sharing"
+msgstr "O que você está compartilhando"
+
+msgid "The shared window or monitor is no longer available. Viewers see the last image. Choose another source within 2 minutes or the stream stops."
+msgstr "A janela ou o monitor compartilhado não está mais disponível. Os espectadores veem a última imagem. Escolha outra fonte em até 2 minutos ou a transmissão será encerrada."
+
+msgid "Sharing now: {}"
+msgstr "Compartilhando agora: {}"
+
+msgid "Sharing"
+msgstr "Em uso"
+
+msgid "Switching the source restarts capture and the encoder: viewers see a brief freeze, then the stream continues in the same room."
+msgstr "Trocar a fonte reinicia a captura e o encoder: os espectadores veem um breve congelamento e a transmissão continua na mesma sala."
+
+msgid "Switch source"
+msgstr "Trocar fonte"
+
+msgid "Stream quality"
+msgstr "Qualidade da transmissão"
+
+msgid "Content"
+msgstr "Conteúdo"
+
+msgid "Smooth motion"
+msgstr "Movimento fluido"
+
+msgid "Sharp text"
+msgstr "Texto nítido"
+
+msgid "For code, documents and menus: when the network slows down, fewer frames keep text readable."
+msgstr "Para código, documentos e menus: quando a rede fica lenta, menos quadros por segundo mantêm o texto legível."
+
+msgid "For games and video: when the network slows down, the frame rate is kept and detail is reduced."
+msgstr "Para jogos e vídeo: quando a rede fica lenta, a taxa de quadros é mantida e o detalhe é reduzido."
+
+msgid "Content and bitrate apply instantly. Resolution and frame rate restart the encoder."
+msgstr "Conteúdo e taxa de bits valem na hora. Resolução e taxa de quadros reiniciam o encoder."
+
+msgid "Content applies instantly. This encoder cannot change the bitrate live, so bitrate, resolution and frame rate restart the encoder."
+msgstr "Conteúdo vale na hora. Este encoder não muda a taxa de bits ao vivo: taxa de bits, resolução e taxa de quadros reiniciam o encoder."
+
+msgid "These changes restart capture and the encoder: viewers see a brief freeze."
+msgstr "Estas mudanças reiniciam a captura e o encoder: os espectadores veem um breve congelamento."
+
+msgid "Apply (restarts video)"
+msgstr "Aplicar (reinicia o vídeo)"
+
+msgid "Apply now"
+msgstr "Aplicar agora"
+
+msgid "Share game audio"
+msgstr "Compartilhar o áudio do jogo"
+
+msgid "Sound from the shared app or the whole system, separate from the microphone."
+msgstr "Som do aplicativo compartilhado ou do sistema inteiro, separado do microfone."
+
+msgid "Audio source"
+msgstr "Origem do áudio"
+
+msgid "A monitor has no app of its own: only the entire system audio can be shared."
+msgstr "Um monitor não tem um aplicativo próprio: só o áudio do sistema inteiro pode ser compartilhado."
+
+msgid "Entire system audio leaves Discord voice out when possible; other apps and notifications are included."
+msgstr "O áudio do sistema inteiro deixa a voz do Discord de fora quando possível; outros aplicativos e notificações entram."
+
+msgid "Applies instantly, without interrupting the stream."
+msgstr "Vale na hora, sem interromper a transmissão."
+
+msgid "Share microphone"
+msgstr "Compartilhar o microfone"
+
+msgid "Off until you turn it on. Mixed into the stream audio, separate from the game audio."
+msgstr "Desligado até você ligar. Misturado ao áudio da transmissão, separado do áudio do jogo."
+
+msgid "Input device"
+msgstr "Dispositivo de entrada"
+
+msgid "Mute microphone"
+msgstr "Silenciar o microfone"
+
+msgid "Opening the microphone…"
+msgstr "Abrindo o microfone…"
+
+msgid "Microphone live: viewers hear you."
+msgstr "Microfone ligado: os espectadores ouvem você."
+
+msgid "Microphone muted: nothing is sent."
+msgstr "Microfone no mudo: nada é enviado."
+
+msgid "Microphone unavailable (disconnected, missing or blocked in Windows privacy settings). The stream continues without it; choose another device or refresh the list."
+msgstr "Microfone indisponível (desconectado, ausente ou bloqueado nas configurações de privacidade do Windows). A transmissão continua sem ele; escolha outro dispositivo ou atualize a lista."
+
+msgid "No microphone found. Connect one and select Refresh devices."
+msgstr "Nenhum microfone encontrado. Conecte um e toque em Atualizar dispositivos."
+
+msgid "Refresh devices"
+msgstr "Atualizar dispositivos"

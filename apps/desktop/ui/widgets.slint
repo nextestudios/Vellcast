@@ -35,6 +35,8 @@ export component VButton inherits Rectangle {
     accessible-role: button;
     accessible-label: root.text;
     accessible-action-default => { root.clicked(); }
+    // Permite `botao.focus()` (ex.: primeiro controle de um painel recém-aberto).
+    forward-focus: fs;
 
     fs := FocusScope {
         enabled: root.enabled;
@@ -84,6 +86,7 @@ export component VToggle inherits Rectangle {
     accessible-label: root.label;
     accessible-checked: root.checked;
     accessible-action-default => { root.flip(); }
+    forward-focus: fs;
 
     function flip() {
         if (!root.enabled) { return; }
@@ -187,6 +190,7 @@ export component VStepper inherits Rectangle {
     accessible-value-step: root.step;
     accessible-action-increment => { root.nudge(1); }
     accessible-action-decrement => { root.nudge(-1); }
+    forward-focus: fs;
 
     function nudge(direction: int) {
         // Arredonda para o passo para evitar acúmulo de erro de ponto flutuante.
@@ -244,6 +248,7 @@ export component VSelect inherits Rectangle {
     accessible-role: combobox;
     accessible-label: root.label;
     accessible-value: root.options[root.current-index];
+    forward-focus: fs;
 
     function move(direction: int) {
         if (root.options.length == 0) { return; }

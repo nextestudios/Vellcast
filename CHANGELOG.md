@@ -9,12 +9,22 @@ Notas em português do Brasil; a versão em inglês (Estados Unidos) fica em `CH
 - **Salas pelo Início:** a tela Início ganhou "Criar sala" e "Entrar com link". Cole o link de convite (ou toque em **Colar link**) para entrar na sala de outra pessoa; a sala aparece em Salas marcada como **Participante**.
 - **Qualquer participante pode compartilhar a tela:** na sala, toque em **Compartilhar minha tela**, escolha o que compartilhar e inicie. Uma pessoa compartilha por vez: quem começa assume a vez, quem compartilhava é avisado e os espectadores passam para o novo fluxo sem imagem travada. Parar, sair da sala ou cair libera a vez na hora.
 - A sala mostra quem está compartilhando (no app e no player web) e tem **Assistir no navegador**, **Parar de compartilhar** e **Sair da sala**.
+- **Controles rápidos na tela Ao vivo:** troque o que está compartilhando, a qualidade (conteúdo, resolução, taxa de quadros e taxa de bits), o áudio do jogo e o microfone sem sair da transmissão, com controle, mouse ou teclado. Taxa de bits, preferência de conteúdo e áudio valem na hora; fonte, resolução e taxa de quadros reiniciam a captura e o encoder na mesma sala, depois de uma confirmação que avisa do breve congelamento.
+- **Microfone (opcional):** escolha o microfone, ligue, desligue ou silencie durante a transmissão. Ele vem desligado e é misturado ao áudio do jogo, que continua controlado à parte (só o aplicativo, sistema inteiro sem a voz do Discord, ou desligado).
+- **Preferência de conteúdo "Texto nítido":** para código e documentos, quando a rede fica lenta o Vellcast reduz a taxa de quadros em vez de borrar o texto.
 
 ### Correções
 - **Player web cabe na janela:** a página `/watch` ocupa exatamente a área visível do navegador, sem barras de rolagem. A imagem é ajustada com faixas pretas quando a proporção da transmissão difere da janela (sem esticar nem cortar), acompanha redimensionamento e tela cheia, e os controles, a barra de status e as estatísticas continuam visíveis, inclusive em telas estreitas.
 
 ### Segurança
 - Só quem entrou com um convite válido (ou o dono) pode pedir para compartilhar; revogar um participante encerra o compartilhamento dele. Convites, tokens e nomes não aparecem nos logs do servidor.
+
+### Mudanças
+- Se a janela ou o monitor compartilhado fechar, a transmissão não termina mais na hora: os espectadores veem a última imagem e você tem 2 minutos para escolher outra fonte.
+- As opções de qualidade mostram só o que o Vellcast e o plano realmente oferecem (até 1080p60 no plano Gratuito); o que não está disponível aparece numa nota.
+
+### Limitações conhecidas
+- Microfone real, troca de dispositivo e controle físico ainda não foram validados em hardware; o servidor de testes da CI não tem microfone.
 
 ## [0.2.0-alpha.1]
 ### Novidades

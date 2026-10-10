@@ -75,6 +75,11 @@ jobs:
           & target\release\examples\capture_audio.exe system 5 e2e-out\audio.opus 2>&1 | Out-String | Write-Output
           Write-Output "código de saída: $LASTEXITCODE"
           Get-ChildItem e2e-out\audio.opus -ErrorAction SilentlyContinue | Format-Table Name, Length
+          # Issue #5: microfones disponíveis e mixagem sistema + microfone. O runner
+          # costuma não ter microfone: o esperado é lista vazia e microfone indisponível, sem falha.
+          & target\release\examples\capture_audio.exe devices 2>&1 | Out-String | Write-Output
+          & target\release\examples\capture_audio.exe system+mic 5 e2e-out\mix.opus 2>&1 | Out-String | Write-Output
+          Write-Output "código de saída (system+mic): $LASTEXITCODE"
 
       # Relay e testes no mesmo passo: no Windows, o runner encerra os processos
       # iniciados por um passo quando ele termina.
@@ -98,6 +103,13 @@ jobs:
             node tests/e2e/windows-e2e.mjs target\release\examples\stream_to_relay.exe 20 2 20 2000 off $win.Matches[0].Groups[1].Value
             if ($LASTEXITCODE -ne 0) { $failed = $true }
           } else { Write-Output "sem janela do Bloco de Notas; transmissão de janela pulada" }
+
+          # Issue #5: controles rápidos pelo mesmo caminho do app (bitrate, nitidez,
+          # microfone e reinício do vídeo em 720p no meio da transmissão).
+          $env:VELLCAST_E2E_LIVE = "1"
+          node tests/e2e/windows-e2e.mjs target\release\examples\stream_to_relay.exe 30 2 20 3000 system monitor
+          if ($LASTEXITCODE -ne 0) { $failed = $true }
+          Remove-Item Env:VELLCAST_E2E_LIVE
 
           # S-001: console rolando texto (janela própria via conhost) gera tráfego real no
           # monitor; a subida passa por um proxy limitado a 300 kbps.
@@ -132,6 +144,14 @@ jobs:
           $env:VELLCAST_DEV_MODAL = "keyboard"
           $env:VELLCAST_DEV_SNAPSHOT = "$PWD\e2e-out\telas\teclado-virtual.bmp"
           Start-Process target\release\vellcast-desktop.exe -Wait
+          # Issue #5: tela Ao vivo com os controles rápidos e o painel de qualidade aberto.
+          Remove-Item Env:VELLCAST_DEV_MODAL
+          $env:VELLCAST_DEV_PAGE = "3"
+          $env:VELLCAST_DEV_LIVE_DEMO = "1"
+          $env:VELLCAST_DEV_LIVE_PANEL = "2"
+          $env:VELLCAST_DEV_SNAPSHOT = "$PWD\e2e-out\telas\ao-vivo-controles-rapidos.bmp"
+          Start-Process target\release\vellcast-desktop.exe -Wait
+          Remove-Item Env:VELLCAST_DEV_LIVE_DEMO, Env:VELLCAST_DEV_LIVE_PANEL
           Get-ChildItem e2e-out\telas | Format-Table Name, Length
           if ((Get-ChildItem e2e-out\telas\*.bmp).Count -lt 9) { throw "nem todas as telas foram capturadas" }
 

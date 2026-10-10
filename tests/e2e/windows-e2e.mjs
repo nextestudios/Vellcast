@@ -4,6 +4,8 @@
 //   node tests/e2e/windows-e2e.mjs <publisher.exe> [segundos=30] [espectadores=3] [fps=30] [kbps=3000] [audio=system] [fonte=monitor]
 //
 // Variáveis: VELLCAST_E2E_BASE (padrão http://127.0.0.1:8788), VELLCAST_E2E_RELAY_PID (amostra de memória do relay).
+// VELLCAST_E2E_LIVE=1: o transmissor também exercita os controles rápidos (issue #5):
+// bitrate, nitidez, microfone e reinício do vídeo em 720p no meio da transmissão.
 // Sai com código 1 se os espectadores não receberem vídeo em ritmo razoável,
 // se houver erros de protocolo ou se a memória do transmissor crescer sem parar.
 
@@ -22,6 +24,7 @@ const secs = Number(secsArg);
 const viewers = Number(viewersArg);
 const fps = Number(fpsArg);
 const relayPid = process.env.VELLCAST_E2E_RELAY_PID ? Number(process.env.VELLCAST_E2E_RELAY_PID) : null;
+const live = process.env.VELLCAST_E2E_LIVE === '1';
 
 async function api(method, url, token, body) {
   const res = await fetch(base + url, {
@@ -175,6 +178,13 @@ const summary = {
     staleFramesDropped: metrics.staleFramesDropped,
     slowViewersDisconnected: metrics.slowViewersDisconnected,
   },
+  liveControls: live
+    ? {
+        videoRestarted: /VideoRestarted \{/.test(log),
+        microphones: [...log.matchAll(/MICROFONE[S]? ([^\n]+)/g)].map((m) => m[1].trim()),
+        finalMic: (log.match(/"mic":"([A-Za-z]+)"/g) ?? []).pop() ?? null,
+      }
+    : null,
 };
 console.log('\nRESULTADO ' + JSON.stringify(summary, null, 2));
 
@@ -188,6 +198,7 @@ if (summary.errors.length) failures.push(`erros de protocolo: ${summary.errors.j
 if (summary.memoryMb.publisherGrowthAfterWarmup !== null && summary.memoryMb.publisherGrowthAfterWarmup > 100)
   failures.push(`memória do transmissor cresceu ${summary.memoryMb.publisherGrowthAfterWarmup.toFixed(0)} MB`);
 if (!/connected|Connected/.test(log)) failures.push('o transmissor não reportou conexão ao relay');
+if (live && !summary.liveControls.videoRestarted) failures.push('o reinício do vídeo durante a transmissão (LiveChange::Video) não aconteceu');
 
 if (process.env.GITHUB_STEP_SUMMARY) {
   appendFileSync(

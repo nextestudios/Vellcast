@@ -1,10 +1,38 @@
 //! Métricas da sessão: o pipeline publica valores a cada segundo em atômicos
 //! e a interface lê sem bloquear a thread de codificação.
 
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use crate::SessionStats;
+use crate::{MicStatus, SessionStats};
+
+/// Estado do áudio publicado junto com as métricas.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct AudioSnapshot {
+    pub active: bool,
+    pub game_audio: bool,
+    pub microphone: MicStatus,
+}
+
+fn mic_to_u8(m: MicStatus) -> u8 {
+    match m {
+        MicStatus::Off => 0,
+        MicStatus::Starting => 1,
+        MicStatus::Active => 2,
+        MicStatus::Muted => 3,
+        MicStatus::Unavailable => 4,
+    }
+}
+
+fn mic_from_u8(v: u8) -> MicStatus {
+    match v {
+        1 => MicStatus::Starting,
+        2 => MicStatus::Active,
+        3 => MicStatus::Muted,
+        4 => MicStatus::Unavailable,
+        _ => MicStatus::Off,
+    }
+}
 
 fn f32_store(a: &AtomicU32, v: f32) {
     a.store(v.to_bits(), Ordering::Relaxed);
@@ -26,6 +54,10 @@ pub(super) struct LiveStats {
     /// RTT em µs; 0 = desconhecido.
     rtt_us: AtomicU64,
     audio_active: AtomicBool,
+    game_audio: AtomicBool,
+    microphone: AtomicU8,
+    /// 0 = desconhecido, 1 = aceita, 2 = recusa mudar o bitrate em tempo real.
+    live_bitrate: AtomicU8,
     target_bitrate_kbps: AtomicU32,
     target_fps: AtomicU32,
 }
@@ -43,6 +75,9 @@ impl LiveStats {
             reconnects: AtomicU64::new(0),
             rtt_us: AtomicU64::new(0),
             audio_active: AtomicBool::new(false),
+            game_audio: AtomicBool::new(false),
+            microphone: AtomicU8::new(0),
+            live_bitrate: AtomicU8::new(0),
             target_bitrate_kbps: AtomicU32::new(0),
             target_fps: AtomicU32::new(0),
         }
@@ -53,6 +88,15 @@ impl LiveStats {
         self.target_bitrate_kbps
             .store(bitrate_kbps, Ordering::Relaxed);
         self.target_fps.store(fps, Ordering::Relaxed);
+    }
+
+    pub fn set_live_bitrate(&self, live: Option<bool>) {
+        let v = match live {
+            None => 0,
+            Some(true) => 1,
+            Some(false) => 2,
+        };
+        self.live_bitrate.store(v, Ordering::Relaxed);
     }
 
     pub fn add_dropped(&self, n: u64) {
@@ -74,6 +118,13 @@ impl LiveStats {
             rtt_ms: (rtt > 0).then(|| rtt as f32 / 1000.0),
             target_bitrate_kbps: self.target_bitrate_kbps.load(Ordering::Relaxed),
             target_fps: self.target_fps.load(Ordering::Relaxed),
+            game_audio: self.game_audio.load(Ordering::Relaxed),
+            microphone: mic_from_u8(self.microphone.load(Ordering::Relaxed)),
+            live_bitrate: match self.live_bitrate.load(Ordering::Relaxed) {
+                1 => Some(true),
+                2 => Some(false),
+                _ => None,
+            },
         }
     }
 }
@@ -110,7 +161,7 @@ impl RateWindow {
         &mut self,
         now: Instant,
         stats: &LiveStats,
-        side: impl FnOnce() -> (vellcast_transport::StatsSnapshot, bool),
+        side: impl FnOnce() -> (vellcast_transport::StatsSnapshot, AudioSnapshot),
     ) {
         let elapsed = now.duration_since(self.start);
         if elapsed < Duration::from_secs(1) {
@@ -124,13 +175,17 @@ impl RateWindow {
             let avg = self.encode_total.as_secs_f32() * 1000.0 / self.encode_samples as f32;
             f32_store(&stats.encode_ms, avg);
         }
-        let (net, audio_active) = side();
+        let (net, audio) = side();
         stats
             .network_dropped
             .store(net.video_dropped, Ordering::Relaxed);
         stats.reconnects.store(net.reconnects, Ordering::Relaxed);
         stats.rtt_us.store(net.last_rtt_us, Ordering::Relaxed);
-        stats.audio_active.store(audio_active, Ordering::Relaxed);
+        stats.audio_active.store(audio.active, Ordering::Relaxed);
+        stats.game_audio.store(audio.game_audio, Ordering::Relaxed);
+        stats
+            .microphone
+            .store(mic_to_u8(audio.microphone), Ordering::Relaxed);
         *self = Self::new(now);
     }
 }

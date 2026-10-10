@@ -89,6 +89,7 @@ pub fn init(ui: &AppWindow) {
     with_state(|st| st.live_timer = Some(timer));
 
     wire(ui);
+    crate::live_controls::init(ui);
     apply_stream_prefs(ui);
     refresh_rooms_ui(ui);
     set_encoder_options(ui, &[]);
@@ -336,6 +337,7 @@ fn set_sources(ui: &AppWindow, result: Result<Vec<SourceInfo>, String>) {
     ui.set_sources(ModelRc::new(VecModel::from(items)));
     ui.set_selected_source(selected);
     with_state(|st| st.sources = list);
+    crate::live_controls::sources_updated(ui);
 }
 
 // ---------------------------------------------------------------------------
@@ -351,6 +353,7 @@ fn on_engine_msg(ui: &AppWindow, msg: EngineMsg) {
         }
         EngineMsg::StartFailed(e) => {
             with_state(|st| st.live = None);
+            crate::live_controls::end(ui);
             ui.set_starting(false);
             set_stream_message(
                 ui,
@@ -360,7 +363,11 @@ fn on_engine_msg(ui: &AppWindow, msg: EngineMsg) {
             sync_live(ui);
         }
         EngineMsg::Event(event) => on_session_event(ui, event),
-        EngineMsg::Stats(stats) => show_stats(ui, &stats),
+        EngineMsg::Stats(stats) => {
+            show_stats(ui, &stats);
+            crate::live_controls::on_stats(ui, &stats);
+        }
+        EngineMsg::AudioInputs(result) => crate::live_controls::set_audio_inputs(ui, result),
     }
 }
 
@@ -409,15 +416,35 @@ fn on_session_event(ui: &AppWindow, event: SessionEvent) {
         SessionEvent::Warning { message } => {
             if active {
                 set_live_message(ui, &message, false);
+                crate::live_controls::on_warning(ui);
             }
         }
         SessionEvent::SourceLost => {
             if active {
-                let msg = t(
-                    "A janela ou o monitor capturado não está mais disponível. A transmissão foi encerrada.",
-                    "The captured window or monitor is no longer available. The stream was stopped.",
+                // A sessão continua na sala; os controles rápidos oferecem outra fonte.
+                set_live_message(
+                    ui,
+                    &t(
+                        "A janela ou o monitor capturado não está mais disponível. Escolha outra fonte em Controles rápidos; sem nova fonte em 2 minutos, a transmissão é encerrada.",
+                        "The captured window or monitor is no longer available. Choose another source in Quick controls; without a new source within 2 minutes, the stream stops.",
+                    ),
+                    true,
                 );
-                stop_stream(ui, Some(msg.as_str()));
+                crate::live_controls::on_source_lost(ui);
+            }
+        }
+        SessionEvent::VideoRestarted {
+            source,
+            encoder,
+            width,
+            height,
+            fps,
+        } => {
+            if active {
+                ui.set_live_video(format!("{width}×{height} @ {fps} · {encoder}").into());
+                ui.set_live_source(source.clone().into());
+                set_live_message(ui, "", false);
+                crate::live_controls::on_video_restarted(ui, &source, width, height, fps);
             }
         }
         SessionEvent::Stopped { reason } => {
@@ -577,6 +604,7 @@ fn start_stream(ui: &AppWindow) {
                     display_name: with_state(|st| st.settings.display_name.clone())
                         .filter(|n| !n.is_empty()),
                 };
+                crate::live_controls::begin(ui, &config);
                 with_state(|st| {
                     if let Some(e) = &st.engine {
                         e.send(Command::Start(Box::new(config)));
@@ -607,6 +635,7 @@ pub fn stop_stream(ui: &AppWindow, message: Option<&str>) {
 
 fn end_live(ui: &AppWindow, message: Option<&str>) {
     with_state(|st| st.live = None);
+    crate::live_controls::end(ui);
     ui.set_starting(false);
     match message {
         Some(m) => {

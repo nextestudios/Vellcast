@@ -3,6 +3,13 @@
 //! Uso:
 //!   cargo run -p vellcast-audio --example capture_audio -- system 10 saida.opus
 //!   cargo run -p vellcast-audio --example capture_audio -- <pid> 10 saida.opus
+//!   cargo run -p vellcast-audio --example capture_audio -- mic 10 microfone.opus
+//!   cargo run -p vellcast-audio --example capture_audio -- system+mic 10 mix.opus
+//!   cargo run -p vellcast-audio --example capture_audio -- devices
+//!
+//! `mic` grava só o microfone padrão (linha do tempo de silêncio + microfone);
+//! `system+mic` mistura o áudio do sistema com o microfone. Sem microfone, o
+//! estado termina `Unavailable` e o arquivo sai só com silêncio (sem falhar).
 //!
 //! Grava um arquivo Ogg Opus que pode ser ouvido no VLC, no ffplay ou no navegador,
 //! e imprime estatísticas de PTS (intervalos e lacunas).
@@ -91,7 +98,7 @@ mod ogg {
 #[cfg(windows)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use std::sync::{Arc, Mutex};
-    use vellcast_audio::{AudioCapture, AudioTarget, qpc_now};
+    use vellcast_audio::{AudioCapture, AudioSetup, AudioTarget, MicConfig, qpc_now};
 
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -100,10 +107,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let target = match args.first().map(String::as_str) {
-        None | Some("system") => AudioTarget::System,
-        Some(pid) => AudioTarget::Process(pid.parse()?),
+    if args.first().map(String::as_str) == Some("devices") {
+        let list = vellcast_audio::list_input_devices()?;
+        if list.is_empty() {
+            println!("nenhum microfone encontrado");
+        }
+        for d in list {
+            println!(
+                "microfone: {:?} (padrão: {}) id={}",
+                d.name, d.is_default, d.id
+            );
+        }
+        return Ok(());
+    }
+    let mic = || Some(MicConfig::default());
+    let setup = match args.first().map(String::as_str) {
+        None | Some("system") => AudioSetup {
+            loopback: Some(AudioTarget::System),
+            microphone: None,
+        },
+        Some("mic") => AudioSetup {
+            loopback: None,
+            microphone: mic(),
+        },
+        Some("system+mic") => AudioSetup {
+            loopback: Some(AudioTarget::System),
+            microphone: mic(),
+        },
+        Some(pid) => AudioSetup {
+            loopback: Some(AudioTarget::Process(pid.parse()?)),
+            microphone: None,
+        },
     };
+    let target = setup.clone();
     let seconds: u64 = args.get(1).map_or(Ok(10), |s| s.parse())?;
     let path = args
         .get(2)
@@ -112,8 +148,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let packets = Arc::new(Mutex::new(Vec::<(Vec<u8>, u64)>::new()));
     let sink = Arc::clone(&packets);
-    let capture = AudioCapture::start(
-        target,
+    let capture = AudioCapture::start_with(
+        setup,
         qpc_now().unwrap_or(0),
         Box::new(move |p| {
             if let Ok(mut v) = sink.lock() {

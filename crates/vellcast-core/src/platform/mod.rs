@@ -14,7 +14,7 @@ mod stats;
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{SyncSender, sync_channel};
+use std::sync::mpsc::{Receiver, Sender, SyncSender, channel, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -31,7 +31,7 @@ use vellcast_encoder::{
 use vellcast_protocol::messages::{AudioInit, VideoInit};
 use vellcast_transport::{Publisher, PublisherConfig, PublisherEvent, SendOutcome};
 
-use self::stats::{LiveStats, RateWindow};
+use self::stats::{AudioSnapshot, LiveStats, RateWindow};
 use super::adapt::{Adapter, Reason, Signals};
 use super::*;
 
@@ -47,6 +47,8 @@ const MAX_INFLIGHT: usize = 16;
 const ADAPT_INTERVAL: Duration = Duration::from_secs(1);
 /// Intervalo mínimo entre avisos de redução de qualidade na interface.
 const ADAPT_WARNING_INTERVAL: Duration = Duration::from_secs(15);
+/// Espera entre voltas do laço enquanto não há fonte (janela fechada).
+const WAITING_SOURCE_POLL: Duration = Duration::from_millis(200);
 
 pub fn list_sources() -> Result<Vec<SourceInfo>> {
     let sources = vellcast_capture::list_sources().map_err(map_capture_error)?;
@@ -89,6 +91,18 @@ pub fn list_encoders() -> Result<Vec<EncoderInfo>> {
         .collect())
 }
 
+pub fn list_audio_inputs() -> Result<Vec<AudioInputInfo>> {
+    let list = vellcast_audio::list_input_devices().map_err(|e| CoreError::Audio(e.to_string()))?;
+    Ok(list
+        .into_iter()
+        .map(|d| AudioInputInfo {
+            id: d.id,
+            name: d.name,
+            is_default: d.is_default,
+        })
+        .collect())
+}
+
 fn map_capture_error(e: CaptureError) -> CoreError {
     match e {
         CaptureError::Unsupported => CoreError::Unsupported,
@@ -119,6 +133,8 @@ struct Shared {
 
 pub struct Session {
     shared: Arc<Shared>,
+    /// Mudanças ao vivo, aplicadas pela thread do pipeline.
+    controls: Sender<LiveChange>,
     thread: Option<JoinHandle<()>>,
 }
 
@@ -133,14 +149,24 @@ impl Session {
             stats: LiveStats::new(),
         });
         let (init_tx, init_rx) = sync_channel::<Result<()>>(1);
+        let (controls, controls_rx) = channel::<LiveChange>();
         let thread_shared = Arc::clone(&shared);
         let thread = std::thread::Builder::new()
             .name("vellcast-pipeline".into())
-            .spawn(move || run(config, thread_shared, Arc::new(events), init_tx))
+            .spawn(move || {
+                run(
+                    config,
+                    thread_shared,
+                    Arc::new(events),
+                    controls_rx,
+                    init_tx,
+                )
+            })
             .map_err(|e| CoreError::Capture(format!("falha ao criar a thread do pipeline: {e}")))?;
 
         let session = Self {
             shared,
+            controls,
             thread: Some(thread),
         };
         match init_rx.recv_timeout(INIT_TIMEOUT) {
@@ -164,6 +190,13 @@ impl Session {
 
     pub fn request_keyframe(&self) {
         self.shared.keyframe.store(true, Ordering::Relaxed);
+    }
+
+    pub fn apply(&self, change: LiveChange) {
+        if self.controls.send(change).is_ok() {
+            // Acorda o pipeline (pode estar esperando quadro ou sem fonte).
+            self.shared.slot.wake();
+        }
     }
 
     pub fn stop(mut self) {
@@ -242,10 +275,11 @@ fn run(
     config: SessionConfig,
     shared: Arc<Shared>,
     events: Events,
+    controls: Receiver<LiveChange>,
     init_tx: SyncSender<Result<()>>,
 ) {
     vellcast_encoder::init_thread();
-    let reason = match Pipeline::open(&config, &shared, &events) {
+    let reason = match Pipeline::open(&config, &shared, &events, controls) {
         Ok(mut pipeline) => {
             let _ = init_tx.send(Ok(()));
             let reason = pipeline.run_loop(&shared, &events);
@@ -266,9 +300,17 @@ struct Pipeline {
     out_w: u32,
     out_h: u32,
     origin_hns: i64,
+    /// Origem QPC bruta (para iniciar o áudio depois, durante a transmissão).
+    origin_ticks: i64,
     runtime: tokio::runtime::Runtime,
     publisher: Arc<Publisher>,
     audio: Option<vellcast_audio::AudioCapture>,
+    /// Microfone pedido pelo usuário (desligado por padrão).
+    microphone: Option<MicrophoneConfig>,
+    /// Mudanças ao vivo pedidas pela interface.
+    controls: Receiver<LiveChange>,
+    /// Desde quando a fonte sumiu (janela fechada, monitor desconectado).
+    waiting_source: Option<Instant>,
     video_codec: Option<String>,
     inflight: VecDeque<(i64, Instant)>,
     device_resets: u32,
@@ -292,7 +334,12 @@ struct Pipeline {
 }
 
 impl Pipeline {
-    fn open(config: &SessionConfig, shared: &Arc<Shared>, events: &Events) -> Result<Self> {
+    fn open(
+        config: &SessionConfig,
+        shared: &Arc<Shared>,
+        events: &Events,
+        controls: Receiver<LiveChange>,
+    ) -> Result<Self> {
         let (out_w, out_h) = fit_dimensions(
             config.source.width,
             config.source.height,
@@ -366,9 +413,13 @@ impl Pipeline {
             out_w,
             out_h,
             origin_hns,
+            origin_ticks,
             runtime,
             publisher,
             audio,
+            microphone: None,
+            controls,
+            waiting_source: None,
             video_codec: None,
             inflight: VecDeque::with_capacity(MAX_INFLIGHT),
             device_resets: 0,
@@ -394,16 +445,30 @@ impl Pipeline {
         let mut out: Vec<EncodedFrame> = Vec::with_capacity(4);
         let mut window = RateWindow::new(Instant::now());
         loop {
-            if shared.source_lost.load(Ordering::SeqCst) {
-                events(SessionEvent::SourceLost);
-                return Some("a janela ou o monitor capturado foi fechado".into());
-            }
             if shared.stop.load(Ordering::SeqCst) {
                 return shared
                     .fatal
                     .lock()
                     .unwrap_or_else(|p| p.into_inner())
                     .take();
+            }
+            if let Some(fatal) = self.process_controls(shared, events) {
+                return Some(fatal);
+            }
+            if shared.source_lost.load(Ordering::SeqCst) && self.waiting_source.is_none() {
+                self.enter_waiting_source(shared, events);
+            }
+            if let Some(since) = self.waiting_source {
+                // Sem fonte: a conexão e o áudio continuam; espera outra fonte.
+                if since.elapsed() >= SOURCE_LOST_GRACE {
+                    return Some(
+                        "a janela ou o monitor capturado foi fechado e nenhuma outra fonte foi escolhida"
+                            .into(),
+                    );
+                }
+                let _ = shared.slot.take(WAITING_SOURCE_POLL);
+                window.maybe_publish(Instant::now(), &shared.stats, || self.side_stats());
+                continue;
             }
 
             // Espera curta quando há saída pendente no encoder; senão aguarda o próximo quadro.
@@ -630,9 +695,252 @@ impl Pipeline {
         }
     }
 
-    fn side_stats(&self) -> (vellcast_transport::StatsSnapshot, bool) {
-        let audio_active = self.audio.as_ref().is_some_and(|a| a.stats().active);
-        (self.publisher.stats(), audio_active)
+    fn side_stats(&self) -> (vellcast_transport::StatsSnapshot, AudioSnapshot) {
+        use vellcast_audio::MicState;
+        let audio = match &self.audio {
+            Some(a) => {
+                let s = a.stats();
+                AudioSnapshot {
+                    active: s.active,
+                    game_audio: s.loopback,
+                    microphone: match s.mic {
+                        MicState::Off => MicStatus::Off,
+                        MicState::Starting => MicStatus::Starting,
+                        MicState::Active if s.mic_muted => MicStatus::Muted,
+                        MicState::Active => MicStatus::Active,
+                        MicState::Unavailable => MicStatus::Unavailable,
+                    },
+                }
+            }
+            None => AudioSnapshot {
+                active: false,
+                game_audio: false,
+                // Microfone pedido sem captura de áudio: ela não pôde iniciar.
+                microphone: if self.microphone.is_some() {
+                    MicStatus::Unavailable
+                } else {
+                    MicStatus::Off
+                },
+            },
+        };
+        (self.publisher.stats(), audio)
+    }
+
+    /// Aplica as mudanças ao vivo pendentes. `Some` = erro fatal.
+    fn process_controls(&mut self, shared: &Arc<Shared>, events: &Events) -> Option<String> {
+        while let Ok(change) = self.controls.try_recv() {
+            tracing::info!(?change, "mudança durante a transmissão");
+            if let Err(fatal) = self.apply_change(change, shared, events) {
+                return Some(fatal);
+            }
+        }
+        None
+    }
+
+    fn now_ms(&self) -> u64 {
+        self.started.elapsed().as_millis() as u64
+    }
+
+    fn apply_change(
+        &mut self,
+        change: LiveChange,
+        shared: &Arc<Shared>,
+        events: &Events,
+    ) -> std::result::Result<(), String> {
+        match change {
+            LiveChange::Bitrate(kbps) => self.change_bitrate(kbps, shared, events)?,
+            LiveChange::Adaptation(mode) => {
+                self.config.adaptation = mode;
+                let now = self.now_ms();
+                self.adapter.set_mode(mode, now);
+                self.push_bitrate(shared);
+                self.target_fps = self.adapter.fps().min(self.config.quality.fps).max(1);
+                shared
+                    .stats
+                    .set_targets(self.gpu.encoder.config().bitrate_kbps, self.target_fps);
+            }
+            LiveChange::Video { source, quality } => {
+                self.restart_video(source, quality, shared, events)?
+            }
+            LiveChange::Audio(mode) => {
+                self.config.audio = mode;
+                self.sync_audio(events);
+            }
+            LiveChange::Microphone(mic) => {
+                self.microphone = mic.clone();
+                match &self.audio {
+                    Some(audio) => audio.set_microphone(mic.map(to_audio_mic)),
+                    None => self.sync_audio(events),
+                }
+            }
+            LiveChange::MicrophoneMuted(muted) => {
+                if let Some(mic) = &mut self.microphone {
+                    mic.muted = muted;
+                }
+                if let Some(audio) = &self.audio {
+                    audio.set_mic_muted(muted);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Leva o bitrate da adaptação ao encoder. `false` se o encoder recusar.
+    fn push_bitrate(&mut self, shared: &Shared) -> bool {
+        let want = self.adapter.bitrate_kbps();
+        if want == self.gpu.encoder.config().bitrate_kbps {
+            return true;
+        }
+        if self.runtime_bitrate == Some(false) {
+            return false;
+        }
+        let ok = self.gpu.encoder.set_bitrate(want);
+        self.runtime_bitrate = Some(ok);
+        shared.stats.set_live_bitrate(Some(ok));
+        ok
+    }
+
+    fn change_bitrate(
+        &mut self,
+        kbps: u32,
+        shared: &Arc<Shared>,
+        events: &Events,
+    ) -> std::result::Result<(), String> {
+        self.config.quality.bitrate_kbps = kbps;
+        let now = self.now_ms();
+        self.adapter.set_max_bitrate(kbps, now);
+        if !self.push_bitrate(shared) && self.waiting_source.is_none() {
+            events(SessionEvent::Warning {
+                message: "Este encoder não muda o bitrate em tempo real: reiniciando o encoder com o novo valor.".into(),
+            });
+            let (source, quality) = (self.config.source.clone(), self.config.quality);
+            return self.restart_video(source, quality, shared, events);
+        }
+        shared
+            .stats
+            .set_targets(self.gpu.encoder.config().bitrate_kbps, self.target_fps);
+        Ok(())
+    }
+
+    /// A fonte sumiu: para a captura e espera outra fonte, mantendo a sala.
+    fn enter_waiting_source(&mut self, shared: &Shared, events: &Events) {
+        tracing::warn!("fonte de captura perdida; aguardando outra fonte");
+        self.waiting_source = Some(Instant::now());
+        self.gpu.capturer.halt();
+        self.last_frame = None;
+        while shared.slot.take(Duration::ZERO).is_some() {}
+        events(SessionEvent::SourceLost);
+    }
+
+    /// Reinicia captura e encoder com outra fonte e/ou qualidade, mantendo a
+    /// conexão com o relay (os espectadores recebem um `VideoInit` novo e
+    /// retomam no próximo keyframe). Se a nova configuração falhar, volta à
+    /// anterior; `Err` só se nem a anterior puder ser reaberta.
+    fn restart_video(
+        &mut self,
+        source: SourceInfo,
+        quality: Quality,
+        shared: &Arc<Shared>,
+        events: &Events,
+    ) -> std::result::Result<(), String> {
+        let mut next = self.config.clone();
+        next.source = source;
+        next.quality = quality.clamped();
+        let (out_w, out_h) = fit_dimensions(
+            next.source.width,
+            next.source.height,
+            next.quality.max_width,
+            next.quality.max_height,
+        );
+        let previous_pid = self.config.source.process_id;
+        self.gpu.capturer.halt();
+        self.last_frame = None;
+        while shared.slot.take(Duration::ZERO).is_some() {}
+        shared.source_lost.store(false, Ordering::SeqCst);
+        match open_gpu(&next, shared, out_w, out_h) {
+            Ok(fresh) => {
+                drop(std::mem::replace(&mut self.gpu, fresh));
+                self.config = next;
+                self.out_w = out_w;
+                self.out_h = out_h;
+                self.waiting_source = None;
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "não foi possível reiniciar o vídeo com a nova configuração");
+                events(SessionEvent::Warning {
+                    message: format!(
+                        "Não foi possível aplicar a mudança ({e}). A configuração anterior foi mantida."
+                    ),
+                });
+                if self.waiting_source.is_some() {
+                    // A fonte anterior não existe mais: continua esperando outra.
+                    return Ok(());
+                }
+                let fresh = open_gpu(&self.config, shared, self.out_w, self.out_h)
+                    .map_err(|e| format!("falha ao retomar a captura: {e}"))?;
+                drop(std::mem::replace(&mut self.gpu, fresh));
+            }
+        }
+        // Encoder novo: força um VideoInit com as dimensões novas e um keyframe.
+        self.video_codec = None;
+        self.inflight.clear();
+        shared.keyframe.store(true, Ordering::Relaxed);
+        let now = self.now_ms();
+        self.adapter = Adapter::new(
+            self.config.adaptation,
+            self.config.quality.bitrate_kbps,
+            self.config.quality.fps,
+            now,
+        );
+        self.target_fps = self.config.quality.fps;
+        self.runtime_bitrate = None;
+        shared.stats.set_live_bitrate(None);
+        self.last_submit = Instant::now();
+        shared
+            .stats
+            .set_targets(self.config.quality.bitrate_kbps, self.config.quality.fps);
+        events(SessionEvent::VideoRestarted {
+            source: self.config.source.title.clone(),
+            encoder: self.gpu.encoder.descriptor().name.clone(),
+            width: self.out_w,
+            height: self.out_h,
+            fps: self.config.quality.fps,
+        });
+        if self.config.source.process_id != previous_pid {
+            // "Só o aplicativo" acompanha a janela compartilhada.
+            self.sync_audio(events);
+        }
+        Ok(())
+    }
+
+    /// Origem do áudio do jogo para o modo e a fonte atuais.
+    fn audio_target(&self) -> Option<vellcast_audio::AudioTarget> {
+        use vellcast_audio::AudioTarget;
+        match (self.config.audio, self.config.source.process_id) {
+            (AudioMode::Off, _) => None,
+            (AudioMode::Application, Some(pid)) => Some(AudioTarget::Process(pid)),
+            (AudioMode::Application, None) => None,
+            (AudioMode::System, _) => Some(AudioTarget::System),
+        }
+    }
+
+    /// Aplica modo de áudio e microfone atuais, iniciando a captura se preciso.
+    fn sync_audio(&mut self, events: &Events) {
+        let target = self.audio_target();
+        if self.config.audio == AudioMode::Application && target.is_none() {
+            events(SessionEvent::Warning {
+                message: "Monitor compartilhado: não há um aplicativo para capturar o áudio. Escolha \"Sistema inteiro\" para compartilhar o som.".into(),
+            });
+        }
+        let mic = self.microphone.clone().map(to_audio_mic);
+        match &self.audio {
+            Some(audio) => audio.set_loopback(target),
+            None if target.is_some() || mic.is_some() => {
+                self.audio =
+                    start_audio_live(target, mic, self.origin_ticks, &self.publisher, events);
+            }
+            None => {}
+        }
     }
 
     fn reopen_gpu(&mut self, shared: &Arc<Shared>) -> Result<()> {
@@ -733,6 +1041,59 @@ fn start_audio(
                     None
                 }
             }
+        }
+        Err(err) => {
+            events(SessionEvent::Warning {
+                message: format!("Áudio desativado: {err}"),
+            });
+            None
+        }
+    }
+}
+
+fn to_audio_mic(mic: MicrophoneConfig) -> vellcast_audio::MicConfig {
+    vellcast_audio::MicConfig {
+        device_id: mic.device_id,
+        muted: mic.muted,
+    }
+}
+
+/// Inicia o áudio durante a transmissão (áudio do jogo ligado depois, ou
+/// microfone). Não bloqueia o pipeline: começa só com silêncio; o loopback e
+/// o microfone abrem na thread de áudio.
+fn start_audio_live(
+    target: Option<vellcast_audio::AudioTarget>,
+    microphone: Option<vellcast_audio::MicConfig>,
+    origin_ticks: i64,
+    publisher: &Arc<Publisher>,
+    events: &Events,
+) -> Option<vellcast_audio::AudioCapture> {
+    use vellcast_audio::{AudioCapture, AudioSetup};
+
+    publisher.set_audio_init(&AudioInit {
+        codec: "opus".into(),
+        sample_rate: vellcast_audio::SAMPLE_RATE,
+        number_of_channels: vellcast_audio::CHANNELS,
+    });
+    let sink = Arc::clone(publisher);
+    let warn_events = Arc::clone(events);
+    let started = AudioCapture::start_with(
+        AudioSetup {
+            loopback: None,
+            microphone,
+        },
+        origin_ticks,
+        Box::new(move |packet| {
+            let _ = sink.send_audio(&packet.data, packet.pts_us);
+        }),
+        Box::new(move |message| warn_events(SessionEvent::Warning { message })),
+    );
+    match started {
+        Ok(capture) => {
+            if target.is_some() {
+                capture.set_loopback(target);
+            }
+            Some(capture)
         }
         Err(err) => {
             events(SessionEvent::Warning {

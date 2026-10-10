@@ -8,8 +8,10 @@
 use std::time::Duration;
 
 pub mod adapt;
+pub mod live;
 
 pub use adapt::Adaptation;
+pub use live::ContentPreference;
 
 /// Identificador opaco de uma fonte (HWND ou HMONITOR no Windows).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -178,8 +180,20 @@ pub enum SessionEvent {
     Reconnecting { reason: String },
     /// Aviso não fatal (ex.: áudio por processo indisponível, usando áudio do sistema).
     Warning { message: String },
-    /// A janela capturada foi fechada ou o monitor desconectado.
+    /// A janela capturada foi fechada ou o monitor desconectado. A sessão
+    /// continua conectada (imagem congelada para os espectadores) esperando
+    /// outra fonte por [`LiveChange::Video`]; sem nova fonte em
+    /// [`SOURCE_LOST_GRACE`], ela encerra com [`SessionEvent::Stopped`].
     SourceLost,
+    /// Captura e encoder reiniciados por [`LiveChange::Video`] (fonte,
+    /// resolução ou FPS novos); valores efetivos após o redimensionamento.
+    VideoRestarted {
+        source: String,
+        encoder: String,
+        width: u32,
+        height: u32,
+        fps: u32,
+    },
     /// Sessão encerrada (por [`StreamSession::stop`] ou por erro fatal).
     Stopped { reason: Option<String> },
 }
@@ -203,7 +217,65 @@ pub struct SessionStats {
     pub target_bitrate_kbps: u32,
     /// FPS-alvo atual definido pela adaptação; 0 = ainda não iniciado.
     pub target_fps: u32,
+    /// Áudio do aplicativo/sistema sendo capturado agora.
+    pub game_audio: bool,
+    pub microphone: MicStatus,
+    /// `Some(false)` quando o encoder recusou mudar o bitrate em tempo real
+    /// (mudanças de bitrate passam a exigir reinício); `None` = ainda não testado.
+    pub live_bitrate: Option<bool>,
 }
+
+/// Estado do microfone na transmissão.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MicStatus {
+    #[default]
+    Off,
+    Starting,
+    Active,
+    Muted,
+    /// Dispositivo ausente ou desconectado; a transmissão segue sem microfone.
+    Unavailable,
+}
+
+/// Microfone (dispositivo de entrada) disponível.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AudioInputInfo {
+    pub id: String,
+    pub name: String,
+    pub is_default: bool,
+}
+
+/// Microfone escolhido para a transmissão (opt-in; desligado por padrão).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct MicrophoneConfig {
+    /// ID de [`list_audio_inputs`]; `None` = padrão do Windows.
+    pub device_id: Option<String>,
+    pub muted: bool,
+}
+
+/// Mudança pedida durante a transmissão ([`StreamSession::apply`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LiveChange {
+    /// Bitrate novo (ao vivo; se o encoder recusar, reinicia o encoder).
+    Bitrate(u32),
+    /// Modo da adaptação (preferência de conteúdo), ao vivo.
+    Adaptation(Adaptation),
+    /// Fonte e qualidade novas: reinicia captura e encoder (breve congelamento
+    /// da imagem), mantendo a conexão com a sala.
+    Video {
+        source: SourceInfo,
+        quality: Quality,
+    },
+    /// Áudio do aplicativo/sistema, ao vivo.
+    Audio(AudioMode),
+    /// Liga, troca ou desliga (`None`) o microfone, ao vivo.
+    Microphone(Option<MicrophoneConfig>),
+    MicrophoneMuted(bool),
+}
+
+/// Tempo que uma sessão sem fonte (janela fechada, monitor desconectado)
+/// espera o usuário escolher outra antes de encerrar.
+pub const SOURCE_LOST_GRACE: Duration = Duration::from_secs(120);
 
 #[derive(Debug, thiserror::Error)]
 pub enum CoreError {
@@ -238,6 +310,11 @@ pub fn list_encoders() -> Result<Vec<EncoderInfo>> {
     platform::list_encoders()
 }
 
+/// Lista os microfones disponíveis (vazia quando não há nenhum).
+pub fn list_audio_inputs() -> Result<Vec<AudioInputInfo>> {
+    platform::list_audio_inputs()
+}
+
 /// Uma transmissão ativa. Encerrada por [`StreamSession::stop`] ou ao ser descartada.
 pub struct StreamSession {
     inner: platform::Session,
@@ -267,6 +344,23 @@ impl StreamSession {
         self.inner.request_keyframe();
     }
 
+    /// Aplica uma mudança durante a transmissão. Não bloqueia: o pipeline
+    /// aplica na própria thread e informa o resultado por eventos
+    /// ([`SessionEvent::VideoRestarted`], [`SessionEvent::Warning`]).
+    pub fn apply(&self, change: LiveChange) {
+        let change = match change {
+            LiveChange::Video { source, quality } => LiveChange::Video {
+                source,
+                quality: quality.clamped(),
+            },
+            LiveChange::Bitrate(kbps) => LiveChange::Bitrate(
+                kbps.clamp(Quality::MIN_BITRATE_KBPS, Quality::MAX_BITRATE_KBPS),
+            ),
+            other => other,
+        };
+        self.inner.apply(change);
+    }
+
     /// Encerra a sessão e libera captura, encoder e conexão.
     pub fn stop(self) {
         self.inner.stop();
@@ -285,6 +379,10 @@ mod platform {
         Err(CoreError::Unsupported)
     }
 
+    pub fn list_audio_inputs() -> Result<Vec<AudioInputInfo>> {
+        Err(CoreError::Unsupported)
+    }
+
     pub struct Session;
 
     impl Session {
@@ -295,6 +393,7 @@ mod platform {
             SessionStats::default()
         }
         pub fn request_keyframe(&self) {}
+        pub fn apply(&self, _change: LiveChange) {}
         pub fn stop(self) {}
     }
 }

@@ -9,12 +9,22 @@ Notes in US English; the Brazilian Portuguese version lives in `CHANGELOG.md`. B
 - **Rooms from Home:** the Home page now has "Create room" and "Join with a link". Paste an invite link (or select **Paste link**) to join someone else's room; it shows up in Rooms marked as **Participant**.
 - **Any participant can share their screen:** in the room, select **Share my screen**, choose what to share and start. One person shares at a time: whoever starts takes the turn, the previous sharer is notified and viewers switch to the new stream without a frozen picture. Stopping, leaving the room or dropping frees the turn immediately.
 - The room shows who is sharing (in the app and in the web player) and offers **Watch in browser**, **Stop sharing** and **Leave room**.
+- **Quick controls on the Live page:** change what you share, the quality (content, resolution, frame rate and bitrate), the game audio and the microphone without leaving the stream, with a controller, mouse or keyboard. Bitrate, content preference and audio apply instantly; source, resolution and frame rate restart capture and the encoder in the same room, after a confirmation that warns about the brief freeze.
+- **Microphone (optional):** pick a microphone and turn it on, off or mute it while streaming. It starts off and is mixed with the game audio, which stays separately controlled (selected app only, entire system without Discord voice, or off).
+- **"Sharp text" content preference:** for code and documents, when the network slows down Vellcast lowers the frame rate instead of blurring the text.
 
 ### Fixes
 - **Web player fits the window:** the `/watch` page uses exactly the visible browser area, with no scrollbars. The picture is letterboxed when the stream's aspect ratio differs from the window (never stretched or cropped), follows resizing and fullscreen, and the controls, status bar and statistics stay visible, including on narrow screens.
 
 ### Security
 - Only people who joined with a valid invite (or the owner) can ask to share; revoking a participant ends their share. Invites, tokens and names never appear in server logs.
+
+### Changes
+- If the shared window or monitor closes, the stream no longer stops right away: viewers see the last image and you have 2 minutes to choose another source.
+- Quality options only show what Vellcast and your plan actually offer (up to 1080p60 on the Free plan); unavailable options are listed in a note.
+
+### Known limitations
+- A real microphone, switching devices and a physical controller have not been validated on hardware yet; the CI test machine has no microphone.
 
 ## [0.2.0-alpha.1]
 ### New

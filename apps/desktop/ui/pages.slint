@@ -4,6 +4,7 @@
 import { AboutSlint } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { VButton, VToggle, VStepper, VSelect, VTextField, Card, Notice, BulletList, SelectRow, StatusLine, Stat, LiveBadge } from "widgets.slint";
+import { LiveQuickControls } from "live_controls.slint";
 
 component PageTitle inherits VerticalLayout {
     in property <string> title;
@@ -564,6 +565,12 @@ export component LivePage inherits VerticalLayout {
         }
     }
 
+    // Controles rápidos (issue #5): fonte, qualidade e áudio sem sair da sessão.
+    if root.live: Card {
+        title: @tr("Quick controls");
+        LiveQuickControls { }
+    }
+
     if root.live: Card {
         title: @tr("Stream health");
         HorizontalLayout {
@@ -580,7 +587,7 @@ export component LivePage inherits VerticalLayout {
             Stat { label: @tr("Latency to server"); value: root.rtt; }
         }
         Text {
-            text: @tr("To change quality, stop and start again with the new settings.");
+            text: @tr("Change the source, quality and audio in Quick controls above, without stopping the stream.");
             color: Theme.text-secondary;
             font-size: Theme.fs-caption;
             wrap: word-wrap;

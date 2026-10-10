@@ -8,7 +8,8 @@ use std::sync::mpsc;
 use std::thread;
 
 use vellcast_core::{
-    EncoderInfo, SessionConfig, SessionEvent, SessionStats, SourceInfo, StreamSession,
+    AudioInputInfo, EncoderInfo, LiveChange, SessionConfig, SessionEvent, SessionStats, SourceInfo,
+    StreamSession,
 };
 
 pub enum Command {
@@ -17,6 +18,10 @@ pub enum Command {
     Start(Box<SessionConfig>),
     Stop,
     Stats,
+    /// Mudança durante a transmissão (controles rápidos da tela Ao vivo).
+    Apply(LiveChange),
+    /// Lista os microfones disponíveis.
+    ListAudioInputs,
     Shutdown,
 }
 
@@ -28,6 +33,7 @@ pub enum EngineMsg {
     StartFailed(String),
     Event(SessionEvent),
     Stats(SessionStats),
+    AudioInputs(Result<Vec<AudioInputInfo>, String>),
 }
 
 pub struct Engine {
@@ -99,6 +105,16 @@ fn run(rx: mpsc::Receiver<Command>, deliver: std::sync::Arc<dyn Fn(EngineMsg) + 
                 if let Some(s) = &session {
                     deliver(EngineMsg::Stats(s.stats()));
                 }
+            }
+            Command::Apply(change) => {
+                if let Some(s) = &session {
+                    s.apply(change);
+                }
+            }
+            Command::ListAudioInputs => {
+                deliver(EngineMsg::AudioInputs(
+                    vellcast_core::list_audio_inputs().map_err(|e| e.to_string()),
+                ));
             }
             Command::Shutdown => break,
         }

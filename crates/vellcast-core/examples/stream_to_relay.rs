@@ -9,13 +9,19 @@
 //!
 //! Imprime eventos e métricas (uma linha `STATS {...}` a cada 5 s e `FINAL {...}`).
 //! Sai com código 1 se não conectar ao relay ou se nenhum quadro for codificado.
+//!
+//! Com `VELLCAST_E2E_LIVE=1`, exercita os controles rápidos (issue #5) pelo mesmo
+//! caminho do app: em 1/3 do tempo muda bitrate e preferência de conteúdo e liga o
+//! microfone padrão (sem microfone, o estado vira indisponível e a transmissão
+//! segue); na metade, reinicia o vídeo em 720p (`VideoRestarted`). Sai com código 1
+//! se o reinício não acontecer.
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use vellcast_core::{
-    AudioMode, EncoderPreference, Quality, SessionConfig, SessionEvent, SourceKind, StreamSession,
-    list_encoders, list_sources,
+    Adaptation, AudioMode, EncoderPreference, LiveChange, MicrophoneConfig, Quality, SessionConfig,
+    SessionEvent, SourceKind, StreamSession, list_audio_inputs, list_encoders, list_sources,
 };
 
 fn main() {
@@ -79,17 +85,31 @@ fn run() -> Result<(), String> {
     .ok_or("fonte não encontrada")?;
     println!("TRANSMITINDO {:?} {:?}", source.kind, source.title);
 
+    let live = std::env::var("VELLCAST_E2E_LIVE").as_deref() == Ok("1");
+    if live {
+        match list_audio_inputs() {
+            Ok(list) if list.is_empty() => println!("MICROFONES nenhum"),
+            Ok(list) => {
+                for m in list {
+                    println!("MICROFONE {:?} (padrão: {})", m.name, m.is_default);
+                }
+            }
+            Err(e) => println!("MICROFONES erro: {e}"),
+        }
+    }
+
+    let quality = Quality {
+        max_width: 1920,
+        max_height: 1080,
+        fps,
+        bitrate_kbps: kbps,
+    };
     let log = Arc::new(Mutex::new(Vec::<SessionEvent>::new()));
     let sink_log = Arc::clone(&log);
     let session = StreamSession::start(
         SessionConfig {
-            source,
-            quality: Quality {
-                max_width: 1920,
-                max_height: 1080,
-                fps,
-                bitrate_kbps: kbps,
-            },
+            source: source.clone(),
+            quality,
             audio,
             encoder: EncoderPreference::Auto,
             relay_ws_url: url,
@@ -108,12 +128,38 @@ fn run() -> Result<(), String> {
 
     let start = Instant::now();
     let deadline = start + Duration::from_secs(seconds);
+    let mut tick = 0u64;
+    let (mut changed, mut restarted) = (false, false);
     while Instant::now() < deadline {
-        std::thread::sleep(Duration::from_secs(5));
+        std::thread::sleep(Duration::from_secs(1));
+        tick += 1;
+        let elapsed = start.elapsed().as_secs();
+        if live && !changed && elapsed >= seconds / 3 {
+            changed = true;
+            println!("LIVE bitrate {} kbps, nitidez, microfone padrão", kbps / 2);
+            session.apply(LiveChange::Bitrate(kbps / 2));
+            session.apply(LiveChange::Adaptation(Adaptation::Clarity));
+            session.apply(LiveChange::Microphone(Some(MicrophoneConfig::default())));
+        }
+        if live && !restarted && elapsed >= seconds / 2 {
+            restarted = true;
+            println!("LIVE reinício do vídeo em 720p");
+            session.apply(LiveChange::Video {
+                source: source.clone(),
+                quality: Quality {
+                    max_width: 1280,
+                    max_height: 720,
+                    ..quality
+                },
+            });
+        }
+        if !tick.is_multiple_of(5) {
+            continue;
+        }
         let s = session.stats();
         println!(
-            "STATS {{\"t\":{},\"captured_fps\":{:.1},\"encoded_fps\":{:.1},\"bitrate_kbps\":{:.0},\"encode_ms\":{:.2},\"dropped\":{},\"net_dropped\":{},\"audio\":{},\"reconnects\":{},\"target_kbps\":{},\"target_fps\":{}}}",
-            start.elapsed().as_secs(),
+            "STATS {{\"t\":{},\"captured_fps\":{:.1},\"encoded_fps\":{:.1},\"bitrate_kbps\":{:.0},\"encode_ms\":{:.2},\"dropped\":{},\"net_dropped\":{},\"audio\":{},\"reconnects\":{},\"target_kbps\":{},\"target_fps\":{},\"game_audio\":{},\"mic\":\"{:?}\",\"live_bitrate\":\"{:?}\"}}",
+            elapsed,
             s.captured_fps,
             s.encoded_fps,
             s.bitrate_kbps,
@@ -123,7 +169,10 @@ fn run() -> Result<(), String> {
             s.audio_active,
             s.reconnects,
             s.target_bitrate_kbps,
-            s.target_fps
+            s.target_fps,
+            s.game_audio,
+            s.microphone,
+            s.live_bitrate
         );
         let stopped = log
             .lock()
@@ -137,18 +186,25 @@ fn run() -> Result<(), String> {
     session.stop();
     let events = log.lock().map(|l| l.clone()).unwrap_or_default();
     let connected = events.iter().any(|e| matches!(e, SessionEvent::Connected));
+    let video_restarted = events
+        .iter()
+        .any(|e| matches!(e, SessionEvent::VideoRestarted { height, .. } if *height <= 720));
     println!(
-        "FINAL {{\"seconds\":{},\"connected\":{connected},\"encoded_fps\":{:.1},\"bitrate_kbps\":{:.0},\"audio\":{}}}",
+        "FINAL {{\"seconds\":{},\"connected\":{connected},\"encoded_fps\":{:.1},\"bitrate_kbps\":{:.0},\"audio\":{},\"video_restarted\":{video_restarted},\"mic\":\"{:?}\"}}",
         start.elapsed().as_secs(),
         s.encoded_fps,
         s.bitrate_kbps,
-        s.audio_active
+        s.audio_active,
+        s.microphone
     );
     if !connected {
         return Err("a sessão nunca conectou ao relay".into());
     }
     if s.encoded_fps <= 0.0 && s.bitrate_kbps <= 0.0 {
         return Err("nenhum quadro codificado".into());
+    }
+    if live && !video_restarted {
+        return Err("o reinício do vídeo pedido durante a transmissão não aconteceu".into());
     }
     Ok(())
 }

@@ -51,6 +51,16 @@ impl FrameAssembler {
             .map(|o| o + samples_to_us(self.next_sample_index()))
     }
 
+    /// Começa a linha do tempo em `pts_us` sem dados (só silêncio até chegar
+    /// áudio). Não faz nada se ela já começou.
+    pub fn start_at(&mut self, pts_us: u64) {
+        if self.origin_us.is_none() {
+            self.origin_us = Some(pts_us);
+            self.buf_start = 0;
+            self.buf.clear();
+        }
+    }
+
     fn next_sample_index(&self) -> u64 {
         self.buf_start + (self.buf.len() / CH) as u64
     }
@@ -253,6 +263,24 @@ mod tests {
         let mut b = FrameAssembler::new();
         b.fill_silence_until(100_000, &mut |_, p| out.push(p));
         assert_eq!(out.len(), 5);
+    }
+
+    #[test]
+    fn start_at_allows_silence_only_timeline_then_real_audio() {
+        let mut a = FrameAssembler::new();
+        a.start_at(1_000_000);
+        a.start_at(5_000_000); // já começou: ignorado
+        let mut out = Vec::new();
+        a.fill_silence_until(1_040_000, &mut |f, p| {
+            assert!(f.iter().all(|&s| s == 0.0));
+            out.push(p);
+        });
+        assert_eq!(out, vec![1_000_000, 1_020_000]);
+        // Áudio real chega (ex.: o usuário ligou o áudio do jogo) e continua contíguo.
+        let frames = collect(&mut a, &stereo(960, 0.5), 1_040_000);
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].1, 1_040_000);
+        assert!(frames[0].0.iter().all(|&s| s == 0.5));
     }
 
     #[test]

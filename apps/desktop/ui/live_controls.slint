@@ -1,0 +1,491 @@
+// Controles rápidos da tela Ao vivo (issue #5): fonte, qualidade, áudio do
+// jogo e microfone sem sair da sessão. Cada botão abre um painel logo abaixo
+// (sem modal): o foco segue a cadeia normal (Tab/Shift+Tab, Cima/Baixo no
+// controle), Esc ou B fecham o painel e devolvem o foco ao botão.
+//
+// O estado fica no global `LiveControlsState`, preenchido pelo Rust
+// (src/live_controls.rs). Mudanças que reiniciam captura e encoder sempre
+// passam por uma confirmação que explica a breve interrupção.
+
+import { Theme } from "theme.slint";
+import { VButton, VToggle, VSelect, VStepper, SelectRow, StatusLine, FocusRing } from "widgets.slint";
+
+export struct LiveSourceItem { title: string, detail: string, current: bool }
+
+export global LiveControlsState {
+    // 0 = nenhum, 1 = fonte, 2 = qualidade, 3 = áudio do jogo, 4 = microfone.
+    in-out property <int> open-panel: 0;
+    // Painel cujo botão recebe o foco ao fechar (incrementa `refocus-token`).
+    in-out property <int> focus-panel: 0;
+    in-out property <int> refocus-token: 0;
+    in-out property <bool> confirming: false;
+    // Reinício de vídeo em andamento.
+    in property <bool> busy: false;
+    in property <string> message;
+    in property <bool> message-error;
+
+    // Fonte
+    in property <string> source-title;
+    in property <bool> source-lost;
+    in property <bool> monitor-source;
+    in property <[LiveSourceItem]> sources;
+    in-out property <int> source-index: -1;
+    in property <bool> source-dirty;
+    in property <bool> sources-loading;
+
+    // Qualidade
+    in property <string> quality-label;
+    in-out property <int> content-index;
+    in property <[string]> resolution-options;
+    in-out property <int> resolution-index;
+    in property <[string]> fps-options;
+    in-out property <int> fps-index;
+    in-out property <float> bitrate: 8000;
+    in property <float> bitrate-min: 1000;
+    in property <float> bitrate-max: 20000;
+    in property <string> unavailable-note;
+    in property <bool> live-bitrate: true;
+    in property <bool> quality-dirty;
+    in property <bool> quality-restart;
+
+    // Áudio do jogo (aplicativo ou sistema)
+    in-out property <bool> game-audio;
+    in-out property <int> game-audio-index;
+
+    // Microfone (desligado por padrão)
+    in-out property <bool> mic-enabled;
+    in property <[string]> mic-options;
+    in-out property <int> mic-index;
+    in-out property <bool> mic-muted;
+    // 0 desligado, 1 abrindo, 2 ativo, 3 mudo, 4 indisponível.
+    in property <int> mic-state;
+    in property <bool> mic-none-found;
+
+    callback panel-opened(int);
+    callback refresh-sources;
+    callback source-picked(int);
+    callback quality-edited;
+    callback apply-quality;
+    callback confirm-restart;
+    callback cancel-changes;
+    callback game-audio-changed;
+    callback mic-changed;
+    callback mic-mute-changed;
+    callback refresh-mics;
+
+    public function toggle-panel(panel: int) {
+        if (self.open-panel == panel) {
+            self.close-panel();
+        } else {
+            self.confirming = false;
+            self.open-panel = panel;
+            self.panel-opened(panel);
+        }
+    }
+
+    public function close-panel() {
+        if (self.open-panel == 0) { return; }
+        self.cancel-changes();
+        self.confirming = false;
+        self.focus-panel = self.open-panel;
+        self.open-panel = 0;
+        self.refocus-token += 1;
+    }
+}
+
+// Botão compacto com legenda e valor atual; destaca o painel aberto.
+component QuickChip inherits Rectangle {
+    in property <string> caption;
+    in property <string> value;
+    in property <bool> active;
+    in property <bool> warn;
+    in property <int> panel;
+    callback clicked;
+
+    min-height: 52px;
+    min-width: 132px;
+    horizontal-stretch: 1;
+    border-radius: Theme.radius;
+    border-width: 1px;
+    border-color: root.active ? Theme.accent : (root.warn ? Theme.warning : Theme.border);
+    background: root.active ? Theme.bg-3 : (ta.has-hover ? Theme.bg-hover : Theme.bg-1);
+    accessible-role: button;
+    accessible-label: root.caption + ": " + root.value;
+    accessible-expandable: true;
+    accessible-expanded: root.active;
+    accessible-action-default => { root.clicked(); }
+
+    // Ao fechar o painel, o foco volta para o botão que o abriu.
+    property <int> token: LiveControlsState.refocus-token;
+    changed token => {
+        if (LiveControlsState.focus-panel == root.panel) { fs.focus(); }
+    }
+
+    fs := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " ") {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            fs.focus();
+            root.clicked();
+        }
+    }
+    HorizontalLayout {
+        padding-left: Theme.sp-3;
+        padding-right: Theme.sp-2;
+        spacing: Theme.sp-2;
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            horizontal-stretch: 1;
+            Text { text: root.caption; color: Theme.text-secondary; font-size: Theme.fs-caption; overflow: elide; }
+            Text {
+                text: root.value;
+                color: root.warn ? Theme.warning : Theme.text-primary;
+                font-size: Theme.fs-body;
+                font-weight: 600;
+                overflow: elide;
+            }
+        }
+        Text {
+            text: root.active ? "▴" : "▾";
+            color: Theme.text-secondary;
+            font-size: Theme.fs-body;
+            vertical-alignment: center;
+        }
+    }
+    FocusRing { visible-ring: fs.has-focus; }
+}
+
+// Moldura dos painéis: título, conteúdo e Esc para fechar.
+component Panel inherits Rectangle {
+    in property <string> title;
+    background: Theme.bg-1;
+    border-radius: Theme.radius;
+    border-width: 1px;
+    border-color: Theme.accent;
+    scope := FocusScope {
+        focus-on-click: false;
+        focus-on-tab-navigation: false;
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                LiveControlsState.close-panel();
+                return accept;
+            }
+            reject
+        }
+        VerticalLayout {
+            padding: Theme.sp-4;
+            spacing: Theme.sp-2;
+            Text { text: root.title; color: Theme.text-primary; font-size: Theme.fs-body-strong; font-weight: 600; }
+            @children
+        }
+    }
+    height: scope.preferred-height;
+}
+
+// Rodapé dos painéis com reinício: aplicar → confirmar (explica a interrupção).
+component RestartFooter inherits VerticalLayout {
+    in property <bool> dirty;
+    in property <bool> restart;
+    in property <string> apply-text;
+    callback apply;
+    spacing: Theme.sp-2;
+    // Os mesmos dois botões mudam de função na confirmação, para o foco do
+    // controle não se perder.
+    HorizontalLayout {
+        alignment: start;
+        spacing: Theme.sp-2;
+        VButton {
+            text: LiveControlsState.confirming ? @tr("Restart and apply") : root.apply-text;
+            primary: true;
+            enabled: (root.dirty || LiveControlsState.confirming) && !LiveControlsState.busy;
+            clicked => {
+                if (LiveControlsState.confirming) {
+                    LiveControlsState.confirming = false;
+                    LiveControlsState.confirm-restart();
+                } else if (root.restart) {
+                    LiveControlsState.confirming = true;
+                } else {
+                    root.apply();
+                }
+            }
+        }
+        VButton {
+            text: LiveControlsState.confirming ? @tr("Back") : @tr("Close");
+            clicked => {
+                if (LiveControlsState.confirming) {
+                    LiveControlsState.confirming = false;
+                } else {
+                    LiveControlsState.close-panel();
+                }
+            }
+        }
+    }
+    // Abaixo dos botões, para eles não saírem do lugar na confirmação.
+    if LiveControlsState.confirming: StatusLine {
+        text: @tr("Confirm the restart: capture and the encoder restart now and viewers see the image freeze for a moment. The room, viewers and audio stay connected.");
+    }
+}
+
+component SourcePanel inherits Panel {
+    title: @tr("What you are sharing");
+    init => { refresh.focus(); }
+    if LiveControlsState.source-lost: StatusLine {
+        text: @tr("The shared window or monitor is no longer available. Viewers see the last image. Choose another source within 2 minutes or the stream stops.");
+        error: true;
+    }
+    Text {
+        text: @tr("Sharing now: {}", LiveControlsState.source-title);
+        color: Theme.text-secondary;
+        font-size: Theme.fs-caption;
+        overflow: elide;
+    }
+    HorizontalLayout {
+        alignment: start;
+        refresh := VButton {
+            text: LiveControlsState.sources-loading ? @tr("Searching…") : @tr("Refresh list");
+            enabled: !LiveControlsState.sources-loading;
+            clicked => { LiveControlsState.refresh-sources(); }
+        }
+    }
+    for item[i] in LiveControlsState.sources: SelectRow {
+        title: item.title;
+        detail: item.detail;
+        badge: item.current ? @tr("Sharing") : "";
+        selected: LiveControlsState.source-index == i;
+        activated => {
+            LiveControlsState.confirming = false;
+            LiveControlsState.source-picked(i);
+        }
+    }
+    Text {
+        text: @tr("Switching the source restarts capture and the encoder: viewers see a brief freeze, then the stream continues in the same room.");
+        color: Theme.text-secondary;
+        font-size: Theme.fs-caption;
+        wrap: word-wrap;
+    }
+    RestartFooter {
+        dirty: LiveControlsState.source-dirty;
+        restart: true;
+        apply-text: @tr("Switch source");
+    }
+}
+
+component QualityPanel inherits Panel {
+    title: @tr("Stream quality");
+    init => { content.focus(); }
+    content := VSelect {
+        label: @tr("Content");
+        options: [@tr("Smooth motion"), @tr("Sharp text")];
+        current-index <=> LiveControlsState.content-index;
+        selected => { LiveControlsState.confirming = false; LiveControlsState.quality-edited(); }
+    }
+    Text {
+        text: LiveControlsState.content-index == 1
+            ? @tr("For code, documents and menus: when the network slows down, fewer frames keep text readable.")
+            : @tr("For games and video: when the network slows down, the frame rate is kept and detail is reduced.");
+        color: Theme.text-secondary;
+        font-size: Theme.fs-caption;
+        wrap: word-wrap;
+    }
+    VSelect {
+        label: @tr("Resolution");
+        options: LiveControlsState.resolution-options;
+        current-index <=> LiveControlsState.resolution-index;
+        selected => { LiveControlsState.confirming = false; LiveControlsState.quality-edited(); }
+    }
+    VSelect {
+        label: @tr("Frame rate");
+        options: LiveControlsState.fps-options;
+        current-index <=> LiveControlsState.fps-index;
+        selected => { LiveControlsState.confirming = false; LiveControlsState.quality-edited(); }
+    }
+    VStepper {
+        label: @tr("Bitrate");
+        minimum: LiveControlsState.bitrate-min;
+        maximum: LiveControlsState.bitrate-max;
+        step: 500;
+        decimals: 0;
+        unit: " kbps";
+        value <=> LiveControlsState.bitrate;
+        changed => { LiveControlsState.confirming = false; LiveControlsState.quality-edited(); }
+    }
+    Text {
+        text: LiveControlsState.live-bitrate
+            ? @tr("Content and bitrate apply instantly. Resolution and frame rate restart the encoder.")
+            : @tr("Content applies instantly. This encoder cannot change the bitrate live, so bitrate, resolution and frame rate restart the encoder.");
+        color: Theme.text-secondary;
+        font-size: Theme.fs-caption;
+        wrap: word-wrap;
+    }
+    if LiveControlsState.unavailable-note != "": Text {
+        text: LiveControlsState.unavailable-note;
+        color: Theme.text-muted;
+        font-size: Theme.fs-caption;
+        wrap: word-wrap;
+    }
+    if LiveControlsState.quality-restart: Text {
+        text: @tr("These changes restart capture and the encoder: viewers see a brief freeze.");
+        color: Theme.warning;
+        font-size: Theme.fs-caption;
+        wrap: word-wrap;
+    }
+    RestartFooter {
+        dirty: LiveControlsState.quality-dirty;
+        restart: LiveControlsState.quality-restart;
+        apply-text: LiveControlsState.quality-restart ? @tr("Apply (restarts video)") : @tr("Apply now");
+        apply => { LiveControlsState.apply-quality(); }
+    }
+}
+
+component GameAudioPanel inherits Panel {
+    title: @tr("Game audio");
+    init => { toggle.focus(); }
+    toggle := VToggle {
+        label: @tr("Share game audio");
+        description: @tr("Sound from the shared app or the whole system, separate from the microphone.");
+        checked <=> LiveControlsState.game-audio;
+        toggled => { LiveControlsState.game-audio-changed(); }
+    }
+    if LiveControlsState.game-audio: VSelect {
+        label: @tr("Audio source");
+        options: LiveControlsState.monitor-source ? [@tr("Entire system")] : [@tr("Selected app only"), @tr("Entire system")];
+        current-index <=> LiveControlsState.game-audio-index;
+        selected => { LiveControlsState.game-audio-changed(); }
+    }
+    if LiveControlsState.monitor-source: Text {
+        text: @tr("A monitor has no app of its own: only the entire system audio can be shared.");
+        color: Theme.text-secondary;
+        font-size: Theme.fs-caption;
+        wrap: word-wrap;
+    }
+    if LiveControlsState.game-audio && (LiveControlsState.monitor-source || LiveControlsState.game-audio-index == 1): Text {
+        text: @tr("Entire system audio leaves Discord voice out when possible; other apps and notifications are included.");
+        color: Theme.warning;
+        font-size: Theme.fs-caption;
+        wrap: word-wrap;
+    }
+    Text {
+        text: @tr("Applies instantly, without interrupting the stream.");
+        color: Theme.text-secondary;
+        font-size: Theme.fs-caption;
+        wrap: word-wrap;
+    }
+    HorizontalLayout {
+        alignment: start;
+        VButton { text: @tr("Close"); clicked => { LiveControlsState.close-panel(); } }
+    }
+}
+
+component MicPanel inherits Panel {
+    title: @tr("Microphone");
+    init => { toggle.focus(); }
+    toggle := VToggle {
+        label: @tr("Share microphone");
+        description: @tr("Off until you turn it on. Mixed into the stream audio, separate from the game audio.");
+        checked <=> LiveControlsState.mic-enabled;
+        toggled => { LiveControlsState.mic-changed(); }
+    }
+    VSelect {
+        label: @tr("Input device");
+        options: LiveControlsState.mic-options;
+        current-index <=> LiveControlsState.mic-index;
+        selected => { LiveControlsState.mic-changed(); }
+    }
+    // Nome completo (nomes de dispositivo costumam ser longos para o seletor).
+    Text {
+        text: LiveControlsState.mic-options[LiveControlsState.mic-index];
+        color: Theme.text-secondary;
+        font-size: Theme.fs-caption;
+        wrap: word-wrap;
+    }
+    VToggle {
+        label: @tr("Mute microphone");
+        enabled: LiveControlsState.mic-enabled;
+        checked <=> LiveControlsState.mic-muted;
+        toggled => { LiveControlsState.mic-mute-changed(); }
+    }
+    StatusLine {
+        text: !LiveControlsState.mic-enabled ? ""
+            : LiveControlsState.mic-state == 1 ? @tr("Opening the microphone…")
+            : LiveControlsState.mic-state == 2 ? @tr("Microphone live: viewers hear you.")
+            : LiveControlsState.mic-state == 3 ? @tr("Microphone muted: nothing is sent.")
+            : LiveControlsState.mic-state == 4 ? @tr("Microphone unavailable (disconnected, missing or blocked in Windows privacy settings). The stream continues without it; choose another device or refresh the list.")
+            : "";
+        error: LiveControlsState.mic-state == 4;
+    }
+    if LiveControlsState.mic-none-found: Text {
+        text: @tr("No microphone found. Connect one and select Refresh devices.");
+        color: Theme.text-secondary;
+        font-size: Theme.fs-caption;
+        wrap: word-wrap;
+    }
+    HorizontalLayout {
+        alignment: start;
+        spacing: Theme.sp-2;
+        VButton { text: @tr("Refresh devices"); clicked => { LiveControlsState.refresh-mics(); } }
+        VButton { text: @tr("Close"); clicked => { LiveControlsState.close-panel(); } }
+    }
+}
+
+// Barra de controles rápidos + painel aberto.
+export component LiveQuickControls inherits VerticalLayout {
+    spacing: Theme.sp-3;
+
+    HorizontalLayout {
+        spacing: Theme.sp-2;
+        QuickChip {
+            panel: 1;
+            caption: @tr("Source");
+            value: LiveControlsState.source-lost ? @tr("Source closed") : LiveControlsState.source-title;
+            warn: LiveControlsState.source-lost;
+            active: LiveControlsState.open-panel == 1;
+            clicked => { LiveControlsState.toggle-panel(1); }
+        }
+        QuickChip {
+            panel: 2;
+            caption: @tr("Quality");
+            value: LiveControlsState.quality-label;
+            active: LiveControlsState.open-panel == 2;
+            clicked => { LiveControlsState.toggle-panel(2); }
+        }
+        QuickChip {
+            panel: 3;
+            caption: @tr("Game audio");
+            value: !LiveControlsState.game-audio ? @tr("Off")
+                : (LiveControlsState.monitor-source || LiveControlsState.game-audio-index == 1) ? @tr("Entire system")
+                : @tr("Selected app");
+            active: LiveControlsState.open-panel == 3;
+            clicked => { LiveControlsState.toggle-panel(3); }
+        }
+        QuickChip {
+            panel: 4;
+            caption: @tr("Microphone");
+            value: !LiveControlsState.mic-enabled ? @tr("Off")
+                : LiveControlsState.mic-state == 2 ? @tr("On")
+                : LiveControlsState.mic-state == 3 ? @tr("Muted")
+                : LiveControlsState.mic-state == 4 ? @tr("Unavailable")
+                : @tr("Starting…");
+            warn: LiveControlsState.mic-enabled && LiveControlsState.mic-state == 4;
+            active: LiveControlsState.open-panel == 4;
+            clicked => { LiveControlsState.toggle-panel(4); }
+        }
+    }
+
+    if LiveControlsState.open-panel == 1: SourcePanel { }
+    if LiveControlsState.open-panel == 2: QualityPanel { }
+    if LiveControlsState.open-panel == 3: GameAudioPanel { }
+    if LiveControlsState.open-panel == 4: MicPanel { }
+    StatusLine {
+        text: LiveControlsState.message;
+        error: LiveControlsState.message-error;
+    }
+}
