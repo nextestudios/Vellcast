@@ -74,7 +74,7 @@ pub fn manifest_url() -> String {
     std::env::var("VELLCAST_UPDATE_URL").unwrap_or_else(|_| DEFAULT_MANIFEST_URL.into())
 }
 
-/// Versão semântica simples `MAJOR.MINOR.PATCH` (prefixo `v` e sufixos ignorados).
+/// Núcleo `MAJOR.MINOR.PATCH` da versão (prefixo `v` e sufixos ignorados).
 pub fn parse_version(v: &str) -> Option<(u64, u64, u64)> {
     let v = v.trim().trim_start_matches('v');
     let core = v.split(['-', '+']).next()?;
@@ -85,10 +85,51 @@ pub fn parse_version(v: &str) -> Option<(u64, u64, u64)> {
     Some((major, minor, patch))
 }
 
+/// Pré-lançamento (`alpha.2` em `0.2.0-alpha.2`), sem os metadados de build (`+...`).
+fn prerelease(v: &str) -> Option<&str> {
+    let v = v.trim().split('+').next()?;
+    v.split_once('-').map(|(_, pre)| pre)
+}
+
+/// Precedência do SemVer 2.0 entre pré-lançamentos: identificadores numéricos
+/// comparados como números e antes dos alfanuméricos; mais campos vence empate.
+fn compare_prerelease(a: &str, b: &str) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    let (mut x, mut y) = (a.split('.'), b.split('.'));
+    loop {
+        match (x.next(), y.next()) {
+            (None, None) => return Ordering::Equal,
+            (None, Some(_)) => return Ordering::Less,
+            (Some(_), None) => return Ordering::Greater,
+            (Some(p), Some(q)) => {
+                let ord = match (p.parse::<u64>(), q.parse::<u64>()) {
+                    (Ok(m), Ok(n)) => m.cmp(&n),
+                    (Ok(_), Err(_)) => Ordering::Less,
+                    (Err(_), Ok(_)) => Ordering::Greater,
+                    (Err(_), Err(_)) => p.cmp(q),
+                };
+                if ord != Ordering::Equal {
+                    return ord;
+                }
+            }
+        }
+    }
+}
+
+/// `candidate` é mais nova que `current` pela precedência do SemVer
+/// (`0.2.0-alpha.1` < `0.2.0-alpha.2` < `0.2.0`).
 pub fn is_newer(candidate: &str, current: &str) -> bool {
-    match (parse_version(candidate), parse_version(current)) {
-        (Some(a), Some(b)) => a > b,
-        _ => false,
+    use std::cmp::Ordering;
+    let (Some(a), Some(b)) = (parse_version(candidate), parse_version(current)) else {
+        return false;
+    };
+    match a.cmp(&b) {
+        Ordering::Equal => match (prerelease(candidate), prerelease(current)) {
+            (None, Some(_)) => true,
+            (Some(p), Some(q)) => compare_prerelease(p, q) == Ordering::Greater,
+            _ => false,
+        },
+        ord => ord == Ordering::Greater,
     }
 }
 
@@ -303,6 +344,14 @@ mod tests {
         assert!(!is_newer("lixo", "1.0.0"));
         assert_eq!(parse_version("2.3.4-beta.1"), Some((2, 3, 4)));
         assert_eq!(parse_version("2"), Some((2, 0, 0)));
+        assert!(is_newer("0.2.0-alpha.1", "0.1.2"));
+        assert!(is_newer("v0.2.0-alpha.2", "0.2.0-alpha.1"));
+        assert!(is_newer("0.2.0-alpha.10", "0.2.0-alpha.9"));
+        assert!(is_newer("0.2.0-beta.1", "0.2.0-alpha.3"));
+        assert!(is_newer("0.2.0", "0.2.0-alpha.3"));
+        assert!(!is_newer("0.2.0-alpha.3", "0.2.0"));
+        assert!(!is_newer("0.2.0-alpha.1", "0.2.0-alpha.1"));
+        assert!(!is_newer("0.2.0-alpha", "0.2.0-alpha.1"));
     }
 
     #[test]

@@ -3,10 +3,10 @@ resolver = "3"
 members = ["crates/media-fixtures", "crates/transport", "services/relay", "crates/protocol", "services/stage0-server", "crates/controller", "apps/desktop", "crates/vellcast-core", "crates/capture", "crates/encoder", "crates/audio", "crates/entitlement", "crates/perf", "tools/release-sign"]
 
 [workspace.package]
-version = "0.1.2"
+version = "0.2.0-alpha.1"
 edition = "2024"
 rust-version = "1.88"
-license-file = "LICENSE"
+license = "AGPL-3.0-only"
 publish = false
 repository = "https://github.com/nextestudios/Vellcast"
 

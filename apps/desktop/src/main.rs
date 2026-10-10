@@ -12,6 +12,7 @@ mod actions;
 mod engine;
 mod input;
 mod local_relay;
+mod paths;
 mod procstats;
 mod relay_api;
 mod rooms;
@@ -86,8 +87,7 @@ pub(crate) fn with_state<R>(f: impl FnOnce(&mut UiState) -> R) -> Option<R> {
 /// então o log em arquivo é o que o usuário envia ao reportar problemas.
 /// A sessão anterior fica em `.old`; nenhum conteúdo transmitido é registrado.
 pub fn log_path() -> Option<std::path::PathBuf> {
-    directories::ProjectDirs::from("com", "Next Estudios", "Vellcast")
-        .map(|d| d.data_local_dir().join("logs").join("vellcast-desktop.log"))
+    paths::data_dir().map(|d| d.join("logs").join("vellcast-desktop.log"))
 }
 
 fn open_log_file() -> Option<std::fs::File> {

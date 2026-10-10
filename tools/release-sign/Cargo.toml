@@ -4,7 +4,7 @@ description = "Gera chaves e assina manifestos de atualização do Vellcast (Ed2
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-license-file.workspace = true
+license.workspace = true
 repository.workspace = true
 publish = false
 

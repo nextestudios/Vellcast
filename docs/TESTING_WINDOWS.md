@@ -107,7 +107,7 @@ Para o relatório em `docs/PERFORMANCE.md`, registre hardware (CPU, GPU, driver)
 
 ## 8. Reportando problemas
 
-Abra uma issue (repositório privado) com:
+Abra uma issue pelo [formulário de feedback](https://github.com/nextestudios/Vellcast/issues/new?template=feedback.yml) com:
 
 - Windows, GPU e driver, e `VERSAO.txt` do pacote;
 - passo a passo, resultado esperado e resultado obtido;

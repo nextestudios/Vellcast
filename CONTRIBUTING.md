@@ -1,5 +1,8 @@
 # Contribuindo com o Vellcast
 
+> **Licença das contribuições:** o Vellcast é licenciado sob **AGPL-3.0-only**. Ao enviar uma contribuição (código, documentação, testes, recursos), você concorda que ela seja licenciada sob os mesmos termos. Veja [`docs/LICENSING.md`](docs/LICENSING.md).
+> *Contributions are accepted under AGPL-3.0-only.*
+
 ## Antes de começar
 
 - Leia o [Código de Conduta](CODE_OF_CONDUCT.md). Vulnerabilidades: [SECURITY.md](SECURITY.md) (nunca em issues públicas).

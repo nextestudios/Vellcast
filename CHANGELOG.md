@@ -1,10 +1,24 @@
 # Histórico de alterações
 
-Notas em português do Brasil. Antes de publicar uma versão, adicione a seção `## [VERSÃO]` (no PR `chore(release): VERSÃO`, junto com a versão do `Cargo.toml`). O workflow Release usa a seção da tag como notas da release e falha se ela faltar. O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
+Notas em português do Brasil; a versão em inglês (Estados Unidos) fica em `CHANGELOG.en-US.md`. Antes de publicar uma versão, adicione uma seção `## [VERSÃO]` **nos dois arquivos** (no PR `chore(release): VERSÃO`, junto com a versão do `Cargo.toml`). O workflow de release usa a seção da tag e falha se faltar alguma. O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Unreleased]
+
+## [0.2.0-alpha.1]
+### Novidades
+- **Código aberto sob a AGPL-3.0-only:** o Vellcast passa a ser software livre; o repositório [github.com/nextestudios/Vellcast](https://github.com/nextestudios/Vellcast) será aberto quando o projeto estiver pronto. As versões até a 0.1.2 foram distribuídas sob licença proprietária ([notas de licença](docs/LICENSING.md)). Os serviços comerciais (contas e planos) continuam num repositório privado separado e não são necessários para transmitir.
+- **Versão portátil:** `Vellcast-Portable-x64.exe`, um único executável que guarda configurações e logs na pasta `Vellcast_Data` ao lado dele. Ele avisa quando há versão nova; a troca do arquivo é manual.
+
 ### Mudanças
-- **Fluxo de trabalho no GitHub no padrão Gitflow** (o mesmo do ControlFS): CI só em pull requests para `main`/`develop`; release publicada por tag `vX.Y.Z` na `main`, com notas deste arquivo, testes completos e smoke do instalador antes de publicar; workflows Smoke, Windows E2E e Diagnóstico de áudio sob demanda; Dependabot mensal agrupado; CodeQL pronto para quando o repositório for público.
+- **Atualizações entre versões alpha:** o verificador de atualizações agora compara pré-lançamentos pela regra do SemVer (`0.2.0-alpha.1` < `0.2.0-alpha.2` < `0.2.0`).
+- **Releases no padrão do ControlFS:** publicadas por tag na `main`, com notas em inglês e português, testes completos e o app aberto de verdade (portátil e instalado) antes de publicar; `SHA256SUMS.txt` com o hash dos dois downloads.
+- A tela **Sobre** mostra a nova licença e o endereço do código-fonte.
+
+### Limitações conhecidas
+- Ainda não validado com GPUs e jogos reais nem com controle físico; a integração com o Discord aguarda a aplicação no Discord.
+- O servidor de testes fica na Europa: a partir do Brasil, use a qualidade **Econômico**.
+- Executáveis sem assinatura de código ([política](docs/CODE_SIGNING.md)): o SmartScreen pode avisar na primeira execução.
+- Quem está na 0.1.1 ou na 0.1.2 vê esta versão em **Sobre → Verificar atualizações**.
 
 ## [0.1.2]
 ### Correções
@@ -32,6 +46,7 @@ Validado em Windows real (CI): transmissão pelo app até o servidor de produç�
 - Ainda não testado com GPUs e jogos reais nem com controle físico; a integração com o Discord aguarda a aplicação no Discord.
 - Executável sem assinatura de código.
 
-[Unreleased]: https://github.com/nextestudios/Vellcast/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/nextestudios/Vellcast/compare/v0.2.0-alpha.1...HEAD
+[0.2.0-alpha.1]: https://github.com/nextestudios/Vellcast/compare/v0.1.2...v0.2.0-alpha.1
 [0.1.2]: https://github.com/nextestudios/Vellcast/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/nextestudios/Vellcast/releases/tag/v0.1.1

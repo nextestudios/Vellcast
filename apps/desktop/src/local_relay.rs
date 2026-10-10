@@ -133,8 +133,7 @@ pub fn bind_address(base: &str) -> Option<String> {
 }
 
 fn secret_path() -> Option<PathBuf> {
-    directories::ProjectDirs::from("com", "Next Estudios", "Vellcast")
-        .map(|d| d.config_dir().join("local-relay.secret"))
+    crate::paths::config_dir().map(|d| d.join("local-relay.secret"))
 }
 
 fn load_or_create_secret() -> Result<String, String> {

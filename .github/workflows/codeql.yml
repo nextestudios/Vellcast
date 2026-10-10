@@ -2,7 +2,7 @@ name: CodeQL
 
 # Análise de segurança (gratuita para repositórios públicos). Rust e TypeScript são analisados sem compilar
 # (build-mode: none); os workflows também. Enquanto o repositório for privado, o job é pulado (code scanning em
-# repositório privado exige GitHub Advanced Security); passa a rodar sozinho no marco de código aberto.
+# repositório privado exige GitHub Advanced Security); passa a rodar sozinho quando ele for aberto.
 on:
   # Gitflow: analisa o que é publicado (main) e semanalmente; não a cada pull request.
   push:

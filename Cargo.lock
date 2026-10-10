@@ -6129,7 +6129,7 @@ checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
 name = "vellcast-audio"
-version = "0.1.2"
+version = "0.2.0-alpha.1"
 dependencies = [
  "opus",
  "thiserror 2.0.21",
@@ -6141,7 +6141,7 @@ dependencies = [
 
 [[package]]
 name = "vellcast-capture"
-version = "0.1.2"
+version = "0.2.0-alpha.1"
 dependencies = [
  "thiserror 2.0.21",
  "tracing",
@@ -6150,7 +6150,7 @@ dependencies = [
 
 [[package]]
 name = "vellcast-controller"
-version = "0.1.2"
+version = "0.2.0-alpha.1"
 dependencies = [
  "gilrs",
  "tracing",
@@ -6158,7 +6158,7 @@ dependencies = [
 
 [[package]]
 name = "vellcast-core"
-version = "0.1.2"
+version = "0.2.0-alpha.1"
 dependencies = [
  "thiserror 2.0.21",
  "tokio",
@@ -6173,7 +6173,7 @@ dependencies = [
 
 [[package]]
 name = "vellcast-desktop"
-version = "0.1.2"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "arboard",
@@ -6200,7 +6200,7 @@ dependencies = [
 
 [[package]]
 name = "vellcast-encoder"
-version = "0.1.2"
+version = "0.2.0-alpha.1"
 dependencies = [
  "thiserror 2.0.21",
  "tracing",
@@ -6209,7 +6209,7 @@ dependencies = [
 
 [[package]]
 name = "vellcast-entitlement"
-version = "0.1.2"
+version = "0.2.0-alpha.1"
 dependencies = [
  "base64 0.23.1",
  "hmac",
@@ -6221,7 +6221,7 @@ dependencies = [
 
 [[package]]
 name = "vellcast-media-fixtures"
-version = "0.1.2"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bytes",
@@ -6232,7 +6232,7 @@ dependencies = [
 
 [[package]]
 name = "vellcast-perf"
-version = "0.1.2"
+version = "0.2.0-alpha.1"
 dependencies = [
  "bytes",
  "futures-util",
@@ -6249,7 +6249,7 @@ dependencies = [
 
 [[package]]
 name = "vellcast-protocol"
-version = "0.1.2"
+version = "0.2.0-alpha.1"
 dependencies = [
  "bytes",
  "serde",
@@ -6259,7 +6259,7 @@ dependencies = [
 
 [[package]]
 name = "vellcast-relay"
-version = "0.1.2"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -6286,7 +6286,7 @@ dependencies = [
 
 [[package]]
 name = "vellcast-release-sign"
-version = "0.1.2"
+version = "0.2.0-alpha.1"
 dependencies = [
  "base64 0.23.1",
  "ed25519-dalek",
@@ -6297,7 +6297,7 @@ dependencies = [
 
 [[package]]
 name = "vellcast-stage0-server"
-version = "0.1.2"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -6315,7 +6315,7 @@ dependencies = [
 
 [[package]]
 name = "vellcast-transport"
-version = "0.1.2"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bytes",

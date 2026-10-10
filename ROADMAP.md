@@ -38,7 +38,7 @@ flowchart LR
 | 3 | Media relay | M | macOS/Linux | ✅ em produção em `vellcast.nextestudios.com`; 60 min estável |
 | 4 | Áudio | M | **Windows** | ✅ executada no Windows real; sincronia A/V de 9,2 ms |
 | 5 | Integração completa — **MVP** | M | Windows (+ Discord para a Activity) | ✅ MVP Windows: app transmitiu do Windows ao servidor de produção; Activity aguarda E0-T10 |
-| OC | Abertura do código (Open Core) | S | — | ⏸️ suspenso: código proprietário e repositório privado (ADR-058) |
+| OC | Abertura do código (Open Core) | S | — | 🟡 licença AGPL-3.0-only definida; abertura adiada (ADR-060) |
 | 6 | Otimização extrema | M | Windows com GPU + jogos | 🧪 software pronto e medido; otimização com GPU real bloqueada |
 | 7 | Comercialização | S no MVP / M no Premium | Linux (servidor) | 🧪 backend pronto; cobrança real depende de conta no provedor |
 | 8 | Lançamento | M | Windows + produção | 🧪 instalador e atualizador prontos; certificado e revisão jurídica pendentes |
@@ -137,9 +137,9 @@ Desktop, relay e Discord Activity funcionando juntos de ponta a ponta.
 - [ ] ⏸️ Validação dentro do Discord (E0-T10) — aguardando o responsável
 
 ### Marco OC — Abertura do código (Open Core) · S
-Suspenso por decisão (ADR-058): o Vellcast é proprietário e o repositório continua privado. As práticas de higiene (licenças de terceiros, segredos, segurança) continuam valendo.
+Licença definida (ADR-060): AGPL-3.0-only. O repositório continua privado até o projeto estar pronto; a parte comercial fica no repositório privado `nextestudios/vellcast-cloud`.
 
-- [x] ✅ OC-T01 — Licença decidida: software proprietário (ADR-058)
+- [x] ✅ OC-T01 — Licença decidida: AGPL-3.0-only (ADR-060, substitui a ADR-058)
 - [x] ✅ OC-T02 — Inventário de licenças de terceiros (`cargo deny` + npm na CI)
 - [x] ✅ OC-T03 — Parte comercial separada no repositório privado `nextestudios/vellcast-cloud`, com histórico
 - [ ] ⛔ OC-T04 — Verificação da marca "Vellcast" (INPI) — ação sua
@@ -147,7 +147,7 @@ Suspenso por decisão (ADR-058): o Vellcast é proprietário e o repositório co
 - [x] ✅ OC-T06 — `SECURITY.md` (falta habilitar Private Vulnerability Reporting no GitHub)
 - [x] ✅ OC-T07 — Varredura de segredos no histórico e na CI (gitleaks)
 - [x] ✅ OC-T08 — Código de conduta e modelos de issue/PR
-- [x] ✅ OC-T09 — Decisão: repositório permanece privado (ADR-058)
+- [ ] ⏸️ OC-T09 — Abrir o repositório quando o projeto estiver pronto, num repositório novo com histórico limpo (passo a passo na ADR-060)
 
 ### Etapa 6 — Otimização extrema · M
 Reduzir ao mínimo o impacto da transmissão nos jogos, com números reproduzíveis.

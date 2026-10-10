@@ -262,8 +262,7 @@ pub fn sanitize_display_name(name: &str) -> String {
 }
 
 pub fn default_path() -> Option<PathBuf> {
-    directories::ProjectDirs::from("com", "Next Estudios", "Vellcast")
-        .map(|d| d.config_dir().join("settings.json"))
+    crate::paths::config_dir().map(|d| d.join("settings.json"))
 }
 
 #[derive(Debug, PartialEq)]

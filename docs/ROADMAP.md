@@ -15,7 +15,7 @@
 | 3 | Media relay | Must | 0 (local) | Done — em produção em vellcast.nextestudios.com; 60 min estável |
 | 4 | Áudio | Must | 2, 3 | Done — executada no Windows real; sincronia A/V de 9,2 ms no transporte |
 | 5 | Integração completa | Must | 1, 2, 3, 4 (E0-T10 para a Activity) | Done (MVP Windows + player web); Activity aguarda E0-T10 |
-| OC | Marco: abertura do código (Open Core) | Should | 5 | Suspenso — código proprietário e repositório privado (ADR-058) |
+| OC | Marco: abertura do código (Open Core) | Should | 5 | Em andamento — AGPL-3.0-only definida; abertura adiada (ADR-060) |
 | 6 | Otimização extrema | Must | 5 | Testing — software pronto; otimização com GPU real bloqueada |
 | 7 | Comercialização | Should (MVP) / Must (Premium) | 5 | Testing — backend pronto; cobrança real depende de conta no provedor |
 | 8 | Lançamento | Must (lançamento) | 6, 7 | Testing — instalador e atualizador prontos; certificado e revisão jurídica pendentes |
@@ -174,7 +174,7 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 
 | ID | Tarefa | MoSCoW | Depende de | Critérios de aceite | Status |
 |---|---|---|---|---|---|
-| OC-T01 | Confirmar a licença do código próprio | M-022 | — | Apache-2.0 confirmada (ou substituída) pelo responsável; ADR-007 passa a Aceita; arquivo `NOTICE` criado | Done — decisão: software proprietário (ADR-058) |
+| OC-T01 | Confirmar a licença do código próprio | M-022 | — | Apache-2.0 confirmada (ou substituída) pelo responsável; ADR-007 passa a Aceita; arquivo `NOTICE` criado | Done — AGPL-3.0-only (ADR-060, substitui a ADR-058) |
 | OC-T02 | Inventário de licenças de terceiros | M-022 | OC-T01 | `cargo deny check licenses` e verificação das dependências npm na CI; tabela de [LICENSING](LICENSING.md) completa, sem pendências; obrigações do Slint (ADR-006) cumpridas | Done — cargo-deny e licenças npm na CI |
 | OC-T03 | Separar o núcleo aberto da parte comercial | S-015 | — | `services/cloud-api`, planos, billing e documentos comerciais sensíveis movidos para um repositório privado; o núcleo compila e funciona sem eles (W-013) | Done — cloud-api movida com histórico para o repositório privado nextestudios/vellcast-cloud; núcleo compila sem ela |
 | OC-T04 | Verificação da marca "Vellcast" | — | — | Busca no INPI e em domínios registrada; política de uso da marca publicada (Apache-2.0 não licencia a marca, cláusula 6) | Blocked — busca e registro da marca no INPI |
@@ -182,11 +182,11 @@ Ambiente de desenvolvimento atual: macOS. Captura, GPU, WASAPI e gamepad no Wind
 | OC-T06 | Política de reporte de vulnerabilidades | M-020 | — | `SECURITY.md` na raiz com contato privado e prazos de resposta; GitHub Private Vulnerability Reporting habilitado | Done — SECURITY.md; falta habilitar Private Vulnerability Reporting nas configurações |
 | OC-T07 | Varredura de segredos no histórico | M-024 | — | `gitleaks` (ou equivalente) em todo o histórico sem achados; verificação adicionada à CI | Done — gitleaks no histórico (sem segredos) e na CI |
 | OC-T08 | Preparação para contribuidores externos | M-022 | OC-T01 | `CONTRIBUTING.md` revisado, código de conduta, templates de issue e PR, proteção da branch `main` | Done — código de conduta, modelos de issue e PR |
-| OC-T09 | Tornar o repositório público | — | OC-T01..OC-T08 | Visibilidade alterada pelo responsável; README público revisado; anúncio planejado | Done — decisão: repositório permanece privado (ADR-058) |
+| OC-T09 | Tornar o repositório público | — | OC-T01..OC-T08 | Visibilidade alterada pelo responsável; README público revisado; anúncio planejado | Pending — adiado pelo responsável até o projeto estar pronto; abrir num repositório novo com histórico limpo (ADR-060) |
 
 **Entregável:** repositório público do Vellcast Core.
 **Critério de aceite:** todas as tarefas OC-T01 a OC-T08 concluídas e a abertura (OC-T09) aprovada explicitamente pelo responsável.
-**Status:** Backlog.
+**Status:** In Progress — licença definida; abertura adiada.
 
 ---
 

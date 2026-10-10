@@ -4,7 +4,7 @@ description = "Leitura da mídia sintética de teste (H.264 Annex B e Ogg Opus) 
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-license-file.workspace = true
+license.workspace = true
 repository.workspace = true
 publish = false
 

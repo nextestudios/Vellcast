@@ -1,7 +1,7 @@
 AVISOS DE TERCEIROS — Vellcast MVP para Windows
 ================================================
 
-O Vellcast é software proprietário da Next Estúdios (ver LICENSE.txt).
+O Vellcast é software livre da Next Estúdios sob a GNU AGPL-3.0-only (ver LICENSE.txt); código-fonte em https://github.com/nextestudios/Vellcast.
 Este pacote também inclui componentes de terceiros, sob as licenças abaixo.
 O inventário completo e atualizado está em docs/LICENSING.md no repositório.
 

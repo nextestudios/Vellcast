@@ -1,0 +1,44 @@
+name: Feedback
+description: Sugestões, bugs e ideias para o Vellcast / Suggestions, bugs and ideas for Vellcast
+title: "[Feedback] "
+labels: [feedback]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por ajudar a melhorar o Vellcast! Escreva em português ou em inglês. Não anexe dados pessoais nem links de convite ativos. Vulnerabilidades: use o reporte privado (SECURITY.md).
+        Thanks for helping improve Vellcast! Write in Portuguese or English. Don't attach personal data or live invite links. Vulnerabilities: use private reporting (SECURITY.md).
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Tipo / Type
+      options:
+        - Sugestão / Suggestion
+        - Bug
+        - Captura ou encoder / Capture or encoder
+        - Áudio / Audio
+        - Conexão ou servidor / Connection or server
+        - Controle / Controller
+        - Player ou Discord / Player or Discord
+        - Outro / Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: O que aconteceu ou o que você gostaria? / What happened, or what would you like?
+      description: |
+        Para bugs, conte o que você fez, o que esperava e o que aconteceu. Prints da tela Ao vivo ajudam.
+        For bugs, tell us what you did, what you expected and what happened. Screenshots of the Live screen help.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Ambiente / Environment
+      description: |
+        Versão do Vellcast (instalado ou portátil), Windows, GPU, jogo, servidor e, se possível, o log (%LOCALAPPDATA%\Next Estudios\Vellcast\data\logs\vellcast-desktop.log).
+        Vellcast version (installed or portable), Windows, GPU, game, server and, if possible, the log.
+      render: text
+    validations:
+      required: false

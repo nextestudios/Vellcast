@@ -2,14 +2,18 @@
 
 > Este documento não é aconselhamento jurídico. Decisões de licença devem ser confirmadas pelo responsável da Next Estúdios antes da publicação.
 
-## 1. Código próprio
+## 1. Código próprio — AGPL-3.0-only
 
-**Decisão (2026-10-09, ADR-058):** o Vellcast é **software proprietário** da Next Estúdios — todos os direitos reservados (arquivo `LICENSE` na raiz). Nenhum crate é publicável (`publish = false`) e o pacote npm do player é `UNLICENSED`. A proposta anterior de Apache-2.0 (ADR-007) foi rejeitada.
+**Português.** O Vellcast é licenciado sob a **GNU Affero General Public License v3.0 only** (SPDX: `AGPL-3.0-only`), texto completo em [`LICENSE`](../LICENSE). "Only" significa a versão 3 da AGPL, não "versão 3 ou qualquer versão posterior". Decisão de 2026-10-10 (ADR-060), a mesma licença do ControlFS.
 
-Consequências:
-- O código-fonte não é distribuído; os binários são distribuídos sob os Termos de Uso (`docs/legal/TERMOS.md`).
-- As obrigações das dependências de terceiros continuam valendo: avisos e licenças em `THIRD-PARTY-NOTICES` (gerados pelo `cargo-about`) e atribuição do Slint na tela Sobre.
-- Dependências GPL/LGPL não podem ser incluídas no binário distribuído sem análise; o `cargo deny` da CI barra licenças fora da lista permitida.
+- **Transição:** as versões **até a 0.1.2 inclusive** (tags `v0.1.0` … `v0.1.2`) foram distribuídas sob licença proprietária; **a partir da 0.2.0-alpha.1**, o Vellcast é distribuído sob AGPL-3.0-only.
+- **Direitos autorais:** no momento da mudança, todos os commits do repositório eram do responsável pelo projeto (`nextestudios`); nenhuma contribuição externa havia sido incorporada.
+- **Contribuições:** ao enviar uma contribuição, você concorda que ela seja licenciada sob AGPL-3.0-only (veja `CONTRIBUTING.md`).
+- **Servidor (relay):** a AGPL vale também para quem oferece o relay modificado pela rede: os usuários desse servidor têm direito ao código-fonte correspondente (seção 13).
+- **Parte comercial:** contas, planos e entitlements do serviço oficial ficam no repositório privado `nextestudios/vellcast-cloud`, que não é necessário para transmitir nem para rodar um servidor próprio. O formato do token de entitlement (`crates/entitlement`) é parte deste repositório, sob AGPL.
+- **Componentes de terceiros** mantêm suas próprias licenças (inventário abaixo e `THIRD-PARTY-NOTICES.txt` no pacote). Incluí-los na distribuição não os torna AGPL. Crates (`publish = false`) e o pacote npm do player declaram `AGPL-3.0-only`.
+
+**English.** Vellcast is licensed under the **GNU Affero General Public License v3.0 only** (`AGPL-3.0-only`). Releases **up to and including 0.1.2** were distributed under a proprietary license; **starting with 0.2.0-alpha.1**, Vellcast is distributed under AGPL-3.0-only. At the time of the change every commit was authored by the project owner (`nextestudios`). Contributions are accepted under the same license. The commercial service (accounts, plans) lives in a separate private repository and is not needed to stream or to self-host. Third-party components keep their own licenses. This is a note, not legal advice.
 
 ## 2. Slint — decidido: Royalty-free 2.0 (ADR-006)
 
@@ -33,9 +37,7 @@ Condições vigentes e como o Vellcast as cumpre:
 | Não expor as APIs do Slint pelo aplicativo | O app não expõe APIs de UI (o sistema de plugins, C-018, precisa respeitar isso). |
 | Manter avisos de licença e copyright | Inventário de licenças de terceiros na tela "Sobre" e no instalador. |
 
-O código próprio é proprietário; o binário distribuído combina esse código com o Slint sob a licença Royalty-free acima, que permite aplicativos proprietários desde que a atribuição seja cumprida.
-
-Não presumir que vincular Slint sob GPLv3 permite distribuir o produto final inteiro como proprietário ou "só Apache-2.0".
+**Com o código sob AGPL-3.0-only (ADR-060):** a Next Estúdios, titular do código próprio, distribui os binários oficiais combinando-o com o Slint sob a licença Royalty-free acima. Quem redistribuir uma versão modificada pode usar o Slint sob a **GPL-3.0-only**, que a seção 13 da AGPL-3.0 permite combinar com o código AGPL, ou sob a própria licença Royalty-free, cumprindo as condições dela. Isto é uma nota, não aconselhamento jurídico.
 
 ## 3. Codecs e mídia
 

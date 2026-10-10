@@ -30,7 +30,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.inputs.release_tag }}
-        run: gh release download $env:TAG -R $env:GITHUB_REPOSITORY -p Vellcast-Setup-x64.exe -D (Join-Path $env:RUNNER_TEMP rel)
+        run: gh release download $env:TAG -R $env:GITHUB_REPOSITORY -p Vellcast-Setup-x64.exe -p Vellcast-Portable-x64.exe -D (Join-Path $env:RUNNER_TEMP rel)
+      - name: Abrir o portátil publicado
+        shell: pwsh
+        run: .\scripts\windows\Test-Portable.ps1 -Exe (Join-Path $env:RUNNER_TEMP "rel\Vellcast-Portable-x64.exe")
       - name: Instalar, abrir e desinstalar
         shell: pwsh
         run: .\scripts\windows\Test-Installed.ps1 -Setup (Join-Path $env:RUNNER_TEMP "rel\Vellcast-Setup-x64.exe")
@@ -52,6 +55,9 @@ jobs:
       - name: Pacote e instalador
         shell: pwsh
         run: .\scripts\windows\Build-Package.ps1 -Version "0.0.0-smoke.$($env:GITHUB_SHA.Substring(0, 7))"
+      - name: Abrir o portátil
+        shell: pwsh
+        run: .\scripts\windows\Test-Portable.ps1 -Exe dist\Vellcast-Portable-x64.exe
       - name: Instalar, abrir e desinstalar
         shell: pwsh
         run: .\scripts\windows\Test-Installed.ps1 -Setup dist\Vellcast-Setup-x64.exe
@@ -66,6 +72,7 @@ jobs:
           name: Vellcast-Setup-x64
           path: |
             dist/Vellcast-Setup-x64.exe
+            dist/Vellcast-Portable-x64.exe
             dist/SHA256SUMS.txt
           retention-days: 14
           if-no-files-found: error

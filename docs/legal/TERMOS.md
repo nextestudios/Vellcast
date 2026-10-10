@@ -12,7 +12,7 @@ Ao usar o aplicativo Vellcast ou os servidores hospedados pela Next Estúdios ([
 
 O Vellcast permite compartilhar a tela, janelas e o áudio de jogos com pessoas convidadas. O plano gratuito inclui transmissão de até 1920×1080 a 60 quadros por segundo, sujeito ao seu hardware, à sua conexão e a cotas de infraestrutura do serviço hospedado. A qualidade efetiva não é garantida.
 
-O Vellcast é software proprietário da Next Estúdios; o código-fonte não é distribuído. Estes Termos regem o uso do **serviço hospedado** e dos binários distribuídos pela Next Estúdios.
+O código do Vellcast é aberto sob a licença GNU AGPL-3.0-only (arquivo `LICENSE`), que rege o uso, a modificação e a redistribuição do software. Estes Termos regem o uso do **serviço hospedado** pela Next Estúdios (servidores oficiais e, no futuro, planos pagos).
 
 ## 3. Uso aceitável
 

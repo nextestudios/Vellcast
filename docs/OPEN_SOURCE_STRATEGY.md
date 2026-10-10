@@ -1,6 +1,6 @@
 # Estratégia Open Core — Vellcast
 
-> Status: **Suspensa (2026-10-09, ADR-058).** O responsável decidiu manter o Vellcast como software proprietário e o repositório privado. A estratégia abaixo fica como referência caso a abertura seja reavaliada. A parte comercial foi separada no repositório privado `nextestudios/vellcast-cloud`.
+> Status: **Em andamento (2026-10-10, ADR-060).** O núcleo (este repositório) é licenciado sob **AGPL-3.0-only** e será aberto quando o projeto estiver pronto; a parte comercial fica no repositório privado `nextestudios/vellcast-cloud`. A licença proposta abaixo (Apache-2.0) foi substituída pela AGPL-3.0-only.
 
 ## 1. Divisão
 

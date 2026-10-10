@@ -59,6 +59,20 @@ pub fn wire(ui: &AppWindow) {
                     );
                     set_status(ui, msg, false);
                 }
+                // Portátil: não há instalador para rodar; troca-se o executável à mão.
+                Ok(CheckOutcome::Available(manifest)) if crate::paths::is_portable() => {
+                    let msg = t(
+                        &format!(
+                            "Versão {} disponível. Baixe o novo Vellcast-Portable-x64.exe em github.com/nextestudios/Vellcast/releases e substitua este arquivo.",
+                            manifest.version
+                        ),
+                        &format!(
+                            "Version {} available. Download the new Vellcast-Portable-x64.exe from github.com/nextestudios/Vellcast/releases and replace this file.",
+                            manifest.version
+                        ),
+                    );
+                    set_status(ui, msg, false);
+                }
                 Ok(CheckOutcome::Available(manifest)) => {
                     let msg = t(
                         &format!("Versão {} disponível. {}", manifest.version, manifest.notes),

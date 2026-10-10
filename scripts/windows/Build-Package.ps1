@@ -3,7 +3,8 @@
 #
 #   .\scripts\windows\Build-Package.ps1 -Version 0.1.3 [-Sign]
 #
-# Saída em dist/: Vellcast-MVP-windows-x64/ (pasta do pacote), Vellcast-Setup-x64.exe e SHA256SUMS.txt.
+# Saída em dist/: Vellcast-MVP-windows-x64/ (pasta do pacote), Vellcast-Setup-x64.exe, Vellcast-Portable-x64.exe
+# (o app num único executável; guarda os dados em Vellcast_Data ao lado dele) e SHA256SUMS.txt.
 # -Sign assina os executáveis e o instalador com WINDOWS_CERT_PFX_BASE64/WINDOWS_CERT_PASSWORD. O script tira
 # esses valores do ambiente antes do cargo, do npm e do ISCC; só o signtool os recebe.
 
@@ -95,9 +96,11 @@ $src = (Resolve-Path $out).Path
 $dist = (Resolve-Path dist).Path
 Invoke-Checked { & $iscc "/DAppVersion=$Version" "/DSourceDir=$src" "/DOutputDir=$dist" infrastructure/installer/vellcast.iss } "ISCC"
 
+Copy-Item "$out/vellcast-desktop.exe" dist/Vellcast-Portable-x64.exe
+
 if ($Sign) { Set-Signature @("dist/Vellcast-Setup-x64.exe") }
 
-Get-FileHash dist/Vellcast-Setup-x64.exe -Algorithm SHA256 |
-    ForEach-Object { "$($_.Hash.ToLower())  Vellcast-Setup-x64.exe" } | Set-Content -Encoding ascii dist/SHA256SUMS.txt
+Get-FileHash dist/Vellcast-Setup-x64.exe, dist/Vellcast-Portable-x64.exe -Algorithm SHA256 |
+    ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Set-Content -Encoding ascii dist/SHA256SUMS.txt
 Get-Content dist/SHA256SUMS.txt
 Get-ChildItem dist -File | Format-Table Name, Length
