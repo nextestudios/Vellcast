@@ -6,9 +6,9 @@
 
 Transmita seu jogo do Windows em segundos e assista no navegador ou dentro do Discord, sem instalar nada do lado de quem assiste.
 
-[![CI](https://github.com/nextestudios/Vellcast/actions/workflows/ci.yml/badge.svg)](https://github.com/nextestudios/Vellcast/actions/workflows/ci.yml)
-[![Windows E2E](https://github.com/nextestudios/Vellcast/actions/workflows/windows-e2e.yml/badge.svg)](https://github.com/nextestudios/Vellcast/actions/workflows/windows-e2e.yml)
-[![Release](https://img.shields.io/github/v/release/nextestudios/Vellcast?label=release&color=2EC4B6)](https://github.com/nextestudios/Vellcast/releases/latest)
+[![CI](https://github.com/nextestudios/Vellcast/actions/workflows/ci.yml/badge.svg?event=pull_request)](https://github.com/nextestudios/Vellcast/actions/workflows/ci.yml)
+[![Release](https://github.com/nextestudios/Vellcast/actions/workflows/release.yml/badge.svg)](https://github.com/nextestudios/Vellcast/actions/workflows/release.yml)
+[![Versão](https://img.shields.io/github/v/release/nextestudios/Vellcast?label=vers%C3%A3o&color=2EC4B6)](https://github.com/nextestudios/Vellcast/releases/latest)
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows%2010%2F11-0E1014)
 ![Rust](https://img.shields.io/badge/Rust-1.88%2B-orange?logo=rust)
 ![Licença](https://img.shields.io/badge/licen%C3%A7a-propriet%C3%A1ria-lightgrey)
@@ -132,7 +132,7 @@ cargo run --release -p vellcast-desktop
 VELLCAST_RELAY_INSECURE_DEV=1 cargo run --release -p vellcast-relay
 ```
 
-A CI compila e testa em Linux e Windows, roda um teste de ponta a ponta no Windows (captura → encoder → relay → espectadores) e gera o instalador a cada push.
+Seguimos Gitflow: a CI compila e testa em Linux e Windows a cada pull request; uma tag `vX.Y.Z` na `main` gera, testa e publica o instalador. O teste de ponta a ponta no Windows (captura → encoder → relay → espectadores) roda sob demanda. Detalhes em [`CONTRIBUTING.md`](CONTRIBUTING.md#fluxo-de-branches-gitflow) e histórico de versões no [`CHANGELOG.md`](CHANGELOG.md).
 
 ## 🗺️ Roadmap
 

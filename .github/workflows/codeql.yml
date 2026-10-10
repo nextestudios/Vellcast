@@ -1,0 +1,49 @@
+name: CodeQL
+
+# Análise de segurança (gratuita para repositórios públicos). Rust e TypeScript são analisados sem compilar
+# (build-mode: none); os workflows também. Enquanto o repositório for privado, o job é pulado (code scanning em
+# repositório privado exige GitHub Advanced Security); passa a rodar sozinho no marco de código aberto.
+on:
+  # Gitflow: analisa o que é publicado (main) e semanalmente; não a cada pull request.
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
+      - ".github/ISSUE_TEMPLATE/**"
+  schedule:
+    - cron: "37 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [rust, javascript-typescript, actions]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

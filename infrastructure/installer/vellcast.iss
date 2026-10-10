@@ -1,5 +1,5 @@
 ; Instalador Windows do Vellcast (Inno Setup 6). ADR-045.
-; Compilado pela CI (.github/workflows/windows-mvp.yml):
+; Compilado por scripts/windows/Build-Package.ps1 (workflows release.yml e smoke.yml):
 ;   ISCC.exe /DAppVersion=0.1.0 /DSourceDir=<pasta do pacote> /DOutputDir=<saída> vellcast.iss
 ; Instala por usuário (sem administrador). Instalação/desinstalação silenciosa:
 ;   Vellcast-Setup-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /CURRENTUSER [/DIR=...]

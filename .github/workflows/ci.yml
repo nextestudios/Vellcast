@@ -1,12 +1,25 @@
 name: CI
 
+# Lint, testes (Linux e Windows), build do player, licenças e varredura de segredos.
+# Roda em todo pull request para develop ou main (pontos de integração do Gitflow).
 on:
-  push:
-    branches: [main]
+  # Antes da 1.0: PRs de feature/* e hotfix/* vão direto para a main. A partir da 1.0 (Gitflow): feature/* → develop,
+  # release/* e hotfix/* → main. Pushes em outras branches não rodam CI.
   pull_request:
+    branches: [develop, main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
+      - ".github/ISSUE_TEMPLATE/**"
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -20,6 +33,7 @@ jobs:
         # Windows é a plataforma-alvo do desktop; Linux é a do relay.
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable

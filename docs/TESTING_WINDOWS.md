@@ -15,8 +15,10 @@ Guia para validar o Vellcast em uma máquina Windows real: captura, encoder por 
 
 ## 2. Obter o pacote
 
-1. No GitHub, abra **Actions → Windows MVP** e escolha a execução mais recente da `main` (ou use **Run workflow**).
-2. Baixe o artefato **Vellcast-MVP-windows-x64** e extraia em uma pasta (ex.: `C:\Vellcast`).
+Para uso normal, instale o **`Vellcast-Setup-x64.exe`** da [última release](https://github.com/nextestudios/Vellcast/releases/latest). Para testar um commit que ainda não virou release:
+
+1. No GitHub, abra **Actions → Smoke → Run workflow**, escolha a branch e deixe `release_tag` vazio.
+2. Ao terminar, baixe o artefato **Vellcast-MVP-windows-x64** (ou **Vellcast-Setup-x64**) e extraia em uma pasta (ex.: `C:\Vellcast`).
 3. O pacote não é assinado. O SmartScreen pode avisar: **Mais informações → Executar assim mesmo**.
 
 Conteúdo: `vellcast-desktop.exe`, `vellcast-relay.exe`, `iniciar-relay.bat`, `player\`, `LEIA-ME.txt`, `LICENSE.txt`, `THIRD-PARTY-NOTICES.txt`, `VERSAO.txt`.

@@ -3,11 +3,10 @@ name: Windows E2E
 # Validação de ponta a ponta em um Windows real (runner do GitHub, sem GPU):
 # captura WGC → encoder Media Foundation → relay → espectadores autenticados,
 # captura de áudio WASAPI e o app desktop renderizando as 8 telas.
-# Em push roda uma sessão curta; manualmente aceita uma duração longa (M-025).
+# Só manual (pesado para cada PR): rode antes de uma release que mexa em captura, encoder, áudio, transporte
+# ou relay. A duração padrão é curta; aceita uma longa para o teste de estabilidade (M-025).
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       seconds:

@@ -215,7 +215,7 @@ O relay também serve o player web (build de `apps/discord-activity`), para quem
 
 ### 6.9 Pacote de teste para Windows
 
-O workflow `.github/workflows/windows-mvp.yml` gera o artefato `Vellcast-MVP-windows-x64` (desktop, relay, player, `iniciar-relay.bat`, `LEIA-ME.txt` e avisos de licença) a cada push na `main`. O `iniciar-relay.bat` gera um segredo aleatório em `relay.env` na primeira execução, escuta em `0.0.0.0:8788` e serve o player da pasta `player`. Passo a passo em `docs/TESTING_WINDOWS.md`.
+O workflow `.github/workflows/smoke.yml` (manual) gera o artefato `Vellcast-MVP-windows-x64` (desktop, relay, player, `iniciar-relay.bat`, `LEIA-ME.txt` e avisos de licença) a partir de qualquer branch; o mesmo pacote é montado por `scripts/windows/Build-Package.ps1` no workflow `release.yml`. O `iniciar-relay.bat` gera um segredo aleatório em `relay.env` na primeira execução, escuta em `0.0.0.0:8788` e serve o player da pasta `player`. Passo a passo em `docs/TESTING_WINDOWS.md`.
 
 ### 6.10 Região do servidor (medido em 2026-10-08)
 

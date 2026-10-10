@@ -1,0 +1,71 @@
+name: Smoke
+
+# Gera o pacote e o instalador e abre o app de verdade num Windows do GitHub.
+# "release_tag" preenchido: testa exatamente o instalador publicado nessa release. Vazio: gera a partir do commit
+# (artefatos para teste manual). Só manual: o workflow Release roda o mesmo smoke antes de publicar, então pull
+# requests não geram pacotes.
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Tag da release a testar (vazio = gerar a partir deste commit)"
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  released:
+    if: github.event.inputs.release_tag != ''
+    name: Instalador publicado (${{ github.event.inputs.release_tag }})
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Baixar os arquivos publicados
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.release_tag }}
+        run: gh release download $env:TAG -R $env:GITHUB_REPOSITORY -p Vellcast-Setup-x64.exe -D (Join-Path $env:RUNNER_TEMP rel)
+      - name: Instalar, abrir e desinstalar
+        shell: pwsh
+        run: .\scripts\windows\Test-Installed.ps1 -Setup (Join-Path $env:RUNNER_TEMP "rel\Vellcast-Setup-x64.exe")
+
+  source:
+    if: github.event.inputs.release_tag == ''
+    name: Pacote e instalador do commit
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/discord-activity/package-lock.json
+      - name: Pacote e instalador
+        shell: pwsh
+        run: .\scripts\windows\Build-Package.ps1 -Version "0.0.0-smoke.$($env:GITHUB_SHA.Substring(0, 7))"
+      - name: Instalar, abrir e desinstalar
+        shell: pwsh
+        run: .\scripts\windows\Test-Installed.ps1 -Setup dist\Vellcast-Setup-x64.exe
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: Vellcast-MVP-windows-x64
+          path: dist/Vellcast-MVP-windows-x64
+          retention-days: 14
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: Vellcast-Setup-x64
+          path: |
+            dist/Vellcast-Setup-x64.exe
+            dist/SHA256SUMS.txt
+          retention-days: 14
+          if-no-files-found: error

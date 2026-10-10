@@ -219,7 +219,7 @@ Formato: contexto → decisão → consequências. Status possíveis: **Proposta
 ## ADR-045 — Instalador Windows com Inno Setup, por usuário
 **Status:** Aceita (2026-10-08)
 **Contexto:** S-016 pede instalação, atualização e desinstalação simples. Opções: Inno Setup 6, WiX v4 (MSI) e MSIX.
-**Decisão:** Inno Setup 6 (`infrastructure/installer/vellcast.iss`), instalação por usuário sem administrador (opcional para todos), atalho no Menu Iniciar, início com o Windows **desligado por padrão**, `CloseApplications` para atualizar com o app aberto e desinstalação que pergunta antes de apagar configurações. Compilado e testado em modo silencioso na CI (`windows-mvp.yml`).
+**Decisão:** Inno Setup 6 (`infrastructure/installer/vellcast.iss`), instalação por usuário sem administrador (opcional para todos), atalho no Menu Iniciar, início com o Windows **desligado por padrão**, `CloseApplications` para atualizar com o app aberto e desinstalação que pergunta antes de apagar configurações. Compilado e testado em modo silencioso na CI (`release.yml` e `smoke.yml`, via `scripts/windows/`).
 **Consequências:** Um único `.exe` simples de assinar e atualizar. MSI (implantação corporativa via GPO) e MSIX (Microsoft Store) ficam para depois, se houver demanda.
 
 ## ADR-046 — Atualizações assinadas com Ed25519, iniciadas pelo usuário
@@ -310,3 +310,9 @@ Formato: contexto → decisão → consequências. Status possíveis: **Proposta
 **Contexto:** O Marco OC (Open Core) previa abrir o núcleo sob Apache-2.0 (ADR-007, proposta). O responsável decidiu não abrir o código.
 **Decisão:** Todo o código do Vellcast é proprietário (todos os direitos reservados); o repositório `nextestudios/Vellcast` permanece privado; a parte comercial (`cloud-api`) vai para o repositório privado `nextestudios/vellcast-cloud`. O formato do token de entitlement continua no núcleo (`crates/entitlement`), usado pelo relay.
 **Consequências:** OC-T01 e OC-T09 resolvidos por decisão (licença proprietária; repositório privado). O inventário de licenças de terceiros, a varredura de segredos e a política de segurança continuam valendo. A licença Royalty-free do Slint permite o app proprietário com atribuição.
+
+## ADR-059 — Gitflow e workflows do GitHub no padrão do ControlFS
+**Status:** Aceita (2026-10-10, pedido do responsável)
+**Contexto:** A CI rodava a cada push na `main` (incluindo o E2E de Windows e o pacote), as releases eram rascunhos criados por qualquer tag e a versão do `Cargo.toml` só era ajustada no build da tag. O responsável pediu o mesmo fluxo do outro projeto da equipe, o ControlFS.
+**Decisão:** Gitflow com a regra pré-1.0 do ControlFS (sem `develop`; PRs de `feature/*`/`fix/*`/`hotfix/*` direto na `main`). CI só em pull requests para `main`/`develop`, com `paths-ignore` de docs e cancelamento de execuções antigas. `release.yml` publica por tag `vX.Y.Z` na `main` (guarda Gitflow, versão do `Cargo.toml` igual à tag, notas da seção do `CHANGELOG.md`, testes completos, smoke do instalador, manifesto assinado obrigatório, release publicada como Latest). `smoke.yml`, `windows-e2e.yml` e `diag-audio.yml` sob demanda. Dependabot mensal agrupado (cargo, npm, actions). CodeQL em push na `main` e semanal, pulado enquanto o repositório for privado. O empacotamento sai dos workflows para `scripts/windows/` (como o `build/` do ControlFS). Diferenças conscientes: changelog só em pt-BR (o projeto é documentado em pt-BR) e sem portátil nem manifesto do WinGet (o repositório é privado e os downloads exigem autenticação).
+**Consequências:** PRs não geram pacotes nem rodam o E2E pesado; quem altera captura, encoder, áudio, transporte ou relay roda o **Windows E2E** antes da release. Releases deixam de ser rascunhos e exigem o PR `chore(release)`.

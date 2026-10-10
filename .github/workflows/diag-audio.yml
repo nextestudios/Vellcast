@@ -1,11 +1,9 @@
 name: Diagnóstico de áudio
 
 # Roda a captura de áudio WASAPI sob o depurador do Windows (cdb) com page heap,
-# para localizar falhas de memória no código nativo. Uso: push em diag/** ou manual.
+# para localizar falhas de memória no código nativo. Só manual (escolha a branch em "Run workflow").
 
 on:
-  push:
-    branches: ["diag/**"]
   workflow_dispatch:
 
 permissions:
